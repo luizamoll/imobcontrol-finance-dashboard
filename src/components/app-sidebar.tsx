@@ -2,8 +2,9 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Building2,
-  Wallet,
-  Receipt,
+  ShoppingCart,
+  CalendarClock,
+  Landmark,
   Users,
   FileBarChart,
   Settings,
@@ -27,15 +28,16 @@ import {
 const principal = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Empreendimentos", url: "/empreendimentos", icon: Building2 },
-  { title: "Carteira", url: "/carteira", icon: Wallet },
-  { title: "Recebimentos", url: "/recebimentos", icon: Receipt },
-];
+  { title: "Vendas", url: "/vendas", icon: ShoppingCart },
+  { title: "Parcelas", url: "/parcelas", icon: CalendarClock },
+] as const;
 
 const gestao = [
-  { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "Financeiro", url: "/financeiro", icon: Landmark },
+  { title: "Recebedores", url: "/recebedores", icon: Users },
   { title: "Relatórios", url: "/relatorios", icon: FileBarChart },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
-];
+] as const;
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -60,7 +62,7 @@ export function AppSidebar() {
                 ImobControl
               </span>
               <span className="text-xs text-sidebar-foreground/60">
-                Gestão financeira
+                Gestão imobiliária
               </span>
             </div>
           )}
