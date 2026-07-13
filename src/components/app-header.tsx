@@ -31,12 +31,12 @@ export function AppHeader() {
         <div className="flex items-center gap-2 pr-1">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-              RM
+              ML
             </AvatarFallback>
           </Avatar>
           <div className="hidden text-left leading-tight sm:block">
-            <div className="text-sm font-medium">Ricardo Meireles</div>
-            <div className="text-xs text-muted-foreground">Administrador</div>
+            <div className="text-sm font-medium">Maria Luiza</div>
+            <div className="text-xs text-muted-foreground">Administradora</div>
           </div>
         </div>
       </div>
