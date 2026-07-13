@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VendasRouteImport } from './routes/vendas'
 import { Route as ParcelasRouteImport } from './routes/parcelas'
+import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as EmpreendimentosRouteImport } from './routes/empreendimentos'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -22,6 +23,11 @@ const VendasRoute = VendasRouteImport.update({
 const ParcelasRoute = ParcelasRouteImport.update({
   id: '/parcelas',
   path: '/parcelas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceiroRoute = FinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EmpreendimentosRoute = EmpreendimentosRouteImport.update({
@@ -38,12 +44,14 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/empreendimentos': typeof EmpreendimentosRoute
+  '/financeiro': typeof FinanceiroRoute
   '/parcelas': typeof ParcelasRoute
   '/vendas': typeof VendasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/empreendimentos': typeof EmpreendimentosRoute
+  '/financeiro': typeof FinanceiroRoute
   '/parcelas': typeof ParcelasRoute
   '/vendas': typeof VendasRoute
 }
@@ -51,20 +59,28 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/empreendimentos': typeof EmpreendimentosRoute
+  '/financeiro': typeof FinanceiroRoute
   '/parcelas': typeof ParcelasRoute
   '/vendas': typeof VendasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/empreendimentos' | '/parcelas' | '/vendas'
+  fullPaths: '/' | '/empreendimentos' | '/financeiro' | '/parcelas' | '/vendas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/empreendimentos' | '/parcelas' | '/vendas'
-  id: '__root__' | '/' | '/empreendimentos' | '/parcelas' | '/vendas'
+  to: '/' | '/empreendimentos' | '/financeiro' | '/parcelas' | '/vendas'
+  id:
+    | '__root__'
+    | '/'
+    | '/empreendimentos'
+    | '/financeiro'
+    | '/parcelas'
+    | '/vendas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EmpreendimentosRoute: typeof EmpreendimentosRoute
+  FinanceiroRoute: typeof FinanceiroRoute
   ParcelasRoute: typeof ParcelasRoute
   VendasRoute: typeof VendasRoute
 }
@@ -83,6 +99,13 @@ declare module '@tanstack/react-router' {
       path: '/parcelas'
       fullPath: '/parcelas'
       preLoaderRoute: typeof ParcelasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financeiro': {
+      id: '/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof FinanceiroRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/empreendimentos': {
@@ -105,6 +128,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EmpreendimentosRoute: EmpreendimentosRoute,
+  FinanceiroRoute: FinanceiroRoute,
   ParcelasRoute: ParcelasRoute,
   VendasRoute: VendasRoute,
 }
