@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -14,56 +15,45 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useStore } from "@/lib/store";
+import { brl0 } from "@/lib/format";
 
-const data = [
-  { mes: "Jan", recebido: 420000, previsto: 480000 },
-  { mes: "Fev", recebido: 465000, previsto: 490000 },
-  { mes: "Mar", recebido: 512000, previsto: 520000 },
-  { mes: "Abr", recebido: 498000, previsto: 530000 },
-  { mes: "Mai", recebido: 561000, previsto: 560000 },
-  { mes: "Jun", recebido: 604000, previsto: 590000 },
-  { mes: "Jul", recebido: 578000, previsto: 610000 },
-  { mes: "Ago", recebido: 632000, previsto: 640000 },
-  { mes: "Set", recebido: 671000, previsto: 660000 },
-  { mes: "Out", recebido: 702000, previsto: 690000 },
-  { mes: "Nov", recebido: 688000, previsto: 710000 },
-  { mes: "Dez", recebido: 745000, previsto: 740000 },
-];
-
-const brl = (v: number) =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    maximumFractionDigits: 0,
-  }).format(v);
+const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 export function FinancialChart() {
+  const { state } = useStore();
+  const data = useMemo(() => {
+    const now = new Date();
+    const months: { key: string; mes: string; recebido: number; previsto: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+        mes: MESES[d.getMonth()],
+        recebido: 0,
+        previsto: 0,
+      });
+    }
+    const idx = new Map(months.map((m, i) => [m.key, i]));
+    for (const p of state.parcelas) {
+      const k = p.vencimento.slice(0, 7);
+      const i = idx.get(k);
+      if (i == null) continue;
+      months[i].previsto += p.valor;
+      if (p.dataPagamento) {
+        const kp = p.dataPagamento.slice(0, 7);
+        const ip = idx.get(kp);
+        if (ip != null) months[ip].recebido += p.valorPago;
+      }
+    }
+    return months;
+  }, [state.parcelas]);
+
   return (
     <Card className="border-border/70 shadow-sm">
-      <CardHeader className="flex flex-row items-start justify-between space-y-0">
-        <div>
-          <CardTitle className="text-base">Fluxo Financeiro</CardTitle>
-          <CardDescription>
-            Recebido vs. previsto nos últimos 12 meses
-          </CardDescription>
-        </div>
-        <Select defaultValue="12m">
-          <SelectTrigger className="h-8 w-[130px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="30d">Últimos 30 dias</SelectItem>
-            <SelectItem value="6m">Últimos 6 meses</SelectItem>
-            <SelectItem value="12m">Últimos 12 meses</SelectItem>
-          </SelectContent>
-        </Select>
+      <CardHeader>
+        <CardTitle className="text-base">Fluxo Financeiro</CardTitle>
+        <CardDescription>Recebido vs. previsto nos últimos 12 meses</CardDescription>
       </CardHeader>
       <CardContent className="pl-2">
         <div className="h-[300px] w-full">
@@ -79,18 +69,8 @@ export function FinancialChart() {
                   <stop offset="95%" stopColor="var(--color-chart-2)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="var(--color-border)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="mes"
-                stroke="var(--color-muted-foreground)"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+              <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis
                 stroke="var(--color-muted-foreground)"
                 fontSize={12}
@@ -106,26 +86,10 @@ export function FinancialChart() {
                   fontSize: "12px",
                 }}
                 labelStyle={{ color: "var(--color-foreground)", fontWeight: 600 }}
-                formatter={(v: number, name) => [
-                  brl(v),
-                  name === "recebido" ? "Recebido" : "Previsto",
-                ]}
+                formatter={(v: number, name) => [brl0(v), name === "recebido" ? "Recebido" : "Previsto"]}
               />
-              <Area
-                type="monotone"
-                dataKey="previsto"
-                stroke="var(--color-chart-2)"
-                strokeWidth={2}
-                strokeDasharray="4 4"
-                fill="url(#colorPrevisto)"
-              />
-              <Area
-                type="monotone"
-                dataKey="recebido"
-                stroke="var(--color-chart-1)"
-                strokeWidth={2.5}
-                fill="url(#colorRecebido)"
-              />
+              <Area type="monotone" dataKey="previsto" stroke="var(--color-chart-2)" strokeWidth={2} strokeDasharray="4 4" fill="url(#colorPrevisto)" />
+              <Area type="monotone" dataKey="recebido" stroke="var(--color-chart-1)" strokeWidth={2.5} fill="url(#colorRecebido)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
