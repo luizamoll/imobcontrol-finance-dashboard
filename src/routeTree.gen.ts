@@ -17,6 +17,8 @@ import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as EmpreendimentosRouteImport } from './routes/empreendimentos'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EmpreendimentosIndexRouteImport } from './routes/empreendimentos.index'
+import { Route as EmpreendimentosIdRouteImport } from './routes/empreendimentos.$id'
 
 const VendasRoute = VendasRouteImport.update({
   id: '/vendas',
@@ -58,37 +60,52 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EmpreendimentosIndexRoute = EmpreendimentosIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => EmpreendimentosRoute,
+} as any)
+const EmpreendimentosIdRoute = EmpreendimentosIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => EmpreendimentosRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/configuracoes': typeof ConfiguracoesRoute
-  '/empreendimentos': typeof EmpreendimentosRoute
+  '/empreendimentos': typeof EmpreendimentosRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
   '/parcelas': typeof ParcelasRoute
   '/recebedores': typeof RecebedoresRoute
   '/relatorios': typeof RelatoriosRoute
   '/vendas': typeof VendasRoute
+  '/empreendimentos/$id': typeof EmpreendimentosIdRoute
+  '/empreendimentos/': typeof EmpreendimentosIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/configuracoes': typeof ConfiguracoesRoute
-  '/empreendimentos': typeof EmpreendimentosRoute
   '/financeiro': typeof FinanceiroRoute
   '/parcelas': typeof ParcelasRoute
   '/recebedores': typeof RecebedoresRoute
   '/relatorios': typeof RelatoriosRoute
   '/vendas': typeof VendasRoute
+  '/empreendimentos/$id': typeof EmpreendimentosIdRoute
+  '/empreendimentos': typeof EmpreendimentosIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/configuracoes': typeof ConfiguracoesRoute
-  '/empreendimentos': typeof EmpreendimentosRoute
+  '/empreendimentos': typeof EmpreendimentosRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
   '/parcelas': typeof ParcelasRoute
   '/recebedores': typeof RecebedoresRoute
   '/relatorios': typeof RelatoriosRoute
   '/vendas': typeof VendasRoute
+  '/empreendimentos/$id': typeof EmpreendimentosIdRoute
+  '/empreendimentos/': typeof EmpreendimentosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,16 +118,19 @@ export interface FileRouteTypes {
     | '/recebedores'
     | '/relatorios'
     | '/vendas'
+    | '/empreendimentos/$id'
+    | '/empreendimentos/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/configuracoes'
-    | '/empreendimentos'
     | '/financeiro'
     | '/parcelas'
     | '/recebedores'
     | '/relatorios'
     | '/vendas'
+    | '/empreendimentos/$id'
+    | '/empreendimentos'
   id:
     | '__root__'
     | '/'
@@ -121,12 +141,14 @@ export interface FileRouteTypes {
     | '/recebedores'
     | '/relatorios'
     | '/vendas'
+    | '/empreendimentos/$id'
+    | '/empreendimentos/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
-  EmpreendimentosRoute: typeof EmpreendimentosRoute
+  EmpreendimentosRoute: typeof EmpreendimentosRouteWithChildren
   FinanceiroRoute: typeof FinanceiroRoute
   ParcelasRoute: typeof ParcelasRoute
   RecebedoresRoute: typeof RecebedoresRoute
@@ -192,13 +214,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/empreendimentos/': {
+      id: '/empreendimentos/'
+      path: '/'
+      fullPath: '/empreendimentos/'
+      preLoaderRoute: typeof EmpreendimentosIndexRouteImport
+      parentRoute: typeof EmpreendimentosRoute
+    }
+    '/empreendimentos/$id': {
+      id: '/empreendimentos/$id'
+      path: '/$id'
+      fullPath: '/empreendimentos/$id'
+      preLoaderRoute: typeof EmpreendimentosIdRouteImport
+      parentRoute: typeof EmpreendimentosRoute
+    }
   }
 }
+
+interface EmpreendimentosRouteChildren {
+  EmpreendimentosIdRoute: typeof EmpreendimentosIdRoute
+  EmpreendimentosIndexRoute: typeof EmpreendimentosIndexRoute
+}
+
+const EmpreendimentosRouteChildren: EmpreendimentosRouteChildren = {
+  EmpreendimentosIdRoute: EmpreendimentosIdRoute,
+  EmpreendimentosIndexRoute: EmpreendimentosIndexRoute,
+}
+
+const EmpreendimentosRouteWithChildren = EmpreendimentosRoute._addFileChildren(
+  EmpreendimentosRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
-  EmpreendimentosRoute: EmpreendimentosRoute,
+  EmpreendimentosRoute: EmpreendimentosRouteWithChildren,
   FinanceiroRoute: FinanceiroRoute,
   ParcelasRoute: ParcelasRoute,
   RecebedoresRoute: RecebedoresRoute,
