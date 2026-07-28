@@ -30,6 +30,10 @@ function ConfigPage() {
   const [entradaPct, setEntradaPct] = useState(String(cfg.entradaPctCorretor));
   const [parcelasPct, setParcelasPct] = useState(String(cfg.parcelasPctCorretor));
   const [aliq, setAliq] = useState(String(cfg.aliquotaPadrao));
+  const [correcao, setCorrecao] = useState(String(cfg.correcaoPctMes));
+  const [juros, setJuros] = useState(String(cfg.jurosPctMes));
+  const [mora, setMora] = useState(String(cfg.moraPct));
+  const [tolerancia, setTolerancia] = useState(String(cfg.diasTolerancia));
   const [newRec, setNewRec] = useState("");
   const [newTipo, setNewTipo] = useState<"socio" | "empresa" | "corretor">("corretor");
 
@@ -40,7 +44,17 @@ function ConfigPage() {
       parcelasPctCorretor: Number(parcelasPct) || 0,
       aliquotaPadrao: Number(aliq) || 0,
     });
-    toast.success("Regras salvas");
+    toast.success("Regras de comissão salvas");
+  };
+
+  const saveInadimplencia = () => {
+    updateConfig({
+      correcaoPctMes: Number(correcao) || 0,
+      jurosPctMes: Number(juros) || 0,
+      moraPct: Number(mora) || 0,
+      diasTolerancia: Number(tolerancia) || 0,
+    });
+    toast.success("Regras de inadimplência salvas");
   };
 
   const addRec = () => {
@@ -58,7 +72,7 @@ function ConfigPage() {
       <PageHeader
         eyebrow="Sistema"
         title="Configurações"
-        description="Edite regras de comissão, alíquotas por SPE e lista de recebedores."
+        description="Regras de distribuição, alíquotas, inadimplência e cadastro de recebedores. Todos os valores são editáveis."
       />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -72,11 +86,11 @@ function ConfigPage() {
               <Input type="number" value={corretorPct} onChange={(e) => setCorretorPct(e.target.value)} />
             </div>
             <div>
-              <Label>% da entrada repassada ao corretor</Label>
+              <Label>% do sinal destinado ao corretor</Label>
               <Input type="number" value={entradaPct} onChange={(e) => setEntradaPct(e.target.value)} />
             </div>
             <div>
-              <Label>% das parcelas repassadas ao corretor</Label>
+              <Label>% das parcelas destinadas ao corretor</Label>
               <Input type="number" value={parcelasPct} onChange={(e) => setParcelasPct(e.target.value)} />
             </div>
             <div>
@@ -92,6 +106,38 @@ function ConfigPage() {
         </Card>
 
         <Card className="border-border/70">
+          <CardHeader>
+            <CardTitle className="text-base">Regras de inadimplência</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Correção, juros e mora aplicados automaticamente sobre parcelas vencidas.
+            </p>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Correção monetária (% ao mês)</Label>
+              <Input type="number" step="0.01" value={correcao} onChange={(e) => setCorrecao(e.target.value)} />
+            </div>
+            <div>
+              <Label>Juros (% ao mês)</Label>
+              <Input type="number" step="0.01" value={juros} onChange={(e) => setJuros(e.target.value)} />
+            </div>
+            <div>
+              <Label>Mora (% fixo sobre atraso)</Label>
+              <Input type="number" step="0.01" value={mora} onChange={(e) => setMora(e.target.value)} />
+            </div>
+            <div>
+              <Label>Dias de tolerância</Label>
+              <Input type="number" value={tolerancia} onChange={(e) => setTolerancia(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2">
+              <Button onClick={saveInadimplencia} size="sm">
+                <Save className="mr-2 h-4 w-4" /> Salvar regras
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 xl:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Alíquotas por SPE</CardTitle>
           </CardHeader>
