@@ -9,6 +9,8 @@ import {
   FileBarChart,
   Settings,
   CircleDollarSign,
+  Inbox,
+  AlertOctagon,
 } from "lucide-react";
 
 import {
@@ -29,7 +31,9 @@ const principal = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Empreendimentos", url: "/empreendimentos", icon: Building2 },
   { title: "Vendas", url: "/vendas", icon: ShoppingCart },
+  { title: "Central de Recebimentos", url: "/recebimentos", icon: Inbox },
   { title: "Parcelas", url: "/parcelas", icon: CalendarClock },
+  { title: "Inadimplência", url: "/inadimplencia", icon: AlertOctagon },
 ] as const;
 
 const gestao = [

@@ -22,6 +22,23 @@ export type PagamentoTipo =
   | "sem_sinal"
   | "outro";
 
+export type UnidadeTipo =
+  | "lote"
+  | "quadra"
+  | "apartamento"
+  | "sala"
+  | "casa"
+  | "loja"
+  | "outro";
+
+export type EmpreendimentoTipo =
+  | "loteamento"
+  | "vertical"
+  | "horizontal"
+  | "comercial"
+  | "misto"
+  | "outro";
+
 export interface BemMaterial {
   tipo: string;
   descricao: string;
@@ -48,6 +65,7 @@ export interface Empreendimento {
   spe: string;
   cnpj: string;
   areaTotal: number;
+  tipo: EmpreendimentoTipo;
   matriculasCount: number;
   valorTotal: number;
   socioPct: number;
@@ -58,11 +76,14 @@ export interface Empreendimento {
   status: EmpStatus;
 }
 
+// Matricula = Unidade (nomenclatura preservada nos tipos internos para compat.)
 export interface Matricula {
   id: string;
   empreendimentoId: string;
   numero: string;
   unidade: string;
+  unidadeTipo?: UnidadeTipo;
+  descricao?: string;
   area: number;
   valorVenda: number;
   status: MatriculaStatus;
@@ -101,11 +122,34 @@ export interface Parcela {
   status: ParcelaStatus;
 }
 
+export interface Movimento {
+  id: string;
+  parcelaId: string;
+  vendaId: string;
+  empreendimentoId: string;
+  matriculaId: string;
+  compradorNome: string;
+  corretorNome: string;
+  origem: PagamentoTipo;
+  origemDescricao: string;
+  data: string;
+  usuario: string;
+  valorRecebido: number;
+  impostoReservado: number;
+  comissaoPaga: number;
+  empresaValor: number;
+  socioValor: number;
+}
+
 export interface Config {
   corretorPctPadrao: number;
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
   aliquotaPadrao: number;
+  correcaoPctMes: number;
+  jurosPctMes: number;
+  moraPct: number;
+  diasTolerancia: number;
   recebedores: { nome: string; tipo: "socio" | "empresa" | "corretor" }[];
   statusVenda: string[];
   formasPagamento: string[];
@@ -130,12 +174,13 @@ interface State {
   matriculas: Matricula[];
   vendas: Venda[];
   parcelas: Parcela[];
+  movimentos: Movimento[];
   config: Config;
   trimestres: TrimestreItem[];
 }
 
 // ---------- Seed ----------
-const SEED_KEY = "imobcontrol.v1";
+const SEED_KEY = "imobcontrol.v2";
 
 function makeSeed(): State {
   const emp1: Empreendimento = {
@@ -143,6 +188,7 @@ function makeSeed(): State {
     nome: "Residencial Alvorada",
     spe: "Alvorada Empreendimentos SPE Ltda",
     cnpj: "12.345.678/0001-90",
+    tipo: "vertical",
     areaTotal: 12500,
     matriculasCount: 48,
     valorTotal: 24_800_000,
@@ -158,6 +204,7 @@ function makeSeed(): State {
     nome: "Loteamento Vila Verde",
     spe: "Vila Verde SPE Ltda",
     cnpj: "98.765.432/0001-10",
+    tipo: "loteamento",
     areaTotal: 82000,
     matriculasCount: 120,
     valorTotal: 36_500_000,
@@ -172,6 +219,7 @@ function makeSeed(): State {
     nome: "Edifício Panorama",
     spe: "Panorama SPE Ltda",
     cnpj: "45.123.789/0001-55",
+    tipo: "vertical",
     areaTotal: 4800,
     matriculasCount: 24,
     valorTotal: 18_200_000,
@@ -189,6 +237,7 @@ function makeSeed(): State {
     prefix: string,
     baseVal: number,
     baseArea: number,
+    tipo: UnidadeTipo,
   ) => {
     for (let i = 1; i <= n; i++) {
       matriculas.push({
@@ -196,19 +245,86 @@ function makeSeed(): State {
         empreendimentoId: eId,
         numero: `${prefix}${String(1000 + i).padStart(4, "0")}`,
         unidade: eId === "emp2" ? `Lote ${i}` : `Unid. ${101 + i}`,
+        unidadeTipo: tipo,
+        descricao: eId === "emp2" ? `Lote ${i} · Quadra ${Math.ceil(i / 5)}` : `Apto ${101 + i}`,
         area: baseArea + (i % 5) * 4,
         valorVenda: baseVal + (i % 6) * 15000,
         status: "disponivel",
       });
     }
   };
-  push("emp1", 12, "AL", 520_000, 68);
-  push("emp2", 15, "VV", 305_000, 360);
-  push("emp3", 8, "PN", 780_000, 92);
+  push("emp1", 12, "AL", 520_000, 68, "apartamento");
+  push("emp2", 15, "VV", 305_000, 360, "lote");
+  push("emp3", 8, "PN", 780_000, 92, "apartamento");
 
-  // Seed vendas
+  const config: Config = {
+    corretorPctPadrao: 5,
+    entradaPctCorretor: 50,
+    parcelasPctCorretor: 50,
+    aliquotaPadrao: 6.73,
+    correcaoPctMes: 0.5,
+    jurosPctMes: 1.0,
+    moraPct: 2.0,
+    diasTolerancia: 5,
+    recebedores: [
+      { nome: "Sócio Principal", tipo: "socio" },
+      { nome: "Empresa Matriz", tipo: "empresa" },
+      { nome: "Carlos Ribeiro", tipo: "corretor" },
+      { nome: "Ana Paula Costa", tipo: "corretor" },
+      { nome: "Rafael Nogueira", tipo: "corretor" },
+    ],
+    statusVenda: ["ativa", "cancelada", "quitada"],
+    formasPagamento: [
+      "À vista",
+      "Sinal + parcelas",
+      "Sem sinal",
+      "Bem material",
+      "Outro",
+    ],
+    aliquotasPorSpe: {
+      emp1: 6.73,
+      emp2: 5.93,
+      emp3: 7.5,
+    },
+  };
+
   const vendas: Venda[] = [];
   const parcelas: Parcela[] = [];
+  const movimentos: Movimento[] = [];
+
+  const registrarMov = (
+    p: Parcela,
+    valorRecebido: number,
+    v: Venda,
+    e: Empreendimento,
+    comissaoUsada: number,
+    data: string,
+  ) => {
+    const imposto = valorRecebido * (e.aliquotaTributaria / 100);
+    const restante = Math.max(0, valorRecebido - imposto - comissaoUsada);
+    const totalSocEmp = e.socioPct + e.empresaPct;
+    const empresa = totalSocEmp ? restante * (e.empresaPct / totalSocEmp) : 0;
+    const socio = totalSocEmp ? restante * (e.socioPct / totalSocEmp) : 0;
+    movimentos.push({
+      id: uid(),
+      parcelaId: p.id,
+      vendaId: v.id,
+      empreendimentoId: e.id,
+      matriculaId: p.matriculaId,
+      compradorNome: p.compradorNome,
+      corretorNome: v.corretorNome,
+      origem: p.origemTipo,
+      origemDescricao: p.origemDescricao,
+      data,
+      usuario: "Maria Luiza",
+      valorRecebido,
+      impostoReservado: imposto,
+      comissaoPaga: comissaoUsada,
+      empresaValor: empresa,
+      socioValor: socio,
+    });
+  };
+
   const mkVenda = (
     idx: number,
     empId: string,
@@ -220,6 +336,7 @@ function makeSeed(): State {
     valorParcela: number,
     dataContrato: string,
   ) => {
+    const emp = [emp1, emp2, emp3].find((e) => e.id === empId)!;
     const mat = matriculas.find(
       (m) => m.empreendimentoId === empId && m.id === `${empId}-m${matIdx}`,
     )!;
@@ -243,7 +360,7 @@ function makeSeed(): State {
       primeiroVencimento: addMonths(dataContrato, 1),
       status: "pendente",
     };
-    vendas.push({
+    const venda: Venda = {
       id: vId,
       empreendimentoId: empId,
       matriculaId: mat.id,
@@ -254,12 +371,14 @@ function makeSeed(): State {
       corretorPct: 5,
       status: "ativa",
       composicao: [sinalItem, parcelasItem],
-    });
+    };
+    vendas.push(venda);
     mat.status = "vendido";
     mat.compradorNome = comprador;
     mat.vendaId = vId;
-    // sinal parcela (paga)
-    parcelas.push({
+
+    // sinal (pago)
+    const pSinal: Parcela = {
       id: uid(),
       vendaId: vId,
       empreendimentoId: empId,
@@ -274,14 +393,21 @@ function makeSeed(): State {
       valorPago: sinal,
       dataPagamento: dataContrato,
       status: "paga",
-    });
+    };
+    parcelas.push(pSinal);
+    const comissaoTotal = valorTotal * 0.05;
+    let restanteComissao = comissaoTotal;
+    const comSinal = Math.min(restanteComissao, sinal * (config.entradaPctCorretor / 100));
+    restanteComissao -= comSinal;
+    registrarMov(pSinal, sinal, venda, emp, comSinal, dataContrato);
+
     const today = new Date();
     for (let i = 1; i <= parcelasN; i++) {
       const venc = addMonths(dataContrato, i);
       const vencDate = new Date(venc);
       const paid = i <= Math.floor(parcelasN * 0.25);
       const vencida = !paid && vencDate < today;
-      parcelas.push({
+      const p: Parcela = {
         id: uid(),
         vendaId: vId,
         empreendimentoId: empId,
@@ -296,7 +422,13 @@ function makeSeed(): State {
         valorPago: paid ? valorParcela : 0,
         dataPagamento: paid ? venc : undefined,
         status: paid ? "paga" : vencida ? "vencida" : "pendente",
-      });
+      };
+      parcelas.push(p);
+      if (paid) {
+        const comP = Math.min(restanteComissao, valorParcela * (config.parcelasPctCorretor / 100));
+        restanteComissao -= comP;
+        registrarMov(p, valorParcela, venda, emp, comP, venc);
+      }
     }
   };
 
@@ -307,33 +439,6 @@ function makeSeed(): State {
   mkVenda(5, "emp2", 2, "Patrícia Menezes", "Rafael Nogueira", 30_000, 60, 5_800, "2025-09-05");
   mkVenda(6, "emp3", 1, "Fernando Barbosa", "Carlos Ribeiro", 150_000, 60, 12_500, "2024-11-12");
   mkVenda(7, "emp3", 2, "Luciana Ferreira", "Rafael Nogueira", 200_000, 48, 14_200, "2024-08-22");
-
-  const config: Config = {
-    corretorPctPadrao: 5,
-    entradaPctCorretor: 50,
-    parcelasPctCorretor: 50,
-    aliquotaPadrao: 6.73,
-    recebedores: [
-      { nome: "Sócio Principal", tipo: "socio" },
-      { nome: "Empresa Matriz", tipo: "empresa" },
-      { nome: "Carlos Ribeiro", tipo: "corretor" },
-      { nome: "Ana Paula Costa", tipo: "corretor" },
-      { nome: "Rafael Nogueira", tipo: "corretor" },
-    ],
-    statusVenda: ["ativa", "cancelada", "quitada"],
-    formasPagamento: [
-      "À vista",
-      "Sinal + parcelas",
-      "Sem sinal",
-      "Bem material",
-      "Outro",
-    ],
-    aliquotasPorSpe: {
-      emp1: 6.73,
-      emp2: 5.93,
-      emp3: 7.5,
-    },
-  };
 
   const trimestres: TrimestreItem[] = [
     {
@@ -374,14 +479,26 @@ function makeSeed(): State {
     },
   ];
 
-  return { empreendimentos: [emp1, emp2, emp3], matriculas, vendas, parcelas, config, trimestres };
+  return {
+    empreendimentos: [emp1, emp2, emp3],
+    matriculas,
+    vendas,
+    parcelas,
+    movimentos,
+    config,
+    trimestres,
+  };
 }
 
 function loadState(): State {
   if (typeof window === "undefined") return makeSeed();
   try {
     const raw = window.localStorage.getItem(SEED_KEY);
-    if (raw) return JSON.parse(raw) as State;
+    if (raw) {
+      const parsed = JSON.parse(raw) as State;
+      if (!parsed.movimentos) parsed.movimentos = [];
+      return parsed;
+    }
   } catch {}
   const seed = makeSeed();
   try {
@@ -400,6 +517,8 @@ interface Ctx {
   addMatricula: (m: Omit<Matricula, "id">) => Matricula;
   updateMatricula: (id: string, patch: Partial<Matricula>) => void;
   addVenda: (v: Omit<Venda, "id" | "status"> & { status?: VendaStatus }) => Venda;
+  receberParcela: (id: string, valorRecebido?: number, data?: string) => void;
+  reverterParcela: (id: string) => void;
   marcarParcelaPaga: (id: string, dataPagamento?: string) => void;
   desmarcarParcela: (id: string) => void;
   updateConfig: (patch: Partial<Config>) => void;
@@ -407,6 +526,60 @@ interface Ctx {
 }
 
 const StoreCtx = createContext<Ctx | null>(null);
+
+function computeReceber(
+  parcela: Parcela,
+  valorRecebido: number,
+  data: string,
+  state: State,
+) {
+  const venda = state.vendas.find((v) => v.id === parcela.vendaId);
+  const emp = state.empreendimentos.find((e) => e.id === parcela.empreendimentoId);
+  if (!venda || !emp) return null;
+
+  const imposto = valorRecebido * (emp.aliquotaTributaria / 100);
+
+  const comissaoTotal = venda.valorTotal * ((venda.corretorPct || 0) / 100);
+  const jaPago = state.movimentos
+    .filter((m) => m.vendaId === venda.id)
+    .reduce((a, m) => a + m.comissaoPaga, 0);
+  const restanteComissao = Math.max(0, comissaoTotal - jaPago);
+  const pctCor =
+    parcela.origemTipo === "sinal" ||
+    parcela.origemTipo === "sinal_parcelado" ||
+    parcela.origemTipo === "avista"
+      ? state.config.entradaPctCorretor
+      : state.config.parcelasPctCorretor;
+  let comissaoUsada = valorRecebido * (pctCor / 100);
+  if (comissaoUsada > restanteComissao) comissaoUsada = restanteComissao;
+  if (comissaoUsada + imposto > valorRecebido)
+    comissaoUsada = Math.max(0, valorRecebido - imposto);
+
+  const restante = Math.max(0, valorRecebido - imposto - comissaoUsada);
+  const totalPct = emp.socioPct + emp.empresaPct;
+  const empresa = totalPct ? restante * (emp.empresaPct / totalPct) : 0;
+  const socio = totalPct ? restante * (emp.socioPct / totalPct) : 0;
+
+  const mov: Movimento = {
+    id: uid(),
+    parcelaId: parcela.id,
+    vendaId: venda.id,
+    empreendimentoId: emp.id,
+    matriculaId: parcela.matriculaId,
+    compradorNome: parcela.compradorNome,
+    corretorNome: venda.corretorNome,
+    origem: parcela.origemTipo,
+    origemDescricao: parcela.origemDescricao,
+    data,
+    usuario: "Maria Luiza",
+    valorRecebido,
+    impostoReservado: imposto,
+    comissaoPaga: comissaoUsada,
+    empresaValor: empresa,
+    socioValor: socio,
+  };
+  return mov;
+}
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setStateRaw] = useState<State>(() => makeSeed());
@@ -495,21 +668,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }));
         return newVenda;
       },
-      marcarParcelaPaga: (id, dataPagamento) =>
-        setStateRaw((s) => ({
-          ...s,
-          parcelas: s.parcelas.map((p) =>
-            p.id === id
-              ? {
-                  ...p,
-                  status: "paga",
-                  valorPago: p.valor,
-                  dataPagamento: dataPagamento ?? todayISO(),
-                }
-              : p,
-          ),
-        })),
-      desmarcarParcela: (id) =>
+      receberParcela: (id, valorRecebido, dataParam) => {
+        setStateRaw((s) => {
+          const p = s.parcelas.find((x) => x.id === id);
+          if (!p || p.status === "paga") return s;
+          const v = valorRecebido ?? p.valor;
+          const data = dataParam ?? todayISO();
+          const mov = computeReceber(p, v, data, s);
+          if (!mov) return s;
+          return {
+            ...s,
+            parcelas: s.parcelas.map((x) =>
+              x.id === id
+                ? { ...x, status: "paga", valorPago: v, dataPagamento: data }
+                : x,
+            ),
+            movimentos: [...s.movimentos, mov],
+          };
+        });
+      },
+      reverterParcela: (id) => {
         setStateRaw((s) => ({
           ...s,
           parcelas: s.parcelas.map((p) =>
@@ -517,7 +695,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ? { ...p, status: "pendente", valorPago: 0, dataPagamento: undefined }
               : p,
           ),
-        })),
+          movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
+        }));
+      },
+      marcarParcelaPaga: (id, dataPagamento) => {
+        setStateRaw((s) => {
+          const p = s.parcelas.find((x) => x.id === id);
+          if (!p || p.status === "paga") return s;
+          const data = dataPagamento ?? todayISO();
+          const mov = computeReceber(p, p.valor, data, s);
+          return {
+            ...s,
+            parcelas: s.parcelas.map((x) =>
+              x.id === id
+                ? { ...x, status: "paga", valorPago: p.valor, dataPagamento: data }
+                : x,
+            ),
+            movimentos: mov ? [...s.movimentos, mov] : s.movimentos,
+          };
+        });
+      },
+      desmarcarParcela: (id) => {
+        setStateRaw((s) => ({
+          ...s,
+          parcelas: s.parcelas.map((p) =>
+            p.id === id
+              ? { ...p, status: "pendente", valorPago: 0, dataPagamento: undefined }
+              : p,
+          ),
+          movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
+        }));
+      },
       updateConfig: (patch) =>
         setStateRaw((s) => ({ ...s, config: { ...s.config, ...patch } })),
       updateTrimestre: (id, patch) =>
@@ -556,9 +764,22 @@ export function empTotais(empId: string, vendas: Venda[], parcelas: Parcela[]) {
   return { vendas: vs.length, vendido, recebido, saldo };
 }
 
-// Commission calc for a single venda
-export function comissaoDaVenda(v: Venda, parcelas: Parcela[], cfg: Config) {
+// Commission calc for a single venda (based on movimentos)
+export function comissaoDaVenda(v: Venda, parcelas: Parcela[], cfg: Config, movimentos?: Movimento[]) {
   const total = v.valorTotal * (v.corretorPct / 100);
+  if (movimentos) {
+    const relacionados = movimentos.filter((m) => m.vendaId === v.id);
+    const pago = relacionados.reduce((a, m) => a + m.comissaoPaga, 0);
+    const repasses = relacionados.map((m) => ({
+      parcelaId: m.parcelaId,
+      data: m.data,
+      origem: m.origemDescricao,
+      valorParcela: m.valorRecebido,
+      valorRepasse: m.comissaoPaga,
+    }));
+    return { total, pago, saldo: Math.max(0, total - pago), repasses };
+  }
+  // fallback (não usado normalmente)
   const ps = parcelas
     .filter((p) => p.vendaId === v.id && p.status === "paga")
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
@@ -588,4 +809,23 @@ export function comissaoDaVenda(v: Venda, parcelas: Parcela[], cfg: Config) {
     });
   }
   return { total, pago: total - restante, saldo: restante, repasses };
+}
+
+// Inadimplência: calcula correção, juros e mora sobre uma parcela vencida
+export function inadimplenciaCalc(
+  parcela: Parcela,
+  cfg: Config,
+  hoje: Date = new Date(),
+) {
+  const venc = new Date(parcela.vencimento);
+  const diffMs = hoje.getTime() - venc.getTime();
+  const diasAtraso = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  const diasEfetivos = Math.max(0, diasAtraso - cfg.diasTolerancia);
+  const mesesAtraso = diasEfetivos / 30;
+  const base = parcela.valor;
+  const correcao = base * (cfg.correcaoPctMes / 100) * mesesAtraso;
+  const juros = base * (cfg.jurosPctMes / 100) * mesesAtraso;
+  const mora = diasEfetivos > 0 ? base * (cfg.moraPct / 100) : 0;
+  const atualizado = base + correcao + juros + mora;
+  return { diasAtraso, diasEfetivos, correcao, juros, mora, atualizado };
 }
