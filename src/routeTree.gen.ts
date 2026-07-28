@@ -11,13 +11,16 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VendasRouteImport } from './routes/vendas'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
+import { Route as RecebimentosRouteImport } from './routes/recebimentos'
 import { Route as RecebedoresRouteImport } from './routes/recebedores'
 import { Route as ParcelasRouteImport } from './routes/parcelas'
+import { Route as InadimplenciaRouteImport } from './routes/inadimplencia'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as EmpreendimentosRouteImport } from './routes/empreendimentos'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EmpreendimentosIndexRouteImport } from './routes/empreendimentos.index'
+import { Route as VendasIdRouteImport } from './routes/vendas.$id'
 import { Route as EmpreendimentosIdRouteImport } from './routes/empreendimentos.$id'
 
 const VendasRoute = VendasRouteImport.update({
@@ -30,6 +33,11 @@ const RelatoriosRoute = RelatoriosRouteImport.update({
   path: '/relatorios',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RecebimentosRoute = RecebimentosRouteImport.update({
+  id: '/recebimentos',
+  path: '/recebimentos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RecebedoresRoute = RecebedoresRouteImport.update({
   id: '/recebedores',
   path: '/recebedores',
@@ -38,6 +46,11 @@ const RecebedoresRoute = RecebedoresRouteImport.update({
 const ParcelasRoute = ParcelasRouteImport.update({
   id: '/parcelas',
   path: '/parcelas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InadimplenciaRoute = InadimplenciaRouteImport.update({
+  id: '/inadimplencia',
+  path: '/inadimplencia',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FinanceiroRoute = FinanceiroRouteImport.update({
@@ -65,6 +78,11 @@ const EmpreendimentosIndexRoute = EmpreendimentosIndexRouteImport.update({
   path: '/',
   getParentRoute: () => EmpreendimentosRoute,
 } as any)
+const VendasIdRoute = VendasIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => VendasRoute,
+} as any)
 const EmpreendimentosIdRoute = EmpreendimentosIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -76,22 +94,28 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof ConfiguracoesRoute
   '/empreendimentos': typeof EmpreendimentosRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
+  '/inadimplencia': typeof InadimplenciaRoute
   '/parcelas': typeof ParcelasRoute
   '/recebedores': typeof RecebedoresRoute
+  '/recebimentos': typeof RecebimentosRoute
   '/relatorios': typeof RelatoriosRoute
-  '/vendas': typeof VendasRoute
+  '/vendas': typeof VendasRouteWithChildren
   '/empreendimentos/$id': typeof EmpreendimentosIdRoute
+  '/vendas/$id': typeof VendasIdRoute
   '/empreendimentos/': typeof EmpreendimentosIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/financeiro': typeof FinanceiroRoute
+  '/inadimplencia': typeof InadimplenciaRoute
   '/parcelas': typeof ParcelasRoute
   '/recebedores': typeof RecebedoresRoute
+  '/recebimentos': typeof RecebimentosRoute
   '/relatorios': typeof RelatoriosRoute
-  '/vendas': typeof VendasRoute
+  '/vendas': typeof VendasRouteWithChildren
   '/empreendimentos/$id': typeof EmpreendimentosIdRoute
+  '/vendas/$id': typeof VendasIdRoute
   '/empreendimentos': typeof EmpreendimentosIndexRoute
 }
 export interface FileRoutesById {
@@ -100,11 +124,14 @@ export interface FileRoutesById {
   '/configuracoes': typeof ConfiguracoesRoute
   '/empreendimentos': typeof EmpreendimentosRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
+  '/inadimplencia': typeof InadimplenciaRoute
   '/parcelas': typeof ParcelasRoute
   '/recebedores': typeof RecebedoresRoute
+  '/recebimentos': typeof RecebimentosRoute
   '/relatorios': typeof RelatoriosRoute
-  '/vendas': typeof VendasRoute
+  '/vendas': typeof VendasRouteWithChildren
   '/empreendimentos/$id': typeof EmpreendimentosIdRoute
+  '/vendas/$id': typeof VendasIdRoute
   '/empreendimentos/': typeof EmpreendimentosIndexRoute
 }
 export interface FileRouteTypes {
@@ -114,22 +141,28 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/empreendimentos'
     | '/financeiro'
+    | '/inadimplencia'
     | '/parcelas'
     | '/recebedores'
+    | '/recebimentos'
     | '/relatorios'
     | '/vendas'
     | '/empreendimentos/$id'
+    | '/vendas/$id'
     | '/empreendimentos/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/configuracoes'
     | '/financeiro'
+    | '/inadimplencia'
     | '/parcelas'
     | '/recebedores'
+    | '/recebimentos'
     | '/relatorios'
     | '/vendas'
     | '/empreendimentos/$id'
+    | '/vendas/$id'
     | '/empreendimentos'
   id:
     | '__root__'
@@ -137,11 +170,14 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/empreendimentos'
     | '/financeiro'
+    | '/inadimplencia'
     | '/parcelas'
     | '/recebedores'
+    | '/recebimentos'
     | '/relatorios'
     | '/vendas'
     | '/empreendimentos/$id'
+    | '/vendas/$id'
     | '/empreendimentos/'
   fileRoutesById: FileRoutesById
 }
@@ -150,10 +186,12 @@ export interface RootRouteChildren {
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   EmpreendimentosRoute: typeof EmpreendimentosRouteWithChildren
   FinanceiroRoute: typeof FinanceiroRoute
+  InadimplenciaRoute: typeof InadimplenciaRoute
   ParcelasRoute: typeof ParcelasRoute
   RecebedoresRoute: typeof RecebedoresRoute
+  RecebimentosRoute: typeof RecebimentosRoute
   RelatoriosRoute: typeof RelatoriosRoute
-  VendasRoute: typeof VendasRoute
+  VendasRoute: typeof VendasRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +210,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RelatoriosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/recebimentos': {
+      id: '/recebimentos'
+      path: '/recebimentos'
+      fullPath: '/recebimentos'
+      preLoaderRoute: typeof RecebimentosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/recebedores': {
       id: '/recebedores'
       path: '/recebedores'
@@ -184,6 +229,13 @@ declare module '@tanstack/react-router' {
       path: '/parcelas'
       fullPath: '/parcelas'
       preLoaderRoute: typeof ParcelasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inadimplencia': {
+      id: '/inadimplencia'
+      path: '/inadimplencia'
+      fullPath: '/inadimplencia'
+      preLoaderRoute: typeof InadimplenciaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financeiro': {
@@ -221,6 +273,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmpreendimentosIndexRouteImport
       parentRoute: typeof EmpreendimentosRoute
     }
+    '/vendas/$id': {
+      id: '/vendas/$id'
+      path: '/$id'
+      fullPath: '/vendas/$id'
+      preLoaderRoute: typeof VendasIdRouteImport
+      parentRoute: typeof VendasRoute
+    }
     '/empreendimentos/$id': {
       id: '/empreendimentos/$id'
       path: '/$id'
@@ -245,26 +304,29 @@ const EmpreendimentosRouteWithChildren = EmpreendimentosRoute._addFileChildren(
   EmpreendimentosRouteChildren,
 )
 
+interface VendasRouteChildren {
+  VendasIdRoute: typeof VendasIdRoute
+}
+
+const VendasRouteChildren: VendasRouteChildren = {
+  VendasIdRoute: VendasIdRoute,
+}
+
+const VendasRouteWithChildren =
+  VendasRoute._addFileChildren(VendasRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   EmpreendimentosRoute: EmpreendimentosRouteWithChildren,
   FinanceiroRoute: FinanceiroRoute,
+  InadimplenciaRoute: InadimplenciaRoute,
   ParcelasRoute: ParcelasRoute,
   RecebedoresRoute: RecebedoresRoute,
+  RecebimentosRoute: RecebimentosRoute,
   RelatoriosRoute: RelatoriosRoute,
-  VendasRoute: VendasRoute,
+  VendasRoute: VendasRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
