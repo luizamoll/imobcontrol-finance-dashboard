@@ -74,7 +74,7 @@ function EmpreendimentosList() {
               </DialogTrigger>
               <NewEmpreendimentoDialog
                 onSave={(e) => {
-                  addEmpreendimento(e);
+                  addEmpreendimento({ tipo: "loteamento", ...e });
                   toast.success(`Empreendimento "${e.nome}" cadastrado`);
                   setOpen(false);
                 }}
