@@ -19,7 +19,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { useStore, comissaoDaVenda } from "@/lib/store";
+import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
+import { useStore, comissaoDaVenda, distribuicaoPrevista } from "@/lib/store";
 import { brl0, formatDate, pct } from "@/lib/format";
 
 export const Route = createFileRoute("/recebedores")({
