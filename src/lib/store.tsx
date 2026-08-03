@@ -141,15 +141,27 @@ export interface Movimento {
   socioValor: number;
 }
 
+export type JurosTipo = "diario" | "mensal";
+export type InicioJuros = "vencimento" | "apos_tolerancia";
+
 export interface Config {
   corretorPctPadrao: number;
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
   aliquotaPadrao: number;
+  // --- Inadimplência (todos configuráveis) ---
   correcaoPctMes: number;
+  correcaoAtiva: boolean;
+  correcaoIndice: string;
   jurosPctMes: number;
+  jurosPctDia: number;
+  jurosTipo: JurosTipo;
+  jurosAtivo: boolean;
   moraPct: number;
+  moraAtiva: boolean;
   diasTolerancia: number;
+  toleranciaAtiva: boolean;
+  inicioJuros: InicioJuros;
   recebedores: { nome: string; tipo: "socio" | "empresa" | "corretor" }[];
   statusVenda: string[];
   formasPagamento: string[];
