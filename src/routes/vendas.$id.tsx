@@ -172,7 +172,15 @@ function VendaDetail() {
         </CardContent>
       </Card>
 
+      <DistribuicaoFinanceira
+        movimentos={movs}
+        empreendimentos={state.empreendimentos}
+        previsto={previstoDist}
+        descricao={`Como cada recebimento deste contrato foi dividido entre imposto da SPE, corretor, empresa e sócio.`}
+      />
+
       <Card className="border-border/70">
+
         <CardHeader>
           <CardTitle className="text-base">Histórico de auditoria</CardTitle>
           <p className="text-xs text-muted-foreground">Cada linha registra a distribuição aplicada em um recebimento.</p>
