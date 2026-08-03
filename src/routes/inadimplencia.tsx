@@ -59,8 +59,19 @@ function InadimplenciaPage() {
       <PageHeader
         eyebrow="Cobrança"
         title="Inadimplência"
-        description="Parcelas vencidas com cálculo automático de correção monetária, juros e mora conforme configuração."
+        description={`Regras vigentes: ${
+          state.config.correcaoAtiva
+            ? `correção ${state.config.correcaoIndice} ${state.config.correcaoPctMes}% a.m.`
+            : "correção desativada"
+        } · ${
+          state.config.jurosAtivo
+            ? `juros ${state.config.jurosTipo === "diario" ? `${state.config.jurosPctDia}% a.d.` : `${state.config.jurosPctMes}% a.m.`}`
+            : "juros desativados"
+        } · ${state.config.moraAtiva ? `mora ${state.config.moraPct}%` : "mora desativada"} · ${
+          state.config.toleranciaAtiva ? `${state.config.diasTolerancia} dias de tolerância` : "sem tolerância"
+        }.`}
       />
+
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Mini label="Parcelas em atraso" value={String(rows.length)} />
