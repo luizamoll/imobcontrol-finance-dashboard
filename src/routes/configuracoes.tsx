@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/configuracoes")({
@@ -31,9 +32,19 @@ function ConfigPage() {
   const [parcelasPct, setParcelasPct] = useState(String(cfg.parcelasPctCorretor));
   const [aliq, setAliq] = useState(String(cfg.aliquotaPadrao));
   const [correcao, setCorrecao] = useState(String(cfg.correcaoPctMes));
+  const [correcaoAtiva, setCorrecaoAtiva] = useState(cfg.correcaoAtiva ?? true);
+  const [indice, setIndice] = useState(cfg.correcaoIndice ?? "IGP-M");
   const [juros, setJuros] = useState(String(cfg.jurosPctMes));
+  const [jurosDia, setJurosDia] = useState(String(cfg.jurosPctDia ?? 0.033));
+  const [jurosTipo, setJurosTipo] = useState<"diario" | "mensal">(cfg.jurosTipo ?? "mensal");
+  const [jurosAtivo, setJurosAtivo] = useState(cfg.jurosAtivo ?? true);
   const [mora, setMora] = useState(String(cfg.moraPct));
+  const [moraAtiva, setMoraAtiva] = useState(cfg.moraAtiva ?? true);
   const [tolerancia, setTolerancia] = useState(String(cfg.diasTolerancia));
+  const [toleranciaAtiva, setToleranciaAtiva] = useState(cfg.toleranciaAtiva ?? true);
+  const [inicioJuros, setInicioJuros] = useState<"vencimento" | "apos_tolerancia">(
+    cfg.inicioJuros ?? "apos_tolerancia",
+  );
   const [newRec, setNewRec] = useState("");
   const [newTipo, setNewTipo] = useState<"socio" | "empresa" | "corretor">("corretor");
 
@@ -50,12 +61,21 @@ function ConfigPage() {
   const saveInadimplencia = () => {
     updateConfig({
       correcaoPctMes: Number(correcao) || 0,
+      correcaoAtiva,
+      correcaoIndice: indice,
       jurosPctMes: Number(juros) || 0,
+      jurosPctDia: Number(jurosDia) || 0,
+      jurosTipo,
+      jurosAtivo,
       moraPct: Number(mora) || 0,
+      moraAtiva,
       diasTolerancia: Number(tolerancia) || 0,
+      toleranciaAtiva,
+      inicioJuros,
     });
-    toast.success("Regras de inadimplência salvas");
+    toast.success("Configuração de inadimplência salva");
   };
+
 
   const addRec = () => {
     if (!newRec.trim()) return;
