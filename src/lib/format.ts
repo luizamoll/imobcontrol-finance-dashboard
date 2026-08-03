@@ -19,6 +19,8 @@ export const pct = (v: number) => `${(v || 0).toFixed(1).replace(".", ",")}%`;
 
 export const formatDate = (iso?: string) => {
   if (!iso) return "-";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "-";
   return d.toLocaleDateString("pt-BR");
