@@ -48,11 +48,16 @@ export const parseBRLInput = (v: string): number => {
   return isNaN(n) ? 0 : n;
 };
 
-export const todayISO = () => new Date().toISOString().slice(0, 10);
+export const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
+// Timezone-safe: opera em UTC para evitar divergências entre servidor e navegador
 export const addMonths = (iso: string, months: number) => {
-  const d = new Date(iso);
-  d.setMonth(d.getMonth() + months);
+  const [y, m, day] = (iso || "").slice(0, 10).split("-").map(Number);
+  const d = new Date(Date.UTC(y || 1970, (m || 1) - 1, day || 1));
+  d.setUTCMonth(d.getUTCMonth() + months);
   return d.toISOString().slice(0, 10);
 };
 
