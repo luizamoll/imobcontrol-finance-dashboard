@@ -833,21 +833,95 @@ export function comissaoDaVenda(v: Venda, parcelas: Parcela[], cfg: Config, movi
   return { total, pago: total - restante, saldo: restante, repasses };
 }
 
-// Inadimplência: calcula correção, juros e mora sobre uma parcela vencida
+// Inadimplência: correção, juros e mora — 100% parametrizados em Configurações
 export function inadimplenciaCalc(
   parcela: Parcela,
   cfg: Config,
   hoje: Date = new Date(),
 ) {
-  const venc = new Date(parcela.vencimento);
+  const venc = new Date(`${parcela.vencimento}T00:00:00`);
   const diffMs = hoje.getTime() - venc.getTime();
   const diasAtraso = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-  const diasEfetivos = Math.max(0, diasAtraso - cfg.diasTolerancia);
+  const tolerancia = cfg.toleranciaAtiva ? cfg.diasTolerancia || 0 : 0;
+  const dentroTolerancia = diasAtraso > 0 && diasAtraso <= tolerancia;
+  // dias que efetivamente geram encargos, conforme data inicial de incidência
+  const diasEfetivos =
+    diasAtraso <= tolerancia
+      ? 0
+      : cfg.inicioJuros === "vencimento"
+        ? diasAtraso
+        : diasAtraso - tolerancia;
   const mesesAtraso = diasEfetivos / 30;
   const base = parcela.valor;
-  const correcao = base * (cfg.correcaoPctMes / 100) * mesesAtraso;
-  const juros = base * (cfg.jurosPctMes / 100) * mesesAtraso;
-  const mora = diasEfetivos > 0 ? base * (cfg.moraPct / 100) : 0;
+
+  const correcao = cfg.correcaoAtiva ? base * ((cfg.correcaoPctMes || 0) / 100) * mesesAtraso : 0;
+  const juros = cfg.jurosAtivo
+    ? cfg.jurosTipo === "diario"
+      ? base * ((cfg.jurosPctDia || 0) / 100) * diasEfetivos
+      : base * ((cfg.jurosPctMes || 0) / 100) * mesesAtraso
+    : 0;
+  const mora = cfg.moraAtiva && diasEfetivos > 0 ? base * ((cfg.moraPct || 0) / 100) : 0;
   const atualizado = base + correcao + juros + mora;
-  return { diasAtraso, diasEfetivos, correcao, juros, mora, atualizado };
+  return { diasAtraso, diasEfetivos, dentroTolerancia, correcao, juros, mora, atualizado };
+}
+
+// ---------- Distribuição financeira ----------
+export interface MemoriaCalculo {
+  valorRecebido: number;
+  aliquota: number;
+  imposto: number;
+  comissao: number;
+  restante: number;
+  empresaPct: number;
+  empresaValor: number;
+  socioPct: number;
+  socioValor: number;
+}
+
+export function memoriaDoMovimento(m: Movimento, emp?: Empreendimento): MemoriaCalculo {
+  const restante = Math.max(0, m.valorRecebido - m.impostoReservado - m.comissaoPaga);
+  const totalPct = (emp?.socioPct ?? 0) + (emp?.empresaPct ?? 0);
+  return {
+    valorRecebido: m.valorRecebido,
+    aliquota: emp?.aliquotaTributaria ?? 0,
+    imposto: m.impostoReservado,
+    comissao: m.comissaoPaga,
+    restante,
+    empresaPct: totalPct ? ((emp?.empresaPct ?? 0) / totalPct) * 100 : 0,
+    empresaValor: m.empresaValor,
+    socioPct: totalPct ? ((emp?.socioPct ?? 0) / totalPct) * 100 : 0,
+    socioValor: m.socioValor,
+  };
+}
+
+// Totais previstos de Empresa / Sócio considerando todo o contratado
+export function distribuicaoPrevista(
+  empreendimentos: Empreendimento[],
+  vendas: Venda[],
+  parcelas: Parcela[],
+  cfg: Config,
+) {
+  let empresa = 0;
+  let socio = 0;
+  let imposto = 0;
+  let comissao = 0;
+  for (const v of vendas) {
+    if (v.status === "cancelada") continue;
+    const emp = empreendimentos.find((e) => e.id === v.empreendimentoId);
+    if (!emp) continue;
+    const previsto =
+      parcelas.filter((p) => p.vendaId === v.id).reduce((a, p) => a + p.valor, 0) || v.valorTotal;
+    const imp = previsto * (emp.aliquotaTributaria / 100);
+    const com = Math.min(
+      Math.max(0, previsto - imp),
+      v.valorTotal * ((v.corretorPct || cfg.corretorPctPadrao) / 100),
+    );
+    const restante = Math.max(0, previsto - imp - com);
+    const totalPct = emp.socioPct + emp.empresaPct;
+    imposto += imp;
+    comissao += com;
+    empresa += totalPct ? restante * (emp.empresaPct / totalPct) : 0;
+    socio += totalPct ? restante * (emp.socioPct / totalPct) : 0;
+  }
+  return { empresa, socio, imposto, comissao };
 }
