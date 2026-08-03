@@ -517,6 +517,8 @@ function loadState(): State {
     if (raw) {
       const parsed = JSON.parse(raw) as State;
       if (!parsed.movimentos) parsed.movimentos = [];
+      // mescla defaults novos (config de inadimplência) sem perder dados salvos
+      parsed.config = { ...makeSeed().config, ...parsed.config };
       return parsed;
     }
   } catch {}
