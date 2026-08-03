@@ -19,7 +19,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { useStore, comissaoDaVenda } from "@/lib/store";
+import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
+import { useStore, comissaoDaVenda, distribuicaoPrevista } from "@/lib/store";
 import { brl0, formatDate, pct } from "@/lib/format";
 
 export const Route = createFileRoute("/recebedores")({
@@ -63,6 +64,11 @@ function RecebedoresPage() {
     return [...map.entries()].map(([nome, v]) => ({ nome, ...v }));
   }, [state]);
 
+  const previstoDist = useMemo(
+    () => distribuicaoPrevista(state.empreendimentos, state.vendas, state.parcelas, state.config),
+    [state],
+  );
+
   return (
     <PageShell>
       <PageHeader
@@ -71,11 +77,21 @@ function RecebedoresPage() {
         description="Acompanhe a distribuição dos valores recebidos entre sócios, empresa e corretores."
       />
 
-      <Tabs defaultValue="distribuicao" className="space-y-4">
+      <Tabs defaultValue="financeira" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="financeira">Distribuição Financeira</TabsTrigger>
           <TabsTrigger value="distribuicao">Distribuição por empreendimento</TabsTrigger>
           <TabsTrigger value="corretores">Comissão dos corretores</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="financeira" className="space-y-4">
+          <DistribuicaoFinanceira
+            movimentos={state.movimentos}
+            empreendimentos={state.empreendimentos}
+            previsto={previstoDist}
+          />
+        </TabsContent>
+
 
         <TabsContent value="distribuicao" className="space-y-4">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

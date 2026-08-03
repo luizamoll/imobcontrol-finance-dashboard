@@ -26,7 +26,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
-import { useStore, vendaTotais, comissaoDaVenda } from "@/lib/store";
+import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
+import { useStore, vendaTotais, comissaoDaVenda, distribuicaoPrevista } from "@/lib/store";
 import { brl0, formatDate, pct } from "@/lib/format";
 
 export const Route = createFileRoute("/vendas/$id")({
@@ -54,6 +55,8 @@ function VendaDetail() {
   const empresa = movs.reduce((a, m) => a + m.empresaValor, 0);
   const socio = movs.reduce((a, m) => a + m.socioValor, 0);
   const progresso = totais.previsto ? (totais.recebido / totais.previsto) * 100 : 0;
+  const previstoDist = distribuicaoPrevista([emp], [v], state.parcelas, state.config);
+
 
   return (
     <PageShell>
@@ -172,7 +175,15 @@ function VendaDetail() {
         </CardContent>
       </Card>
 
+      <DistribuicaoFinanceira
+        movimentos={movs}
+        empreendimentos={state.empreendimentos}
+        previsto={previstoDist}
+        descricao={`Como cada recebimento deste contrato foi dividido entre imposto da SPE, corretor, empresa e sócio.`}
+      />
+
       <Card className="border-border/70">
+
         <CardHeader>
           <CardTitle className="text-base">Histórico de auditoria</CardTitle>
           <p className="text-xs text-muted-foreground">Cada linha registra a distribuição aplicada em um recebimento.</p>

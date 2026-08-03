@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/configuracoes")({
@@ -31,9 +32,19 @@ function ConfigPage() {
   const [parcelasPct, setParcelasPct] = useState(String(cfg.parcelasPctCorretor));
   const [aliq, setAliq] = useState(String(cfg.aliquotaPadrao));
   const [correcao, setCorrecao] = useState(String(cfg.correcaoPctMes));
+  const [correcaoAtiva, setCorrecaoAtiva] = useState(cfg.correcaoAtiva ?? true);
+  const [indice, setIndice] = useState(cfg.correcaoIndice ?? "IGP-M");
   const [juros, setJuros] = useState(String(cfg.jurosPctMes));
+  const [jurosDia, setJurosDia] = useState(String(cfg.jurosPctDia ?? 0.033));
+  const [jurosTipo, setJurosTipo] = useState<"diario" | "mensal">(cfg.jurosTipo ?? "mensal");
+  const [jurosAtivo, setJurosAtivo] = useState(cfg.jurosAtivo ?? true);
   const [mora, setMora] = useState(String(cfg.moraPct));
+  const [moraAtiva, setMoraAtiva] = useState(cfg.moraAtiva ?? true);
   const [tolerancia, setTolerancia] = useState(String(cfg.diasTolerancia));
+  const [toleranciaAtiva, setToleranciaAtiva] = useState(cfg.toleranciaAtiva ?? true);
+  const [inicioJuros, setInicioJuros] = useState<"vencimento" | "apos_tolerancia">(
+    cfg.inicioJuros ?? "apos_tolerancia",
+  );
   const [newRec, setNewRec] = useState("");
   const [newTipo, setNewTipo] = useState<"socio" | "empresa" | "corretor">("corretor");
 
@@ -50,12 +61,21 @@ function ConfigPage() {
   const saveInadimplencia = () => {
     updateConfig({
       correcaoPctMes: Number(correcao) || 0,
+      correcaoAtiva,
+      correcaoIndice: indice,
       jurosPctMes: Number(juros) || 0,
+      jurosPctDia: Number(jurosDia) || 0,
+      jurosTipo,
+      jurosAtivo,
       moraPct: Number(mora) || 0,
+      moraAtiva,
       diasTolerancia: Number(tolerancia) || 0,
+      toleranciaAtiva,
+      inicioJuros,
     });
-    toast.success("Regras de inadimplência salvas");
+    toast.success("Configuração de inadimplência salva");
   };
+
 
   const addRec = () => {
     if (!newRec.trim()) return;
@@ -107,35 +127,100 @@ function ConfigPage() {
 
         <Card className="border-border/70">
           <CardHeader>
-            <CardTitle className="text-base">Regras de inadimplência</CardTitle>
+            <CardTitle className="text-base">Configuração da Inadimplência</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Correção, juros e mora aplicados automaticamente sobre parcelas vencidas.
+              Índices, juros, mora e tolerância aplicados automaticamente no cálculo das parcelas
+              vencidas. Cada regra pode ser ativada ou desativada.
             </p>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Correção monetária (% ao mês)</Label>
-              <Input type="number" step="0.01" value={correcao} onChange={(e) => setCorrecao(e.target.value)} />
+          <CardContent className="space-y-4">
+            {/* Correção monetária */}
+            <div className="rounded-lg border border-border/60 p-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Correção monetária</Label>
+                <Switch checked={correcaoAtiva} onCheckedChange={setCorrecaoAtiva} />
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Índice de correção</Label>
+                  <Input value={indice} onChange={(e) => setIndice(e.target.value)} placeholder="IGP-M, INCC, IPCA..." />
+                </div>
+                <div>
+                  <Label className="text-xs">% ao mês</Label>
+                  <Input type="number" step="0.01" value={correcao} onChange={(e) => setCorrecao(e.target.value)} />
+                </div>
+              </div>
             </div>
-            <div>
-              <Label>Juros (% ao mês)</Label>
-              <Input type="number" step="0.01" value={juros} onChange={(e) => setJuros(e.target.value)} />
+
+            {/* Juros */}
+            <div className="rounded-lg border border-border/60 p-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Juros</Label>
+                <Switch checked={jurosAtivo} onCheckedChange={setJurosAtivo} />
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Tipo de juros</Label>
+                  <Select value={jurosTipo} onValueChange={(v) => setJurosTipo(v as "diario" | "mensal")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="diario">Diário</SelectItem>
+                      <SelectItem value="mensal">Mensal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">
+                    {jurosTipo === "diario" ? "% ao dia" : "% ao mês"}
+                  </Label>
+                  {jurosTipo === "diario" ? (
+                    <Input type="number" step="0.001" value={jurosDia} onChange={(e) => setJurosDia(e.target.value)} />
+                  ) : (
+                    <Input type="number" step="0.01" value={juros} onChange={(e) => setJuros(e.target.value)} />
+                  )}
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Data inicial da incidência dos juros</Label>
+                  <Select value={inicioJuros} onValueChange={(v) => setInicioJuros(v as "vencimento" | "apos_tolerancia")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vencimento">A partir do vencimento</SelectItem>
+                      <SelectItem value="apos_tolerancia">Após os dias de tolerância</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-            <div>
-              <Label>Mora (% fixo sobre atraso)</Label>
-              <Input type="number" step="0.01" value={mora} onChange={(e) => setMora(e.target.value)} />
+
+            {/* Mora */}
+            <div className="rounded-lg border border-border/60 p-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Mora (multa)</Label>
+                <Switch checked={moraAtiva} onCheckedChange={setMoraAtiva} />
+              </div>
+              <div className="mt-3">
+                <Label className="text-xs">% fixo sobre o valor em atraso</Label>
+                <Input type="number" step="0.01" value={mora} onChange={(e) => setMora(e.target.value)} />
+              </div>
             </div>
-            <div>
-              <Label>Dias de tolerância</Label>
-              <Input type="number" value={tolerancia} onChange={(e) => setTolerancia(e.target.value)} />
+
+            {/* Tolerância */}
+            <div className="rounded-lg border border-border/60 p-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Dias de tolerância</Label>
+                <Switch checked={toleranciaAtiva} onCheckedChange={setToleranciaAtiva} />
+              </div>
+              <div className="mt-3">
+                <Input type="number" value={tolerancia} onChange={(e) => setTolerancia(e.target.value)} />
+              </div>
             </div>
-            <div className="sm:col-span-2">
-              <Button onClick={saveInadimplencia} size="sm">
-                <Save className="mr-2 h-4 w-4" /> Salvar regras
-              </Button>
-            </div>
+
+            <Button onClick={saveInadimplencia} size="sm">
+              <Save className="mr-2 h-4 w-4" /> Salvar configuração
+            </Button>
           </CardContent>
         </Card>
+
 
         <Card className="border-border/70 xl:col-span-2">
           <CardHeader>
