@@ -110,7 +110,7 @@ Uma direção provável para os próximos módulos é:
 ```text
 api/            # controllers e contratos HTTP
 application/    # casos de uso e coordenação
- domain/         # entidades e regras de negócio
+domain/         # entidades e regras de negócio
 infrastructure/ # persistência e integrações
 ```
 
