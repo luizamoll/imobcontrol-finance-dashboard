@@ -58,9 +58,9 @@ O início da API está documentado em [`backend/README.md`](backend/README.md).
 
 ```mermaid
 flowchart LR
-    A[Interface React + TypeScript\nAtual] --> B[API Java + Spring Boot\nEm construção]
-    B --> C[Serviços e regras de domínio\nPróxima etapa]
-    C --> D[(PostgreSQL\nPlanejado)]
+    A["Interface React + TypeScript<br/>Atual"] --> B["API Java + Spring Boot<br/>Em construção"]
+    B --> C["Serviços e regras de domínio<br/>Próxima etapa"]
+    C --> D[("PostgreSQL<br/>Planejado")]
 ```
 
 A migração está sendo feita gradualmente: primeiro a estrutura da API, depois persistência, regras financeiras no servidor e integração completa com a interface.
