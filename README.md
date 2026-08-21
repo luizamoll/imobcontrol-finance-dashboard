@@ -36,6 +36,8 @@ Também existem configurações para correção, juros, mora, dias de tolerânci
 
 ## Tecnologias
 
+### Interface atual
+
 - TypeScript
 - React 19
 - TanStack Start
@@ -49,16 +51,28 @@ Também existem configurações para correção, juros, mora, dias de tolerânci
 - Recharts
 - Bun
 
+### Back-end em construção
+
+- Java 21
+- Spring Boot 4.1
+- Spring Web
+- Bean Validation
+- Spring Boot Actuator
+- Maven
+
+O início da API está em [`backend/`](backend/README.md).
+
 ## Estrutura atual
 
 ```text
-src/
-├── components/   # componentes de interface
-├── hooks/        # hooks reutilizáveis
-├── lib/          # estado, regras de domínio e utilitários
-├── routes/       # páginas e rotas da aplicação
-├── router.tsx
-└── server.ts
+.
+├── backend/       # API Java/Spring Boot em evolução
+├── docs/          # documentação técnica
+└── src/           # aplicação web atual
+    ├── components/
+    ├── hooks/
+    ├── lib/
+    └── routes/
 ```
 
 As entidades centrais incluem empreendimentos, unidades, vendas, parcelas, movimentos financeiros e configurações.
@@ -67,19 +81,20 @@ As entidades centrais incluem empreendimentos, unidades, vendas, parcelas, movim
 
 O ImobControl está em desenvolvimento. A interface e parte importante das regras de negócio já estão implementadas.
 
-No momento, os dados da aplicação são mantidos no estado local do projeto e usam dados de demonstração. A próxima etapa técnica é evoluir a aplicação para uma arquitetura com persistência em banco de dados e uma camada back-end própria.
+Os dados da interface ainda são mantidos no estado local com dados de demonstração. A migração para uma API própria em Java/Spring Boot foi iniciada e será feita por módulos, começando pela estrutura da aplicação e depois seguindo para persistência e regras de domínio.
 
 ### Próximas etapas
 
-- persistência em banco de dados;
+- primeiro CRUD de empreendimentos no back-end;
+- persistência com PostgreSQL;
+- API para vendas, parcelas e recebimentos;
+- validação das regras financeiras no back-end;
 - autenticação e perfis de acesso;
-- API para operações financeiras;
-- validação das regras de negócio no back-end;
 - testes automatizados;
 - auditoria de alterações financeiras;
-- preparação para deploy de produção.
+- integração completa da interface com a API.
 
-## Executando localmente
+## Executando a interface
 
 Requisitos:
 
@@ -102,13 +117,24 @@ Para verificar o código:
 bun run lint
 ```
 
+## Executando o back-end
+
+Com Java 21 e Maven instalados:
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+A documentação específica do back-end está em [`backend/README.md`](backend/README.md).
+
 ## Arquitetura
 
 A visão de domínio e o fluxo financeiro estão documentados em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
 
 ## Objetivo técnico
 
-Além de resolver um problema de negócio, este projeto é usado para praticar modelagem de domínio, regras financeiras, organização de aplicações web e a evolução gradual de uma interface funcional para uma arquitetura back-end mais robusta.
+Além de resolver um problema de negócio, este projeto é usado para praticar modelagem de domínio, regras financeiras, organização de aplicações web e evolução gradual para uma arquitetura full-stack com back-end Java.
 
 ---
 
