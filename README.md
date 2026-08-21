@@ -4,6 +4,8 @@ Sistema web para controle financeiro de empreendimentos imobiliários, com foco 
 
 O projeto nasceu de uma necessidade real de organizar regras financeiras que ficam difíceis de acompanhar em planilhas conforme aumentam o número de empreendimentos, unidades e pagamentos.
 
+> **Demonstração:** nomes, CNPJs, valores, compradores, empreendimentos e demais dados exibidos no projeto são fictícios e foram criados apenas para simular cenários de uso.
+
 ## Funcionalidades atuais
 
 - Dashboard com visão geral financeira
@@ -99,6 +101,10 @@ Para verificar o código:
 ```bash
 bun run lint
 ```
+
+## Arquitetura
+
+A visão de domínio e o fluxo financeiro estão documentados em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
 
 ## Objetivo técnico
 
