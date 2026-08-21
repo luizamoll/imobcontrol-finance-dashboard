@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Front-end build and dependencies
 node_modules
 dist
 dist-ssr
@@ -15,6 +16,10 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+
+# Java / Maven
+target/
+*.class
 
 # Environment and local secrets
 .env
