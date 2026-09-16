@@ -38,15 +38,36 @@ function LoginPage() {
 
     setEntrando(true);
 
-    // Etapa visual: a validação real será conectada ao Spring Security.
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          email: email.trim(),
+          senha,
+        }),
+      });
 
-    toast.info("Acesso de desenvolvimento", {
-      description: "A autenticação real será validada pelo back-end Java/Spring Security.",
-    });
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast.error("E-mail ou senha inválidos.");
+        } else {
+          toast.error("Não foi possível entrar agora. Tente novamente.");
+        }
+        return;
+      }
 
-    setEntrando(false);
-    navigate({ to: "/" });
+      const usuario = (await response.json()) as { nome: string };
+      toast.success(`Bem-vinda, ${usuario.nome}.`);
+      navigate({ to: "/" });
+    } catch {
+      toast.error("Não foi possível conectar ao servidor do ImobControl.");
+    } finally {
+      setEntrando(false);
+    }
   }
 
   return (
@@ -131,7 +152,7 @@ function LoginPage() {
                       type="button"
                       className="text-xs font-medium text-primary hover:underline"
                       onClick={() =>
-                        toast.info("Recuperação de senha será ativada junto com a autenticação.")
+                        toast.info("A recuperação de senha será disponibilizada em breve.")
                       }
                     >
                       Esqueceu sua senha?
@@ -173,7 +194,7 @@ function LoginPage() {
           <div className="mt-5 flex items-start gap-2 rounded-lg border border-border/70 bg-muted/30 px-3.5 py-3 text-xs leading-5 text-muted-foreground">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <p>
-              Nesta etapa, a tela de acesso está pronta para desenvolvimento. A validação segura de usuário, senha e perfil será feita no servidor Java.
+              Seu acesso é validado com segurança pelo servidor do ImobControl.
             </p>
           </div>
         </div>
