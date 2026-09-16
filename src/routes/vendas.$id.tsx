@@ -2,18 +2,20 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Building2,
-  User,
+  CheckCircle2,
   CircleDollarSign,
   Landmark,
+  Receipt,
+  RotateCcw,
+  User,
   Users,
   Wallet,
-  Receipt,
-  CheckCircle2,
-  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -25,10 +27,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
-import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
-import { useStore, vendaTotais, comissaoDaVenda, distribuicaoPrevista } from "@/lib/store";
 import { brl0, formatDate, pct } from "@/lib/format";
+import {
+  comissaoDaVenda,
+  distribuicaoPrevista,
+  inadimplenciaCalc,
+  useStore,
+  vendaTotais,
+  type ParcelaStatus,
+} from "@/lib/store";
 
 export const Route = createFileRoute("/vendas/$id")({
   component: VendaDetail,
@@ -48,7 +55,20 @@ function VendaDetail() {
   const emp = state.empreendimentos.find((e) => e.id === v.empreendimentoId)!;
   const mat = state.matriculas.find((m) => m.id === v.matriculaId)!;
   const totais = vendaTotais(v, state.parcelas);
-  const parcelas = state.parcelas.filter((p) => p.vendaId === v.id);
+  const hoje = new Date();
+  const parcelas = state.parcelas
+    .filter((p) => p.vendaId === v.id)
+    .map((p) => {
+      const calc = inadimplenciaCalc(p, state.config, hoje);
+      const status: ParcelaStatus =
+        p.status === "pendente" && calc.diasAtraso > 0 ? "vencida" : p.status;
+      return {
+        ...p,
+        status,
+        calc,
+        valorCobrado: calc.diasAtraso > 0 ? calc.atualizado : p.valor,
+      };
+    });
   const movs = state.movimentos.filter((m) => m.vendaId === v.id);
   const c = comissaoDaVenda(v, state.parcelas, state.config, state.movimentos);
   const imposto = movs.reduce((a, m) => a + m.impostoReservado, 0);
@@ -56,7 +76,6 @@ function VendaDetail() {
   const socio = movs.reduce((a, m) => a + m.socioValor, 0);
   const progresso = totais.previsto ? (totais.recebido / totais.previsto) * 100 : 0;
   const previstoDist = distribuicaoPrevista([emp], [v], state.parcelas, state.config);
-
 
   return (
     <PageShell>
@@ -74,13 +93,12 @@ function VendaDetail() {
         actions={<VendaStatusBadge status={v.status} />}
       />
 
-      {/* Fluxo Cliente → Unidade → Valor */}
       <Card className="border-border/70">
         <CardContent className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-5">
           <FlowItem icon={User} label="Cliente" value={v.compradorNome} />
           <FlowItem icon={Building2} label="Empreendimento" value={emp.nome} sub={emp.spe} />
           <FlowItem icon={Wallet} label="Unidade" value={mat.unidade} sub={mat.numero} />
-          <FlowItem icon={CircleDollarSign} label="Valor" value={brl0(v.valorTotal)} sub={`Corretor: ${v.corretorNome}`} />
+          <FlowItem icon={CircleDollarSign} label="Valor" value={brl0(v.valorTotal)} sub={`Corretor: ${v.corretorNome || "—"}`} />
           <FlowItem icon={Receipt} label="Recebido" value={brl0(totais.recebido)} sub={`${pct(progresso)} do contrato`} />
         </CardContent>
       </Card>
@@ -124,7 +142,7 @@ function VendaDetail() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <Row icon={Landmark} label={`Reserva tributária (${emp.aliquotaTributaria}%)`} value={imposto} />
-            <Row icon={Users} label={`Comissão do corretor · ${v.corretorNome}`} value={c.pago} sub={`Total: ${brl0(c.total)} · Saldo: ${brl0(c.saldo)}`} />
+            <Row icon={Users} label={`Comissão do corretor · ${v.corretorNome || "—"}`} value={c.pago} sub={`Total: ${brl0(c.total)} · Saldo: ${brl0(c.saldo)}`} />
             <Row icon={Building2} label={`Empresa (${emp.empresaPct}%)`} value={empresa} />
             <Row icon={User} label={`Sócio (${emp.socioPct}%)`} value={socio} />
           </CardContent>
@@ -134,6 +152,9 @@ function VendaDetail() {
       <Card className="border-border/70">
         <CardHeader>
           <CardTitle className="text-base">Recebimentos e parcelas</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Parcelas vencidas usam a mesma regra de correção, juros e multa da Central de Recebimentos.
+          </p>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -142,7 +163,7 @@ function VendaDetail() {
                 <TableHead>Origem</TableHead>
                 <TableHead>Nº</TableHead>
                 <TableHead>Vencimento</TableHead>
-                <TableHead className="text-right">Previsto</TableHead>
+                <TableHead className="text-right">A receber</TableHead>
                 <TableHead className="text-right">Recebido</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ação</TableHead>
@@ -154,7 +175,12 @@ function VendaDetail() {
                   <TableCell className="text-sm">{p.origemDescricao}</TableCell>
                   <TableCell className="text-sm tabular-nums">{p.numero}/{p.totalParcelas}</TableCell>
                   <TableCell className="text-sm">{formatDate(p.vencimento)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{brl0(p.valor)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {brl0(p.status === "vencida" ? p.valorCobrado : p.valor)}
+                    {p.status === "vencida" && p.valorCobrado !== p.valor && (
+                      <div className="text-[11px] text-muted-foreground">original {brl0(p.valor)}</div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums text-success">{brl0(p.valorPago)}</TableCell>
                   <TableCell><ParcelaStatusBadge status={p.status} /></TableCell>
                   <TableCell className="text-right">
@@ -162,8 +188,21 @@ function VendaDetail() {
                       <Button size="sm" variant="ghost" onClick={() => { reverterParcela(p.id); toast("Recebimento revertido"); }}>
                         <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reverter
                       </Button>
+                    ) : p.status === "cancelada" ? (
+                      <span className="text-xs text-muted-foreground">Sem ação</span>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => { receberParcela(p.id); toast.success("Recebimento registrado"); }}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          receberParcela(p.id, p.valorCobrado);
+                          toast.success(
+                            p.status === "vencida"
+                              ? "Parcela recebida com os acréscimos aplicáveis"
+                              : "Recebimento registrado",
+                          );
+                        }}
+                      >
                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
                       </Button>
                     )}
@@ -179,11 +218,10 @@ function VendaDetail() {
         movimentos={movs}
         empreendimentos={state.empreendimentos}
         previsto={previstoDist}
-        descricao={`Como cada recebimento deste contrato foi dividido entre imposto da SPE, corretor, empresa e sócio.`}
+        descricao="Como cada recebimento deste contrato foi dividido entre imposto da SPE, corretor, empresa e sócio."
       />
 
       <Card className="border-border/70">
-
         <CardHeader>
           <CardTitle className="text-base">Histórico de auditoria</CardTitle>
           <p className="text-xs text-muted-foreground">Cada linha registra a distribuição aplicada em um recebimento.</p>
