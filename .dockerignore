@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+.output
+dist
+dist-ssr
+.vinxi
+.tanstack
+.nitro
+backend/target
+backend/data
+*.log
+.env
+.env.*
+!.env.example
