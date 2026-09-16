@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, Plus, RefreshCw } from "lucide-react";
+import { Building2, Plus, Upload } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -21,7 +21,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,116 +42,140 @@ export const Route = createFileRoute("/empreendimentos/")({
 });
 
 function EmpreendimentosList() {
-  const { state, addEmpreendimento, resetSeed } = useStore();
+  const { state, addEmpreendimento } = useStore();
   const [open, setOpen] = useState(false);
+  const hasEmpreendimentos = state.empreendimentos.length > 0;
+
+  const handleImport = () => {
+    toast.info("Importação de arquivo em preparação", {
+      description:
+        "Na próxima etapa, o arquivo será validado pelo back-end Java antes de entrar no sistema.",
+    });
+  };
 
   return (
     <PageShell>
       <PageHeader
         eyebrow="Portfólio"
         title="Empreendimentos"
-        description="Cadastre e acompanhe cada empreendimento, SPE, unidades, VGV e status de comercialização."
+        description="Cadastre os empreendimentos reais da operação e acompanhe suas unidades, vendas e recebimentos."
         actions={
           <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                resetSeed();
-                toast.success("Dados de demonstração restaurados");
-              }}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Restaurar dados
+            <Button variant="outline" size="sm" onClick={handleImport}>
+              <Upload className="mr-2 h-4 w-4" />
+              Importar arquivo
             </Button>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Novo empreendimento
-                </Button>
-              </DialogTrigger>
-              <NewEmpreendimentoDialog
-                onSave={(e) => {
-                  addEmpreendimento({ tipo: "loteamento", ...e });
-                  toast.success(`Empreendimento "${e.nome}" cadastrado`);
-                  setOpen(false);
-                }}
-              />
-            </Dialog>
+            <Button size="sm" onClick={() => setOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo empreendimento
+            </Button>
           </>
         }
       />
 
-      <Card className="border-border/70">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Empreendimento</TableHead>
-                <TableHead>SPE · CNPJ</TableHead>
-                <TableHead className="text-right">Área total</TableHead>
-                <TableHead className="text-right">Unidades</TableHead>
-                <TableHead className="text-right">VGV</TableHead>
-                <TableHead className="text-right">Vendido</TableHead>
-                <TableHead className="text-right">Recebido</TableHead>
-                <TableHead className="text-right">Saldo a receber</TableHead>
-                <TableHead>% vendido</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {state.empreendimentos.map((e) => {
-                const t = empTotais(e.id, state.vendas, state.parcelas);
-                const vendidoPct = e.valorTotal
-                  ? Math.min(100, (t.vendido / e.valorTotal) * 100)
-                  : 0;
-                return (
-                  <TableRow key={e.id} className="hover:bg-muted/30">
-                    <TableCell className="font-medium">
-                      <Link
-                        to="/empreendimentos/$id"
-                        params={{ id: e.id }}
-                        className="flex items-center gap-2 text-foreground hover:text-primary"
-                      >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-                          <Building2 className="h-4 w-4" />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <NewEmpreendimentoDialog
+          onSave={(e) => {
+            addEmpreendimento({ tipo: "loteamento", ...e });
+            toast.success(`Empreendimento "${e.nome}" cadastrado`);
+            setOpen(false);
+          }}
+        />
+      </Dialog>
+
+      {!hasEmpreendimentos ? (
+        <Card className="border-dashed border-border/80">
+          <CardContent className="flex min-h-[360px] flex-col items-center justify-center px-6 py-12 text-center">
+            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Building2 className="h-8 w-8" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground">
+              Cadastre seu primeiro empreendimento
+            </h2>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+              O ImobControl está vazio e pronto para receber os dados reais da operação. Você pode
+              começar pelo cadastro manual e, em seguida, organizar quadras, lotes ou outras unidades
+              dentro de cada empreendimento.
+            </p>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+              <Button onClick={() => setOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Cadastrar empreendimento
+              </Button>
+              <Button variant="outline" onClick={handleImport}>
+                <Upload className="mr-2 h-4 w-4" />
+                Importar arquivo
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-border/70">
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Empreendimento</TableHead>
+                  <TableHead>SPE · CNPJ</TableHead>
+                  <TableHead className="text-right">Área total</TableHead>
+                  <TableHead className="text-right">Unidades</TableHead>
+                  <TableHead className="text-right">VGV</TableHead>
+                  <TableHead className="text-right">Vendido</TableHead>
+                  <TableHead className="text-right">Recebido</TableHead>
+                  <TableHead className="text-right">Saldo a receber</TableHead>
+                  <TableHead>% vendido</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {state.empreendimentos.map((e) => {
+                  const t = empTotais(e.id, state.vendas, state.parcelas);
+                  const vendidoPct = e.valorTotal
+                    ? Math.min(100, (t.vendido / e.valorTotal) * 100)
+                    : 0;
+                  return (
+                    <TableRow key={e.id} className="hover:bg-muted/30">
+                      <TableCell className="font-medium">
+                        <Link
+                          to="/empreendimentos/$id"
+                          params={{ id: e.id }}
+                          className="flex items-center gap-2 text-foreground hover:text-primary"
+                        >
+                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+                            <Building2 className="h-4 w-4" />
+                          </div>
+                          {e.nome}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <div className="text-foreground">{e.spe}</div>
+                        <div className="text-xs text-muted-foreground">{e.cnpj}</div>
+                      </TableCell>
+                      <TableCell className="text-right">{num(e.areaTotal)} m²</TableCell>
+                      <TableCell className="text-right">{e.matriculasCount}</TableCell>
+                      <TableCell className="text-right font-medium">{brl0(e.valorTotal)}</TableCell>
+                      <TableCell className="text-right">{brl0(t.vendido)}</TableCell>
+                      <TableCell className="text-right text-success">{brl0(t.recebido)}</TableCell>
+                      <TableCell className="text-right">{brl0(t.saldo)}</TableCell>
+                      <TableCell className="w-40">
+                        <div className="flex items-center gap-2">
+                          <Progress value={vendidoPct} className="h-1.5" />
+                          <span className="w-12 text-right text-xs text-muted-foreground">
+                            {pct(vendidoPct)}
+                          </span>
                         </div>
-                        {e.nome}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      <div className="text-foreground">{e.spe}</div>
-                      <div className="text-xs text-muted-foreground">{e.cnpj}</div>
-                    </TableCell>
-                    <TableCell className="text-right">{num(e.areaTotal)} m²</TableCell>
-                    <TableCell className="text-right">{e.matriculasCount}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {brl0(e.valorTotal)}
-                    </TableCell>
-                    <TableCell className="text-right">{brl0(t.vendido)}</TableCell>
-                    <TableCell className="text-right text-success">
-                      {brl0(t.recebido)}
-                    </TableCell>
-                    <TableCell className="text-right">{brl0(t.saldo)}</TableCell>
-                    <TableCell className="w-40">
-                      <div className="flex items-center gap-2">
-                        <Progress value={vendidoPct} className="h-1.5" />
-                        <span className="w-12 text-right text-xs text-muted-foreground">
-                          {pct(vendidoPct)}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <EmpStatusBadge status={e.status} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                      </TableCell>
+                      <TableCell>
+                        <EmpStatusBadge status={e.status} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </PageShell>
   );
 }
@@ -181,10 +204,10 @@ function NewEmpreendimentoDialog({
   const [areaTotal, setAreaTotal] = useState("");
   const [matriculasCount, setMatriculasCount] = useState("");
   const [valorTotal, setValorTotal] = useState("");
-  const [socioPct, setSocioPct] = useState("40");
-  const [empresaPct, setEmpresaPct] = useState("55");
-  const [corretorPct, setCorretorPct] = useState("5");
-  const [aliq, setAliq] = useState("6.73");
+  const [socioPct, setSocioPct] = useState("");
+  const [empresaPct, setEmpresaPct] = useState("");
+  const [corretorPct, setCorretorPct] = useState("");
+  const [aliq, setAliq] = useState("");
   const [obs, setObs] = useState("");
   const [status, setStatus] = useState<EmpStatus>("planejamento");
 
@@ -193,7 +216,8 @@ function NewEmpreendimentoDialog({
       <DialogHeader>
         <DialogTitle>Novo empreendimento</DialogTitle>
         <DialogDescription>
-          Informe os dados da SPE e características do empreendimento.
+          Informe os dados reais do empreendimento. Campos financeiros não recebem valores fictícios
+          automaticamente.
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -215,14 +239,10 @@ function NewEmpreendimentoDialog({
         </div>
         <div>
           <Label>Área total (m²)</Label>
-          <Input
-            type="number"
-            value={areaTotal}
-            onChange={(e) => setAreaTotal(e.target.value)}
-          />
+          <Input type="number" value={areaTotal} onChange={(e) => setAreaTotal(e.target.value)} />
         </div>
         <div>
-          <Label>Quantidade de matrículas / unidades</Label>
+          <Label>Quantidade de unidades / lotes</Label>
           <Input
             type="number"
             value={matriculasCount}
@@ -231,11 +251,7 @@ function NewEmpreendimentoDialog({
         </div>
         <div>
           <Label>Valor total estimado (R$)</Label>
-          <Input
-            type="number"
-            value={valorTotal}
-            onChange={(e) => setValorTotal(e.target.value)}
-          />
+          <Input type="number" value={valorTotal} onChange={(e) => setValorTotal(e.target.value)} />
         </div>
         <div>
           <Label>Status</Label>
@@ -253,27 +269,15 @@ function NewEmpreendimentoDialog({
         </div>
         <div>
           <Label>% Sócio</Label>
-          <Input
-            type="number"
-            value={socioPct}
-            onChange={(e) => setSocioPct(e.target.value)}
-          />
+          <Input type="number" value={socioPct} onChange={(e) => setSocioPct(e.target.value)} />
         </div>
         <div>
           <Label>% Empresa</Label>
-          <Input
-            type="number"
-            value={empresaPct}
-            onChange={(e) => setEmpresaPct(e.target.value)}
-          />
+          <Input type="number" value={empresaPct} onChange={(e) => setEmpresaPct(e.target.value)} />
         </div>
         <div>
           <Label>% Corretor</Label>
-          <Input
-            type="number"
-            value={corretorPct}
-            onChange={(e) => setCorretorPct(e.target.value)}
-          />
+          <Input type="number" value={corretorPct} onChange={(e) => setCorretorPct(e.target.value)} />
         </div>
         <div>
           <Label>Alíquota tributária (%)</Label>
@@ -304,7 +308,7 @@ function NewEmpreendimentoDialog({
           }
           disabled={!nome || !spe}
         >
-          Cadastrar
+          Cadastrar empreendimento
         </Button>
       </DialogFooter>
     </DialogContent>
