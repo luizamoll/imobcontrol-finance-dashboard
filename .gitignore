@@ -20,6 +20,9 @@ dist-ssr
 # Java / Maven
 target/
 *.class
+backend/data/
+*.mv.db
+*.trace.db
 
 # Environment and local secrets
 .env
