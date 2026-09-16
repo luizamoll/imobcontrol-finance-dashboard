@@ -1,10 +1,14 @@
 package br.com.imobcontrol.security;
 
+import br.com.imobcontrol.tenant.UsuarioRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -18,6 +22,17 @@ public class SecurityConfig {
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    UserDetailsService userDetailsService(UsuarioRepository usuarioRepository) {
+        return email -> usuarioRepository.findByEmailIgnoreCase(email)
+                .map(usuario -> User.withUsername(usuario.getEmail())
+                        .password(usuario.getSenhaHash())
+                        .authorities("ROLE_" + usuario.getPerfil().name())
+                        .disabled(!usuario.isAtivo())
+                        .build())
+                .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado"));
     }
 
     @Bean
