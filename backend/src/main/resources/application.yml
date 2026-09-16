@@ -14,10 +14,12 @@ spring:
 
 server:
   port: ${PORT:8081}
+  forward-headers-strategy: framework
   servlet:
     session:
       cookie:
         http-only: true
+        secure: ${SESSION_COOKIE_SECURE:false}
         same-site: lax
 
 management:
