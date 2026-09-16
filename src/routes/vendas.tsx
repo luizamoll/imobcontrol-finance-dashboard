@@ -31,8 +31,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { VendaStatusBadge } from "@/components/status-badges";
 import {
   useStore,
@@ -48,7 +48,7 @@ export const Route = createFileRoute("/vendas")({
 });
 
 function VendasPage() {
-  const { state, addVenda } = useStore();
+  const { state } = useStore();
   const [open, setOpen] = useState(false);
 
   return (
@@ -119,7 +119,7 @@ function VendasPage() {
                         </Link>
                       ) : "—"}
                     </TableCell>
-                    <TableCell className="text-sm">{v.corretorNome}</TableCell>
+                    <TableCell className="text-sm">{v.corretorNome || "—"}</TableCell>
                     <TableCell className="text-sm">{formatDate(v.dataContrato)}</TableCell>
                     <TableCell className="text-right font-medium">{brl0(v.valorTotal)}</TableCell>
                     <TableCell className="text-right text-success">{brl0(t.recebido)}</TableCell>
@@ -159,22 +159,30 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [obs, setObs] = useState("");
   const [items, setItems] = useState<PagamentoItem[]>([emptyItem("sinal"), emptyItem("parcelas")]);
 
+  const empreendimento = state.empreendimentos.find((e) => e.id === empId);
   const matriculas = useMemo(
-    () => state.matriculas.filter((m) => m.empreendimentoId === empId && m.status !== "vendido"),
+    () => state.matriculas.filter((m) => m.empreendimentoId === empId && m.status === "disponivel"),
     [state.matriculas, empId],
   );
 
-  const totalComposicao = items.reduce((a, i) => a + i.valor * (i.tipo === "parcelas" || i.tipo === "sinal_parcelado" ? i.parcelas : 1), 0);
+  const totalComposicao = items.reduce(
+    (a, i) => a + i.valor * (i.tipo === "parcelas" || i.tipo === "sinal_parcelado" ? i.parcelas : 1),
+    0,
+  );
 
   const submit = () => {
-    if (!empId || !matId || !comprador) {
-      toast.error("Preencha empreendimento, matrícula e comprador");
+    if (!empId || !matId || !comprador.trim()) {
+      toast.error("Preencha empreendimento, unidade e comprador");
+      return;
+    }
+    if (totalComposicao <= 0) {
+      toast.error("Informe a composição financeira do contrato");
       return;
     }
     addVenda({
       empreendimentoId: empId,
       matriculaId: matId,
-      compradorNome: comprador,
+      compradorNome: comprador.trim(),
       valorTotal: totalComposicao,
       dataContrato,
       corretorNome: corretor,
@@ -187,14 +195,24 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Nova venda</DialogTitle>
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <Label>Empreendimento</Label>
-          <Select value={empId} onValueChange={(v) => { setEmpId(v); setMatId(""); }}>
+          <Select
+            value={empId}
+            onValueChange={(v) => {
+              setEmpId(v);
+              setMatId("");
+              const selecionado = state.empreendimentos.find((e) => e.id === v);
+              setCorretorPct(
+                String(selecionado?.corretorPct ?? state.config.corretorPctPadrao),
+              );
+            }}
+          >
             <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
             <SelectContent>
               {state.empreendimentos.map((e) => (
@@ -205,18 +223,33 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <Label>Matrícula / Unidade</Label>
-          <Select value={matId} onValueChange={setMatId} disabled={!empId}>
-            <SelectTrigger><SelectValue placeholder={empId ? "Selecione" : "Escolha o empreendimento"} /></SelectTrigger>
+          <Select value={matId} onValueChange={setMatId} disabled={!empId || matriculas.length === 0}>
+            <SelectTrigger>
+              <SelectValue
+                placeholder={
+                  !empId
+                    ? "Escolha o empreendimento"
+                    : matriculas.length === 0
+                      ? "Nenhuma unidade disponível"
+                      : "Selecione"
+                }
+              />
+            </SelectTrigger>
             <SelectContent>
               {matriculas.map((m) => (
                 <SelectItem key={m.id} value={m.id}>{m.numero} · {m.unidade}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {empId && matriculas.length === 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Cadastre uma unidade com status Disponível antes de registrar a venda.
+            </p>
+          )}
         </div>
         <div className="sm:col-span-2">
           <Label>Comprador</Label>
-          <Input value={comprador} onChange={(e) => setComprador(e.target.value)} />
+          <Input value={comprador} onChange={(e) => setComprador(e.target.value)} placeholder="Nome do comprador" />
         </div>
         <div>
           <Label>Data do contrato</Label>
@@ -225,7 +258,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         <div>
           <Label>Corretor responsável</Label>
           <Select value={corretor} onValueChange={setCorretor}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Selecione, se houver" /></SelectTrigger>
             <SelectContent>
               {state.config.recebedores.filter((r) => r.tipo === "corretor").map((r) => (
                 <SelectItem key={r.nome} value={r.nome}>{r.nome}</SelectItem>
@@ -234,22 +267,27 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
           </Select>
         </div>
         <div>
-          <Label>% Comissão</Label>
-          <Input type="number" value={corretorPct} onChange={(e) => setCorretorPct(e.target.value)} />
+          <Label>% Comissão do corretor</Label>
+          <Input type="number" min="0" step="0.01" value={corretorPct} onChange={(e) => setCorretorPct(e.target.value)} />
+          <p className="mt-1 text-xs text-muted-foreground">
+            {empreendimento
+              ? `Valor herdado de ${empreendimento.nome}; altere somente se este contrato tiver uma exceção.`
+              : "Ao selecionar o empreendimento, o sistema carrega a regra cadastrada nele."}
+          </p>
         </div>
       </div>
 
       <Separator className="my-2" />
 
       <div>
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold">Composição do pagamento</h3>
             <p className="text-xs text-muted-foreground">
               Combine à vista, sinal, parcelas ou bem material como parte do pagamento.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button size="sm" variant="outline" onClick={() => setItems((x) => [...x, emptyItem("sinal")])}>
               + Sinal
             </Button>
@@ -285,11 +323,11 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
               </div>
               <div>
                 <Label className="text-xs">Valor unitário</Label>
-                <Input type="number" value={it.valor || ""} onChange={(e) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x))} />
+                <Input type="number" min="0" value={it.valor || ""} onChange={(e) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x))} />
               </div>
               <div>
                 <Label className="text-xs">Nº parcelas</Label>
-                <Input type="number" value={it.parcelas} onChange={(e) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, parcelas: Number(e.target.value) || 1 } : x))} />
+                <Input type="number" min="1" value={it.parcelas} onChange={(e) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, parcelas: Number(e.target.value) || 1 } : x))} />
               </div>
               <div className="sm:col-span-2">
                 <Label className="text-xs">Primeiro vencimento</Label>
@@ -302,7 +340,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                 </div>
               )}
               <div className="flex items-end justify-end">
-                <Button size="icon" variant="ghost" onClick={() => setItems((arr) => arr.filter((_, i) => i !== idx))}>
+                <Button size="icon" variant="ghost" onClick={() => setItems((arr) => arr.filter((_, i) => i !== idx))} aria-label="Remover item">
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
