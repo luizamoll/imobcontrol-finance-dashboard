@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Save, Plus, Trash2 } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowRight, Save } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -15,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useStore } from "@/lib/store";
 
@@ -25,28 +24,26 @@ export const Route = createFileRoute("/configuracoes")({
 });
 
 function ConfigPage() {
-  const { state, updateConfig, updateEmpreendimento } = useStore();
+  const { state, updateConfig } = useStore();
   const cfg = state.config;
   const [corretorPct, setCorretorPct] = useState(String(cfg.corretorPctPadrao));
   const [entradaPct, setEntradaPct] = useState(String(cfg.entradaPctCorretor));
   const [parcelasPct, setParcelasPct] = useState(String(cfg.parcelasPctCorretor));
   const [aliq, setAliq] = useState(String(cfg.aliquotaPadrao));
   const [correcao, setCorrecao] = useState(String(cfg.correcaoPctMes));
-  const [correcaoAtiva, setCorrecaoAtiva] = useState(cfg.correcaoAtiva ?? true);
-  const [indice, setIndice] = useState(cfg.correcaoIndice ?? "IGP-M");
+  const [correcaoAtiva, setCorrecaoAtiva] = useState(cfg.correcaoAtiva ?? false);
+  const [indice, setIndice] = useState(cfg.correcaoIndice ?? "");
   const [juros, setJuros] = useState(String(cfg.jurosPctMes));
-  const [jurosDia, setJurosDia] = useState(String(cfg.jurosPctDia ?? 0.033));
+  const [jurosDia, setJurosDia] = useState(String(cfg.jurosPctDia ?? 0));
   const [jurosTipo, setJurosTipo] = useState<"diario" | "mensal">(cfg.jurosTipo ?? "mensal");
-  const [jurosAtivo, setJurosAtivo] = useState(cfg.jurosAtivo ?? true);
+  const [jurosAtivo, setJurosAtivo] = useState(cfg.jurosAtivo ?? false);
   const [mora, setMora] = useState(String(cfg.moraPct));
-  const [moraAtiva, setMoraAtiva] = useState(cfg.moraAtiva ?? true);
+  const [moraAtiva, setMoraAtiva] = useState(cfg.moraAtiva ?? false);
   const [tolerancia, setTolerancia] = useState(String(cfg.diasTolerancia));
-  const [toleranciaAtiva, setToleranciaAtiva] = useState(cfg.toleranciaAtiva ?? true);
+  const [toleranciaAtiva, setToleranciaAtiva] = useState(cfg.toleranciaAtiva ?? false);
   const [inicioJuros, setInicioJuros] = useState<"vencimento" | "apos_tolerancia">(
     cfg.inicioJuros ?? "apos_tolerancia",
   );
-  const [newRec, setNewRec] = useState("");
-  const [newTipo, setNewTipo] = useState<"socio" | "empresa" | "corretor">("corretor");
 
   const saveComissao = () => {
     updateConfig({
@@ -55,14 +52,14 @@ function ConfigPage() {
       parcelasPctCorretor: Number(parcelasPct) || 0,
       aliquotaPadrao: Number(aliq) || 0,
     });
-    toast.success("Regras de comissão salvas");
+    toast.success("Padrões comerciais salvos");
   };
 
   const saveInadimplencia = () => {
     updateConfig({
       correcaoPctMes: Number(correcao) || 0,
       correcaoAtiva,
-      correcaoIndice: indice,
+      correcaoIndice: indice.trim(),
       jurosPctMes: Number(juros) || 0,
       jurosPctDia: Number(jurosDia) || 0,
       jurosTipo,
@@ -73,18 +70,7 @@ function ConfigPage() {
       toleranciaAtiva,
       inicioJuros,
     });
-    toast.success("Configuração de inadimplência salva");
-  };
-
-
-  const addRec = () => {
-    if (!newRec.trim()) return;
-    updateConfig({ recebedores: [...cfg.recebedores, { nome: newRec.trim(), tipo: newTipo }] });
-    setNewRec("");
-    toast.success("Recebedor adicionado");
-  };
-  const rmRec = (nome: string) => {
-    updateConfig({ recebedores: cfg.recebedores.filter((r) => r.nome !== nome) });
+    toast.success("Regras de inadimplência salvas");
   };
 
   return (
@@ -92,34 +78,62 @@ function ConfigPage() {
       <PageHeader
         eyebrow="Sistema"
         title="Configurações"
-        description="Regras de distribuição, alíquotas, inadimplência e cadastro de recebedores. Todos os valores são editáveis."
+        description="Defina os padrões gerais da operação. Dados específicos ficam no empreendimento, na venda ou na área de recebedores."
       />
+
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="grid gap-4 p-5 text-sm md:grid-cols-3">
+          <div>
+            <p className="font-semibold text-foreground">1. Padrão da empresa</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Aqui ficam comissão, tributação padrão e regras gerais de atraso.
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">2. Empreendimento</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Comissão e alíquota podem ser ajustadas para um projeto específico.
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">3. Venda</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              A comissão pode ser alterada quando um contrato tiver uma exceção comercial.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className="border-border/70">
           <CardHeader>
-            <CardTitle className="text-base">Regras de comissão e tributação</CardTitle>
+            <CardTitle className="text-base">Padrões comerciais e tributários</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Valores sugeridos ao cadastrar a operação. Eles evitam redigitação, mas não substituem as regras específicas de cada empreendimento ou contrato.
+            </p>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label>% Comissão padrão do corretor</Label>
-              <Input type="number" value={corretorPct} onChange={(e) => setCorretorPct(e.target.value)} />
-            </div>
-            <div>
-              <Label>% do sinal destinado ao corretor</Label>
-              <Input type="number" value={entradaPct} onChange={(e) => setEntradaPct(e.target.value)} />
-            </div>
-            <div>
-              <Label>% das parcelas destinadas ao corretor</Label>
-              <Input type="number" value={parcelasPct} onChange={(e) => setParcelasPct(e.target.value)} />
+              <Label>Comissão padrão do corretor (%)</Label>
+              <Input type="number" min="0" step="0.01" value={corretorPct} onChange={(e) => setCorretorPct(e.target.value)} />
             </div>
             <div>
               <Label>Alíquota tributária padrão (%)</Label>
-              <Input type="number" value={aliq} onChange={(e) => setAliq(e.target.value)} />
+              <Input type="number" min="0" step="0.01" value={aliq} onChange={(e) => setAliq(e.target.value)} />
+            </div>
+            <div>
+              <Label>Parte da entrada usada para comissão (%)</Label>
+              <Input type="number" min="0" step="0.01" value={entradaPct} onChange={(e) => setEntradaPct(e.target.value)} />
+              <p className="mt-1 text-xs text-muted-foreground">Percentual de cada recebimento de entrada destinado a quitar a comissão.</p>
+            </div>
+            <div>
+              <Label>Parte das parcelas usada para comissão (%)</Label>
+              <Input type="number" min="0" step="0.01" value={parcelasPct} onChange={(e) => setParcelasPct(e.target.value)} />
+              <p className="mt-1 text-xs text-muted-foreground">Aplicado até atingir o total da comissão contratada.</p>
             </div>
             <div className="sm:col-span-2">
               <Button onClick={saveComissao} size="sm">
-                <Save className="mr-2 h-4 w-4" /> Salvar regras
+                <Save className="mr-2 h-4 w-4" /> Salvar padrões
               </Button>
             </div>
           </CardContent>
@@ -127,32 +141,32 @@ function ConfigPage() {
 
         <Card className="border-border/70">
           <CardHeader>
-            <CardTitle className="text-base">Configuração da Inadimplência</CardTitle>
+            <CardTitle className="text-base">Regras de inadimplência</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Índices, juros, mora e tolerância aplicados automaticamente no cálculo das parcelas
-              vencidas. Cada regra pode ser ativada ou desativada.
+              Regras usadas pela Central de Recebimentos e pela tela de Inadimplência para calcular parcelas vencidas.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Correção monetária */}
             <div className="rounded-lg border border-border/60 p-3">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Correção monetária</Label>
+                <Label className="text-sm font-medium">Correção mensal contratual</Label>
                 <Switch checked={correcaoAtiva} onCheckedChange={setCorrecaoAtiva} />
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <Label className="text-xs">Índice de correção</Label>
-                  <Input value={indice} onChange={(e) => setIndice(e.target.value)} placeholder="IGP-M, INCC, IPCA..." />
+                  <Label className="text-xs">Referência / descrição</Label>
+                  <Input value={indice} onChange={(e) => setIndice(e.target.value)} placeholder="Ex.: índice previsto em contrato" />
+                  <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                    Campo descritivo. O sistema não consulta automaticamente índices oficiais.
+                  </p>
                 </div>
                 <div>
-                  <Label className="text-xs">% ao mês</Label>
-                  <Input type="number" step="0.01" value={correcao} onChange={(e) => setCorrecao(e.target.value)} />
+                  <Label className="text-xs">Percentual ao mês (%)</Label>
+                  <Input type="number" min="0" step="0.01" value={correcao} onChange={(e) => setCorrecao(e.target.value)} />
                 </div>
               </div>
             </div>
 
-            {/* Juros */}
             <div className="rounded-lg border border-border/60 p-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">Juros</Label>
@@ -160,7 +174,7 @@ function ConfigPage() {
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <Label className="text-xs">Tipo de juros</Label>
+                  <Label className="text-xs">Periodicidade</Label>
                   <Select value={jurosTipo} onValueChange={(v) => setJurosTipo(v as "diario" | "mensal")}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -171,16 +185,16 @@ function ConfigPage() {
                 </div>
                 <div>
                   <Label className="text-xs">
-                    {jurosTipo === "diario" ? "% ao dia" : "% ao mês"}
+                    {jurosTipo === "diario" ? "Percentual ao dia (%)" : "Percentual ao mês (%)"}
                   </Label>
                   {jurosTipo === "diario" ? (
-                    <Input type="number" step="0.001" value={jurosDia} onChange={(e) => setJurosDia(e.target.value)} />
+                    <Input type="number" min="0" step="0.001" value={jurosDia} onChange={(e) => setJurosDia(e.target.value)} />
                   ) : (
-                    <Input type="number" step="0.01" value={juros} onChange={(e) => setJuros(e.target.value)} />
+                    <Input type="number" min="0" step="0.01" value={juros} onChange={(e) => setJuros(e.target.value)} />
                   )}
                 </div>
                 <div className="sm:col-span-2">
-                  <Label className="text-xs">Data inicial da incidência dos juros</Label>
+                  <Label className="text-xs">Início da incidência</Label>
                   <Select value={inicioJuros} onValueChange={(v) => setInicioJuros(v as "vencimento" | "apos_tolerancia")}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -192,104 +206,56 @@ function ConfigPage() {
               </div>
             </div>
 
-            {/* Mora */}
             <div className="rounded-lg border border-border/60 p-3">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Mora (multa)</Label>
+                <Label className="text-sm font-medium">Multa por atraso</Label>
                 <Switch checked={moraAtiva} onCheckedChange={setMoraAtiva} />
               </div>
               <div className="mt-3">
-                <Label className="text-xs">% fixo sobre o valor em atraso</Label>
-                <Input type="number" step="0.01" value={mora} onChange={(e) => setMora(e.target.value)} />
+                <Label className="text-xs">Percentual fixo sobre o valor em atraso (%)</Label>
+                <Input type="number" min="0" step="0.01" value={mora} onChange={(e) => setMora(e.target.value)} />
               </div>
             </div>
 
-            {/* Tolerância */}
             <div className="rounded-lg border border-border/60 p-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">Dias de tolerância</Label>
                 <Switch checked={toleranciaAtiva} onCheckedChange={setToleranciaAtiva} />
               </div>
               <div className="mt-3">
-                <Input type="number" value={tolerancia} onChange={(e) => setTolerancia(e.target.value)} />
+                <Input type="number" min="0" value={tolerancia} onChange={(e) => setTolerancia(e.target.value)} />
               </div>
             </div>
 
             <Button onClick={saveInadimplencia} size="sm">
-              <Save className="mr-2 h-4 w-4" /> Salvar configuração
+              <Save className="mr-2 h-4 w-4" /> Salvar regras
             </Button>
           </CardContent>
         </Card>
 
-
         <Card className="border-border/70 xl:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Alíquotas por SPE</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {state.empreendimentos.map((e) => (
-              <div key={e.id} className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-3">
-                <div>
-                  <div className="text-sm font-medium">{e.nome}</div>
-                  <div className="text-xs text-muted-foreground">{e.spe}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    className="h-9 w-24 text-right"
-                    type="number"
-                    defaultValue={e.aliquotaTributaria}
-                    onBlur={(ev) => {
-                      const v = Number(ev.target.value) || 0;
-                      if (v !== e.aliquotaTributaria) {
-                        updateEmpreendimento(e.id, { aliquotaTributaria: v });
-                        toast.success(`Alíquota de ${e.nome} atualizada`);
-                      }
-                    }}
-                  />
-                  <span className="text-sm text-muted-foreground">%</span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/70 xl:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Recebedores</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Sócios, empresa e corretores usados nas telas de vendas e distribuição.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[220px] flex-1">
-                <Label>Nome</Label>
-                <Input value={newRec} onChange={(e) => setNewRec(e.target.value)} placeholder="Ex.: Nome completo" />
-              </div>
-              <div className="w-40">
-                <Label>Tipo</Label>
-                <Select value={newTipo} onValueChange={(v) => setNewTipo(v as "socio" | "empresa" | "corretor")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="socio">Sócio</SelectItem>
-                    <SelectItem value="empresa">Empresa</SelectItem>
-                    <SelectItem value="corretor">Corretor</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button size="sm" onClick={addRec}><Plus className="mr-2 h-4 w-4" /> Adicionar</Button>
+          <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
+            <div className="rounded-lg border border-border/70 p-4">
+              <p className="text-sm font-semibold">Regras por empreendimento</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Alíquota tributária, participação de sócio/empresa e comissão específica são cadastradas junto do empreendimento.
+              </p>
+              <Button asChild variant="outline" size="sm" className="mt-3">
+                <Link to="/empreendimentos">
+                  Abrir empreendimentos <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
             </div>
-
-            <div className="flex flex-wrap gap-2">
-              {cfg.recebedores.map((r) => (
-                <Badge key={r.nome} variant="secondary" className="gap-2 rounded-full px-3 py-1.5 text-sm">
-                  <span className="text-xs uppercase text-muted-foreground">{r.tipo}</span>
-                  {r.nome}
-                  <button onClick={() => rmRec(r.nome)} className="text-destructive hover:opacity-80">
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
+            <div className="rounded-lg border border-border/70 p-4">
+              <p className="text-sm font-semibold">Sócios, empresas e corretores</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                O cadastro e o acompanhamento de repasses agora ficam juntos na área Recebedores.
+              </p>
+              <Button asChild variant="outline" size="sm" className="mt-3">
+                <Link to="/recebedores">
+                  Abrir recebedores <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
             </div>
           </CardContent>
         </Card>
