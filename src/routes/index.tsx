@@ -1,26 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import {
-  Building2,
-  TrendingUp,
-  Landmark,
   AlertTriangle,
+  Building2,
   Download,
+  Landmark,
   Plus,
+  TrendingUp,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { AlertsPanel } from "@/components/dashboard/alerts-panel";
 import { FinancialChart } from "@/components/dashboard/financial-chart";
 import { PortfolioByProject } from "@/components/dashboard/portfolio-by-project";
-import { AlertsPanel } from "@/components/dashboard/alerts-panel";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { UpcomingReceivables } from "@/components/dashboard/upcoming-receivables";
-import { ActivityFeed } from "@/components/dashboard/activity-feed";
-import { useStore, comissaoDaVenda } from "@/lib/store";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { brl0 } from "@/lib/format";
+import { inadimplenciaCalc, useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -30,7 +30,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Visão geral da carteira imobiliária: empreendimentos ativos, recebíveis, saldo para retirada e alertas operacionais.",
+          "Visão geral da carteira imobiliária: empreendimentos, recebimentos, distribuição financeira e alertas operacionais.",
       },
     ],
   }),
@@ -41,30 +41,34 @@ function Dashboard() {
   const hasData = state.empreendimentos.length > 0;
 
   const stats = useMemo(() => {
-    const today = new Date();
-    const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const hoje = new Date();
+    const monthKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
     const ativos = state.empreendimentos.filter((e) => e.status !== "concluido").length;
     const recebidoMes = state.parcelas
       .filter((p) => p.dataPagamento?.startsWith(monthKey))
       .reduce((a, p) => a + p.valorPago, 0);
-    const recebidoTotal = state.parcelas.reduce((a, p) => a + p.valorPago, 0);
-    const comissoesPagas = state.vendas.reduce(
-      (a, v) => a + comissaoDaVenda(v, state.parcelas, state.config).pago,
+    const saldoDistribuido = state.movimentos.reduce(
+      (a, m) => a + m.empresaValor + m.socioValor,
       0,
     );
-    const impostos = state.empreendimentos.reduce((a, e) => {
-      const rec = state.parcelas
-        .filter((p) => p.empreendimentoId === e.id)
-        .reduce((s, p) => s + p.valorPago, 0);
-      return a + rec * (e.aliquotaTributaria / 100);
-    }, 0);
-    const saldoRetirada = Math.max(0, recebidoTotal - comissoesPagas - impostos);
-    const vencidas = state.parcelas.filter(
-      (p) => p.status === "pendente" && new Date(p.vencimento) < today,
-    );
-    const vencidasTotal = vencidas.reduce((a, p) => a + p.valor, 0);
-    return { ativos, recebidoMes, saldoRetirada, vencidasCount: vencidas.length, vencidasTotal };
+    const vencidas = state.parcelas
+      .filter((p) => p.status !== "paga" && p.status !== "cancelada")
+      .map((p) => ({ p, calc: inadimplenciaCalc(p, state.config, hoje) }))
+      .filter(({ calc }) => calc.diasAtraso > 0);
+    const vencidasTotal = vencidas.reduce((a, item) => a + item.calc.atualizado, 0);
+    return {
+      ativos,
+      recebidoMes,
+      saldoDistribuido,
+      vencidasCount: vencidas.length,
+      vencidasTotal,
+    };
   }, [state]);
+
+  const recursoEmBreve = (recurso: string) =>
+    toast.info(`${recurso} ainda não disponível`, {
+      description: "O recurso será liberado quando estiver ligado ao back-end e validado para dados reais.",
+    });
 
   if (!hasData) {
     return (
@@ -88,45 +92,36 @@ function Dashboard() {
             </div>
             <h2 className="text-2xl font-semibold text-foreground">Comece pelo primeiro empreendimento</h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Cadastre manualmente um empreendimento ou prepare a importação de um arquivo. Depois,
-              você poderá organizar quadras, lotes ou outras unidades e registrar as vendas a partir
-              delas.
+              Cadastre manualmente um empreendimento. Depois inclua as unidades comercializáveis e
+              registre as vendas a partir delas.
             </p>
             <div className="mt-7 flex flex-col gap-2 sm:flex-row">
               <Button onClick={() => (window.location.href = "/empreendimentos")}>
                 <Plus className="mr-2 h-4 w-4" />
                 Cadastrar empreendimento
               </Button>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  toast.info("Importação de arquivo em preparação", {
-                    description:
-                      "O arquivo será validado pelo back-end Java antes de os dados entrarem no sistema.",
-                  })
-                }
-              >
+              <Button variant="outline" onClick={() => recursoEmBreve("Importação") }>
                 <Upload className="mr-2 h-4 w-4" />
-                Importar arquivo
+                Importar · em breve
               </Button>
             </div>
             <div className="mt-8 grid w-full max-w-3xl grid-cols-1 gap-3 text-left sm:grid-cols-3">
               <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
                 <div className="text-sm font-medium text-foreground">1. Empreendimento</div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Dados gerais, SPE, área e informações financeiras reais.
+                  Dados gerais, SPE, área e regras financeiras reais.
                 </p>
               </div>
               <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
-                <div className="text-sm font-medium text-foreground">2. Quadras e unidades</div>
+                <div className="text-sm font-medium text-foreground">2. Unidades</div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Organize lotes, apartamentos, salas ou outras unidades comercializáveis.
+                  Cadastre lotes, apartamentos, salas ou outras unidades comercializáveis.
                 </p>
               </div>
               <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
                 <div className="text-sm font-medium text-foreground">3. Venda</div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Escolha a unidade, cadastre o cliente e monte a forma de pagamento.
+                  Escolha uma unidade disponível, informe o comprador e monte o pagamento.
                 </p>
               </div>
             </div>
@@ -154,14 +149,10 @@ function Dashboard() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() =>
-              toast.success("Exportação preparada", {
-                description: "A exportação definitiva será ligada aos dados do back-end.",
-              })
-            }
+            onClick={() => recursoEmBreve("Exportação")}
           >
             <Download className="mr-2 h-4 w-4" />
-            Exportar
+            Exportar · em breve
           </Button>
           <Button size="sm" onClick={() => (window.location.href = "/vendas")}>
             <Plus className="mr-2 h-4 w-4" />
@@ -172,30 +163,30 @@ function Dashboard() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="🏘 Empreendimentos ativos"
+          title="Empreendimentos ativos"
           value={String(stats.ativos)}
           hint={`${state.empreendimentos.length} no portfólio`}
           icon={Building2}
           accent="primary"
         />
         <StatCard
-          title="💰 Recebimentos do mês"
+          title="Recebimentos do mês"
           value={brl0(stats.recebidoMes)}
-          hint="parcelas quitadas no mês vigente"
+          hint="pagamentos registrados no mês vigente"
           icon={TrendingUp}
           accent="success"
         />
         <StatCard
-          title="💵 Saldo disponível p/ retirada"
-          value={brl0(stats.saldoRetirada)}
-          hint="após comissões e tributos"
+          title="Saldo líquido distribuído"
+          value={brl0(stats.saldoDistribuido)}
+          hint="empresa + sócio, após imposto e comissão"
           icon={Landmark}
           accent="primary"
         />
         <StatCard
-          title="⚠ Parcelas em atraso"
+          title="Parcelas em atraso"
           value={String(stats.vencidasCount)}
-          hint={`${brl0(stats.vencidasTotal)} pendentes`}
+          hint={`${brl0(stats.vencidasTotal)} atualizado`}
           icon={AlertTriangle}
           accent="warning"
         />
