@@ -1,11 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Inbox, CheckCircle2, Search } from "lucide-react";
+import { CheckCircle2, Inbox, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { ParcelaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -23,16 +31,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ParcelaStatusBadge } from "@/components/status-badges";
-import { useStore, type Parcela, type ParcelaStatus } from "@/lib/store";
 import { brl0, formatDate, todayISO } from "@/lib/format";
+import {
+  inadimplenciaCalc,
+  useStore,
+  type Parcela,
+  type ParcelaStatus,
+} from "@/lib/store";
 
 export const Route = createFileRoute("/recebimentos")({
   component: RecebimentosPage,
@@ -48,15 +53,16 @@ function RecebimentosPage() {
   const [valor, setValor] = useState("");
   const [data, setData] = useState(todayISO());
 
-  const today = new Date();
+  const hoje = new Date();
 
   const parcelas = useMemo(() => {
     return state.parcelas
       .map((p) => {
-        if (p.status === "pendente" && new Date(p.vencimento) < today) {
-          return { ...p, status: "vencida" as ParcelaStatus };
-        }
-        return p;
+        const calc = inadimplenciaCalc(p, state.config, hoje);
+        const status: ParcelaStatus =
+          p.status === "pendente" && calc.diasAtraso > 0 ? "vencida" : p.status;
+        const valorCobrado = calc.diasAtraso > 0 ? calc.atualizado : p.valor;
+        return { ...p, status, calc, valorCobrado };
       })
       .filter((p) => p.status !== "paga" && p.status !== "cancelada")
       .filter((p) => (empFilter === "todos" ? true : p.empreendimentoId === empFilter))
@@ -73,38 +79,45 @@ function RecebimentosPage() {
           : true,
       )
       .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
-  }, [state.parcelas, empFilter, origem, busca]);
+  }, [state.parcelas, state.config, empFilter, origem, busca]);
 
-  const totalAReceber = parcelas.reduce((a, p) => a + p.valor, 0);
-  const totalVencido = parcelas.filter((p) => p.status === "vencida").reduce((a, p) => a + p.valor, 0);
+  const totalAReceber = parcelas.reduce((a, p) => a + p.valorCobrado, 0);
+  const totalVencido = parcelas
+    .filter((p) => p.status === "vencida")
+    .reduce((a, p) => a + p.valorCobrado, 0);
 
   const abrirRecebimento = (p: Parcela) => {
+    const calc = inadimplenciaCalc(p, state.config, new Date());
     setSelecionada(p);
-    setValor(String(p.valor));
+    setValor(String(calc.diasAtraso > 0 ? calc.atualizado : p.valor));
     setData(todayISO());
   };
 
   const confirmar = () => {
     if (!selecionada) return;
-    receberParcela(selecionada.id, Number(valor) || selecionada.valor, data);
+    receberParcela(selecionada.id, Number(valor), data);
     toast.success("Recebimento registrado", {
       description: "Distribuição financeira executada automaticamente.",
     });
     setSelecionada(null);
   };
 
+  const calcSelecionada = selecionada
+    ? inadimplenciaCalc(selecionada, state.config, new Date())
+    : null;
+
   return (
     <PageShell>
       <PageHeader
         eyebrow="Operacional"
         title="Central de Recebimentos"
-        description="Tela principal de operação diária. Registre recebimentos e o sistema executa toda a distribuição financeira."
+        description="Registre os pagamentos em um único lugar. Parcelas vencidas já consideram as regras de correção, juros, multa e tolerância configuradas."
       />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Mini label="Parcelas em aberto" value={String(parcelas.length)} />
         <Mini label="Total a receber" value={brl0(totalAReceber)} />
-        <Mini label="Vencidas" value={brl0(totalVencido)} tone="destructive" />
+        <Mini label="Vencidas atualizadas" value={brl0(totalVencido)} tone="destructive" />
         <Mini label="Empreendimentos" value={String(state.empreendimentos.length)} />
       </div>
 
@@ -154,7 +167,7 @@ function RecebimentosPage() {
                 <TableHead>Origem</TableHead>
                 <TableHead>Parcela</TableHead>
                 <TableHead>Vencimento</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
+                <TableHead className="text-right">Valor a receber</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ação</TableHead>
               </TableRow>
@@ -183,7 +196,14 @@ function RecebimentosPage() {
                     <TableCell className="text-sm">{p.origemDescricao}</TableCell>
                     <TableCell className="text-sm tabular-nums">{p.numero}/{p.totalParcelas}</TableCell>
                     <TableCell className="text-sm">{formatDate(p.vencimento)}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">{brl0(p.valor)}</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {brl0(p.valorCobrado)}
+                      {p.calc.diasAtraso > 0 && p.valorCobrado !== p.valor && (
+                        <div className="text-[11px] font-normal text-muted-foreground">
+                          original {brl0(p.valor)}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell><ParcelaStatusBadge status={p.status} /></TableCell>
                     <TableCell className="text-right">
                       <Button size="sm" onClick={() => abrirRecebimento(p)}>
@@ -203,7 +223,7 @@ function RecebimentosPage() {
           <DialogHeader>
             <DialogTitle>Registrar recebimento</DialogTitle>
           </DialogHeader>
-          {selecionada && (
+          {selecionada && calcSelecionada && (
             <div className="space-y-3 text-sm">
               <div className="rounded-md border border-border/70 bg-muted/30 p-3">
                 <div className="font-medium">{selecionada.compradorNome}</div>
@@ -214,16 +234,30 @@ function RecebimentosPage() {
                   {selecionada.origemDescricao} · vence em {formatDate(selecionada.vencimento)}
                 </div>
               </div>
+
+              {calcSelecionada.diasAtraso > 0 && (
+                <div className="space-y-1.5 rounded-md border border-destructive/20 bg-destructive/5 p-3 text-xs">
+                  <div className="flex justify-between"><span>Valor original</span><strong>{brl0(selecionada.valor)}</strong></div>
+                  <div className="flex justify-between"><span>Correção</span><span>{brl0(calcSelecionada.correcao)}</span></div>
+                  <div className="flex justify-between"><span>Juros</span><span>{brl0(calcSelecionada.juros)}</span></div>
+                  <div className="flex justify-between"><span>Multa / mora</span><span>{brl0(calcSelecionada.mora)}</span></div>
+                  <div className="flex justify-between border-t border-destructive/15 pt-1.5 text-sm"><strong>Total atualizado</strong><strong>{brl0(calcSelecionada.atualizado)}</strong></div>
+                </div>
+              )}
+
               <div>
-                <Label>Valor recebido (R$)</Label>
-                <Input type="number" value={valor} onChange={(e) => setValor(e.target.value)} />
+                <Label>Valor a registrar</Label>
+                <Input type="text" value={brl0(Number(valor) || 0)} readOnly className="bg-muted/30 font-semibold" />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Pagamento parcial ainda não está habilitado. O recebimento quita esta parcela integralmente.
+                </p>
               </div>
               <div>
                 <Label>Data do recebimento</Label>
                 <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
               </div>
               <p className="rounded bg-primary/5 p-2 text-xs text-muted-foreground">
-                Ao confirmar, o sistema reserva o imposto, quita a comissão do corretor e distribui o saldo entre empresa e sócio.
+                Ao confirmar, o sistema reserva o imposto, aplica a comissão do corretor e distribui o saldo entre empresa e sócio.
               </p>
             </div>
           )}
