@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { ParcelaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,9 +24,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ParcelaStatusBadge } from "@/components/status-badges";
-import { useStore, type ParcelaStatus } from "@/lib/store";
 import { brl0, formatDate } from "@/lib/format";
+import { inadimplenciaCalc, useStore, type ParcelaStatus } from "@/lib/store";
 
 export const Route = createFileRoute("/parcelas")({
   component: ParcelasPage,
@@ -33,20 +33,24 @@ export const Route = createFileRoute("/parcelas")({
 });
 
 function ParcelasPage() {
-  const { state, marcarParcelaPaga, desmarcarParcela } = useStore();
+  const { state, receberParcela, desmarcarParcela } = useStore();
   const [empFilter, setEmpFilter] = useState<string>("todos");
   const [statusFilter, setStatusFilter] = useState<ParcelaStatus | "todos">("todos");
   const [busca, setBusca] = useState("");
 
-  // Recompute status if vencida
-  const today = new Date();
+  const hoje = new Date();
   const parcelasView = useMemo(() => {
     return state.parcelas
       .map((p) => {
-        if (p.status === "pendente" && new Date(p.vencimento) < today) {
-          return { ...p, status: "vencida" as ParcelaStatus };
-        }
-        return p;
+        const calc = inadimplenciaCalc(p, state.config, hoje);
+        const status: ParcelaStatus =
+          p.status === "pendente" && calc.diasAtraso > 0 ? "vencida" : p.status;
+        return {
+          ...p,
+          status,
+          calc,
+          valorCobrado: calc.diasAtraso > 0 ? calc.atualizado : p.valor,
+        };
       })
       .filter((p) => (empFilter === "todos" ? true : p.empreendimentoId === empFilter))
       .filter((p) => (statusFilter === "todos" ? true : p.status === statusFilter))
@@ -57,24 +61,26 @@ function ParcelasPage() {
           : true,
       )
       .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
-  }, [state.parcelas, empFilter, statusFilter, busca]);
+  }, [state.parcelas, state.config, empFilter, statusFilter, busca]);
 
   const totalPrevisto = parcelasView.reduce((a, p) => a + p.valor, 0);
   const totalRecebido = parcelasView.reduce((a, p) => a + p.valorPago, 0);
-  const totalAtraso = parcelasView.filter((p) => p.status === "vencida").reduce((a, p) => a + p.valor, 0);
+  const totalAtraso = parcelasView
+    .filter((p) => p.status === "vencida")
+    .reduce((a, p) => a + p.valorCobrado, 0);
 
   return (
     <PageShell>
       <PageHeader
         eyebrow="Cobrança"
         title="Parcelas"
-        description="Acompanhe todas as parcelas de contratos, marque recebimentos e monitore atrasos."
+        description="Acompanhe as parcelas dos contratos. Valores vencidos exibem os acréscimos conforme as regras atuais de inadimplência."
       />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <MiniStat label="Total previsto" value={brl0(totalPrevisto)} />
         <MiniStat label="Total recebido" value={brl0(totalRecebido)} tone="success" />
-        <MiniStat label="Em atraso" value={brl0(totalAtraso)} tone="destructive" />
+        <MiniStat label="Em atraso atualizado" value={brl0(totalAtraso)} tone="destructive" />
         <MiniStat label="Parcelas listadas" value={String(parcelasView.length)} />
       </div>
 
@@ -144,16 +150,36 @@ function ParcelasPage() {
                     <TableCell className="text-sm">{p.origemDescricao}</TableCell>
                     <TableCell className="text-sm">{p.numero}/{p.totalParcelas}</TableCell>
                     <TableCell className="text-sm">{formatDate(p.vencimento)}</TableCell>
-                    <TableCell className="text-right font-medium">{brl0(p.valor)}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {brl0(p.status === "vencida" ? p.valorCobrado : p.valor)}
+                      {p.status === "vencida" && p.valorCobrado !== p.valor && (
+                        <div className="text-[11px] font-normal text-muted-foreground">
+                          original {brl0(p.valor)}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell><ParcelaStatusBadge status={p.status} /></TableCell>
                     <TableCell className="text-right">
                       {p.status === "paga" ? (
                         <Button size="sm" variant="ghost" onClick={() => { desmarcarParcela(p.id); toast("Recebimento revertido"); }}>
                           <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reverter
                         </Button>
+                      ) : p.status === "cancelada" ? (
+                        <span className="text-xs text-muted-foreground">Sem ação</span>
                       ) : (
-                        <Button size="sm" variant="outline" onClick={() => { marcarParcelaPaga(p.id); toast.success("Parcela marcada como paga"); }}>
-                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Marcar paga
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            receberParcela(p.id, p.valorCobrado);
+                            toast.success(
+                              p.status === "vencida"
+                                ? "Parcela recebida com os acréscimos aplicáveis"
+                                : "Recebimento registrado",
+                            );
+                          }}
+                        >
+                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
                         </Button>
                       )}
                     </TableCell>
