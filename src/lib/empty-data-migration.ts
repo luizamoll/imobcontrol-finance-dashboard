@@ -1,5 +1,5 @@
 const DATA_KEY = "imobcontrol.v2";
-const RESET_MARKER_KEY = "imobcontrol.clean-start.v1";
+const RESET_MARKER_KEY = "imobcontrol.clean-start.v2";
 
 const cleanState = {
   empreendimentos: [],
@@ -26,24 +26,21 @@ const cleanState = {
     inicioJuros: "apos_tolerancia",
     recebedores: [],
     statusVenda: ["ativa", "cancelada", "quitada"],
-    formasPagamento: [
-      "À vista",
-      "Sinal + parcelas",
-      "Sem sinal",
-      "Bem material",
-      "Outro",
-    ],
+    formasPagamento: ["À vista", "Sinal + parcelas", "Sem sinal", "Bem material", "Outro"],
     aliquotasPorSpe: {},
   },
   trimestres: [],
 };
 
+const DEMO_NAMES = new Set([
+  "Residencial Alvorada",
+  "Loteamento Vila Verde",
+  "Edifício Panorama",
+]);
+
 /**
- * Migração temporária para a transição dos dados fictícios do protótipo
- * para uma base limpa, antes da persistência definitiva no back-end Java.
- *
- * É executada uma única vez por navegador. Depois disso, os dados criados
- * pelo usuário continuam sendo preservados normalmente no localStorage.
+ * Remove apenas o antigo conteúdo demonstrativo conhecido.
+ * Dados reais ou dados inseridos manualmente pelo usuário são preservados.
  */
 export function applyCleanStartMigration() {
   if (typeof window === "undefined") return;
@@ -51,10 +48,25 @@ export function applyCleanStartMigration() {
   try {
     if (window.localStorage.getItem(RESET_MARKER_KEY)) return;
 
-    window.localStorage.setItem(DATA_KEY, JSON.stringify(cleanState));
+    const raw = window.localStorage.getItem(DATA_KEY);
+    if (!raw) {
+      window.localStorage.setItem(DATA_KEY, JSON.stringify(cleanState));
+      window.localStorage.setItem(RESET_MARKER_KEY, "done");
+      return;
+    }
+
+    const parsed = JSON.parse(raw) as { empreendimentos?: { nome?: string }[] };
+    const hasDemo = (parsed.empreendimentos ?? []).some((e) =>
+      e.nome ? DEMO_NAMES.has(e.nome) : false,
+    );
+
+    if (hasDemo) {
+      window.localStorage.setItem(DATA_KEY, JSON.stringify(cleanState));
+    }
+
     window.localStorage.setItem(RESET_MARKER_KEY, "done");
   } catch {
-    // O app continua funcionando mesmo quando o navegador bloqueia storage.
+    // Se o navegador bloquear storage, o app continua normalmente.
   }
 }
 
