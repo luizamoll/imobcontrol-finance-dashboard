@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { recarregar } = useAuth();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -61,8 +63,9 @@ function LoginPage() {
       }
 
       const usuario = (await response.json()) as { nome: string };
+      await recarregar();
       toast.success(`Bem-vinda, ${usuario.nome}.`);
-      navigate({ to: "/" });
+      await navigate({ to: "/", replace: true });
     } catch {
       toast.error("Não foi possível conectar ao servidor do ImobControl.");
     } finally {
@@ -193,9 +196,7 @@ function LoginPage() {
 
           <div className="mt-5 flex items-start gap-2 rounded-lg border border-border/70 bg-muted/30 px-3.5 py-3 text-xs leading-5 text-muted-foreground">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <p>
-              Seu acesso é validado com segurança pelo servidor do ImobControl.
-            </p>
+            <p>Seu acesso é validado com segurança pelo servidor do ImobControl.</p>
           </div>
         </div>
       </main>
