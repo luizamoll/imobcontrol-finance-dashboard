@@ -32,8 +32,10 @@ import {
   comissaoDaVenda,
   distribuicaoPrevista,
   inadimplenciaCalc,
+  regrasEfetivasEmpreendimento,
   useStore,
   vendaTotais,
+  type PagamentoTipo,
   type ParcelaStatus,
 } from "@/lib/store";
 
@@ -52,8 +54,10 @@ function VendaDetail() {
   const { state, receberParcela, reverterParcela } = useStore();
   const v = state.vendas.find((x) => x.id === id);
   if (!v) throw notFound();
+
   const emp = state.empreendimentos.find((e) => e.id === v.empreendimentoId)!;
   const mat = state.matriculas.find((m) => m.id === v.matriculaId)!;
+  const regras = v.regras ?? regrasEfetivasEmpreendimento(emp, state.config);
   const totais = vendaTotais(v, state.parcelas);
   const hoje = new Date();
   const parcelas = state.parcelas
@@ -86,6 +90,7 @@ function VendaDetail() {
           </Link>
         </Button>
       </div>
+
       <PageHeader
         eyebrow={`Contrato · ${mat.numero}`}
         title={v.compradorNome}
@@ -98,31 +103,74 @@ function VendaDetail() {
           <FlowItem icon={User} label="Cliente" value={v.compradorNome} />
           <FlowItem icon={Building2} label="Empreendimento" value={emp.nome} sub={emp.spe} />
           <FlowItem icon={Wallet} label="Unidade" value={mat.unidade} sub={mat.numero} />
-          <FlowItem icon={CircleDollarSign} label="Valor" value={brl0(v.valorTotal)} sub={`Corretor: ${v.corretorNome || "—"}`} />
-          <FlowItem icon={Receipt} label="Recebido" value={brl0(totais.recebido)} sub={`${pct(progresso)} do contrato`} />
+          <FlowItem
+            icon={CircleDollarSign}
+            label="Valor"
+            value={brl0(v.valorTotal)}
+            sub={`Corretor: ${v.corretorNome || "—"}`}
+          />
+          <FlowItem
+            icon={Receipt}
+            label="Liquidado"
+            value={brl0(totais.recebido)}
+            sub={`${pct(progresso)} do contrato`}
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-4 text-sm">
+          <div className="font-semibold text-foreground">Regras contratuais congeladas</div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Este contrato preserva as regras registradas no momento da venda. Alterações posteriores em
+            {" "}{emp.nome} não modificam cálculos históricos nem parcelas deste contrato.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
+            <MiniRegra label="Tributação" value={`${regras.aliquotaTributaria}%`} />
+            <MiniRegra label="Corretor" value={`${v.corretorPct}%`} />
+            <MiniRegra label="Sócio · líquido" value={`${regras.socioPct}%`} />
+            <MiniRegra label="Empresa · líquido" value={`${regras.empresaPct}%`} />
+            <MiniRegra
+              label="Atraso"
+              value={regras.inadimplencia.jurosAtivo || regras.inadimplencia.moraAtiva || regras.inadimplencia.correcaoAtiva ? "Configurado" : "Sem acréscimos"}
+            />
+          </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="border-border/70 xl:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Forma de pagamento</CardTitle>
+            <CardTitle className="text-base">Composição do pagamento</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {v.composicao.map((it) => (
-              <div key={it.id} className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 p-3 text-sm">
-                <div>
-                  <div className="font-medium capitalize">{it.tipo.replace("_", " ")}</div>
-                  <div className="text-xs text-muted-foreground">{it.descricao}</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold">{brl0(it.valor * (it.parcelas || 1))}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {it.parcelas > 1 ? `${it.parcelas}x de ${brl0(it.valor)}` : "único"}
+            {v.composicao.map((it) => {
+              const parcelado = it.tipo === "parcelas" || it.tipo === "sinal_parcelado";
+              const quantidade = parcelado ? Math.max(1, it.parcelas || 1) : 1;
+              return (
+                <div
+                  key={it.id}
+                  className="flex items-center justify-between gap-4 rounded-md border border-border/60 bg-muted/20 p-3 text-sm"
+                >
+                  <div>
+                    <div className="font-medium">{pagamentoLegivel(it.tipo)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {it.descricao || "Sem descrição adicional"}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold">{brl0(it.valor * quantidade)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {parcelado && quantidade > 1
+                        ? `${quantidade}x de ${brl0(it.valor)}`
+                        : it.tipo === "bem"
+                          ? "parte do pagamento"
+                          : "pagamento único"}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div className="mt-3 space-y-1.5">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>Progresso do contrato</span>
@@ -137,14 +185,23 @@ function VendaDetail() {
           <CardHeader>
             <CardTitle className="text-base">Distribuição financeira</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Regras aplicadas automaticamente a cada recebimento.
+              Valores realizados com as regras congeladas deste contrato.
             </p>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <Row icon={Landmark} label={`Reserva tributária (${emp.aliquotaTributaria}%)`} value={imposto} />
-            <Row icon={Users} label={`Comissão do corretor · ${v.corretorNome || "—"}`} value={c.pago} sub={`Total: ${brl0(c.total)} · Saldo: ${brl0(c.saldo)}`} />
-            <Row icon={Building2} label={`Empresa (${emp.empresaPct}%)`} value={empresa} />
-            <Row icon={User} label={`Sócio (${emp.socioPct}%)`} value={socio} />
+            <Row
+              icon={Landmark}
+              label={`Reserva tributária (${regras.aliquotaTributaria}%)`}
+              value={imposto}
+            />
+            <Row
+              icon={Users}
+              label={`Comissão do corretor · ${v.corretorNome || "—"}`}
+              value={c.pago}
+              sub={`Total: ${brl0(c.total)} · Saldo: ${brl0(c.saldo)}`}
+            />
+            <Row icon={Building2} label={`Empresa (${regras.empresaPct}%)`} value={empresa} />
+            <Row icon={User} label={`Sócio (${regras.socioPct}%)`} value={socio} />
           </CardContent>
         </Card>
       </div>
@@ -153,7 +210,8 @@ function VendaDetail() {
         <CardHeader>
           <CardTitle className="text-base">Recebimentos e parcelas</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Parcelas vencidas usam a mesma regra de correção, juros e multa da Central de Recebimentos.
+            Cada parcela usa a regra de inadimplência congelada no contrato, não uma configuração global
+            atual do sistema.
           </p>
         </CardHeader>
         <CardContent className="p-0">
@@ -173,19 +231,34 @@ function VendaDetail() {
               {parcelas.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="text-sm">{p.origemDescricao}</TableCell>
-                  <TableCell className="text-sm tabular-nums">{p.numero}/{p.totalParcelas}</TableCell>
+                  <TableCell className="text-sm tabular-nums">
+                    {p.numero}/{p.totalParcelas}
+                  </TableCell>
                   <TableCell className="text-sm">{formatDate(p.vencimento)}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {brl0(p.status === "vencida" ? p.valorCobrado : p.valor)}
                     {p.status === "vencida" && p.valorCobrado !== p.valor && (
-                      <div className="text-[11px] text-muted-foreground">original {brl0(p.valor)}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        original {brl0(p.valor)}
+                      </div>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-success">{brl0(p.valorPago)}</TableCell>
-                  <TableCell><ParcelaStatusBadge status={p.status} /></TableCell>
+                  <TableCell className="text-right tabular-nums text-success">
+                    {brl0(p.valorPago)}
+                  </TableCell>
+                  <TableCell>
+                    <ParcelaStatusBadge status={p.status} />
+                  </TableCell>
                   <TableCell className="text-right">
                     {p.status === "paga" ? (
-                      <Button size="sm" variant="ghost" onClick={() => { reverterParcela(p.id); toast("Recebimento revertido"); }}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          reverterParcela(p.id);
+                          toast("Recebimento revertido");
+                        }}
+                      >
                         <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reverter
                       </Button>
                     ) : p.status === "cancelada" ? (
@@ -198,7 +271,7 @@ function VendaDetail() {
                           receberParcela(p.id, p.valorCobrado);
                           toast.success(
                             p.status === "vencida"
-                              ? "Parcela recebida com os acréscimos aplicáveis"
+                              ? "Parcela recebida com os acréscimos contratuais"
                               : "Recebimento registrado",
                           );
                         }}
@@ -224,7 +297,9 @@ function VendaDetail() {
       <Card className="border-border/70">
         <CardHeader>
           <CardTitle className="text-base">Histórico de auditoria</CardTitle>
-          <p className="text-xs text-muted-foreground">Cada linha registra a distribuição aplicada em um recebimento.</p>
+          <p className="text-xs text-muted-foreground">
+            Cada linha registra a distribuição efetivamente aplicada no recebimento.
+          </p>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -253,9 +328,15 @@ function VendaDetail() {
                   <TableCell className="text-sm">{formatDate(m.data)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{m.usuario}</TableCell>
                   <TableCell className="text-sm">{m.origemDescricao}</TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{brl0(m.valorRecebido)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">{brl0(m.impostoReservado)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">{brl0(m.comissaoPaga)}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
+                    {brl0(m.valorRecebido)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {brl0(m.impostoReservado)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {brl0(m.comissaoPaga)}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{brl0(m.empresaValor)}</TableCell>
                   <TableCell className="text-right tabular-nums">{brl0(m.socioValor)}</TableCell>
                 </TableRow>
@@ -265,6 +346,28 @@ function VendaDetail() {
         </CardContent>
       </Card>
     </PageShell>
+  );
+}
+
+function pagamentoLegivel(tipo: PagamentoTipo) {
+  const labels: Record<PagamentoTipo, string> = {
+    avista: "À vista",
+    sinal: "Sinal",
+    sinal_parcelado: "Sinal parcelado",
+    parcelas: "Parcelas",
+    bem: "Bem material",
+    sem_sinal: "Sem sinal (legado)",
+    outro: "Outro",
+  };
+  return labels[tipo];
+}
+
+function MiniRegra({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="font-medium text-foreground">{value}</p>
+    </div>
   );
 }
 
