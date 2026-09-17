@@ -25,7 +25,6 @@ export type PagamentoTipo =
 
 export type UnidadeTipo =
   | "lote"
-  | "quadra"
   | "apartamento"
   | "sala"
   | "casa"
@@ -39,6 +38,39 @@ export type EmpreendimentoTipo =
   | "comercial"
   | "misto"
   | "outro";
+
+export type JurosTipo = "diario" | "mensal";
+export type InicioJuros = "vencimento" | "apos_tolerancia";
+
+export interface RegrasInadimplencia {
+  correcaoPctMes: number;
+  correcaoAtiva: boolean;
+  correcaoIndice: string;
+  jurosPctMes: number;
+  jurosPctDia: number;
+  jurosTipo: JurosTipo;
+  jurosAtivo: boolean;
+  moraPct: number;
+  moraAtiva: boolean;
+  diasTolerancia: number;
+  toleranciaAtiva: boolean;
+  inicioJuros: InicioJuros;
+}
+
+export const DEFAULT_REGRAS_INADIMPLENCIA: RegrasInadimplencia = {
+  correcaoPctMes: 0,
+  correcaoAtiva: false,
+  correcaoIndice: "",
+  jurosPctMes: 0,
+  jurosPctDia: 0,
+  jurosTipo: "mensal",
+  jurosAtivo: false,
+  moraPct: 0,
+  moraAtiva: false,
+  diasTolerancia: 0,
+  toleranciaAtiva: false,
+  inicioJuros: "apos_tolerancia",
+};
 
 export interface BemMaterial {
   tipo: string;
@@ -73,6 +105,12 @@ export interface Empreendimento {
   empresaPct: number;
   corretorPct: number;
   aliquotaTributaria: number;
+  /** Percentual de cada recebimento de entrada destinado à comissão. */
+  entradaPctCorretor?: number;
+  /** Percentual de cada recebimento parcelado destinado à comissão. */
+  parcelasPctCorretor?: number;
+  /** Regras de atraso próprias deste empreendimento. */
+  inadimplencia?: RegrasInadimplencia;
   observacoes?: string;
   status: EmpStatus;
 }
@@ -89,24 +127,6 @@ export interface Matricula {
   status: MatriculaStatus;
   compradorNome?: string;
   vendaId?: string;
-}
-
-export type JurosTipo = "diario" | "mensal";
-export type InicioJuros = "vencimento" | "apos_tolerancia";
-
-export interface RegrasInadimplencia {
-  correcaoPctMes: number;
-  correcaoAtiva: boolean;
-  correcaoIndice: string;
-  jurosPctMes: number;
-  jurosPctDia: number;
-  jurosTipo: JurosTipo;
-  jurosAtivo: boolean;
-  moraPct: number;
-  moraAtiva: boolean;
-  diasTolerancia: number;
-  toleranciaAtiva: boolean;
-  inicioJuros: InicioJuros;
 }
 
 export interface RegrasContrato {
@@ -149,7 +169,7 @@ export interface Parcela {
   valorPago: number;
   dataPagamento?: string;
   status: ParcelaStatus;
-  /** Snapshot para que mudanças futuras nas configurações não alterem contratos antigos. */
+  /** Snapshot para mudanças futuras não alterarem contratos antigos. */
   regrasInadimplencia?: RegrasInadimplencia;
 }
 
@@ -175,6 +195,10 @@ export interface Movimento {
   socioPctAplicada?: number;
 }
 
+/**
+ * Mantido para compatibilidade com dados locais antigos e cadastros auxiliares.
+ * Regras financeiras novas devem ser vinculadas ao empreendimento/contrato.
+ */
 export interface Config extends RegrasInadimplencia {
   corretorPctPadrao: number;
   entradaPctCorretor: number;
@@ -216,21 +240,10 @@ const DEFAULT_CONFIG: Config = {
   entradaPctCorretor: 0,
   parcelasPctCorretor: 0,
   aliquotaPadrao: 0,
-  correcaoPctMes: 0,
-  correcaoAtiva: false,
-  correcaoIndice: "",
-  jurosPctMes: 0,
-  jurosPctDia: 0,
-  jurosTipo: "mensal",
-  jurosAtivo: false,
-  moraPct: 0,
-  moraAtiva: false,
-  diasTolerancia: 0,
-  toleranciaAtiva: false,
-  inicioJuros: "apos_tolerancia",
+  ...DEFAULT_REGRAS_INADIMPLENCIA,
   recebedores: [],
   statusVenda: ["ativa", "cancelada", "quitada"],
-  formasPagamento: ["À vista", "Sinal + parcelas", "Sem sinal", "Bem material", "Outro"],
+  formasPagamento: ["À vista", "Sinal + parcelas", "Bem material", "Outro"],
   aliquotasPorSpe: {},
 };
 
@@ -296,32 +309,39 @@ function loadState(): State {
   }
 }
 
-function snapshotInadimplencia(cfg: Config): RegrasInadimplencia {
+function snapshotInadimplencia(regra: RegrasInadimplencia): RegrasInadimplencia {
   return {
-    correcaoPctMes: cfg.correcaoPctMes,
-    correcaoAtiva: cfg.correcaoAtiva,
-    correcaoIndice: cfg.correcaoIndice,
-    jurosPctMes: cfg.jurosPctMes,
-    jurosPctDia: cfg.jurosPctDia,
-    jurosTipo: cfg.jurosTipo,
-    jurosAtivo: cfg.jurosAtivo,
-    moraPct: cfg.moraPct,
-    moraAtiva: cfg.moraAtiva,
-    diasTolerancia: cfg.diasTolerancia,
-    toleranciaAtiva: cfg.toleranciaAtiva,
-    inicioJuros: cfg.inicioJuros,
+    correcaoPctMes: regra.correcaoPctMes,
+    correcaoAtiva: regra.correcaoAtiva,
+    correcaoIndice: regra.correcaoIndice,
+    jurosPctMes: regra.jurosPctMes,
+    jurosPctDia: regra.jurosPctDia,
+    jurosTipo: regra.jurosTipo,
+    jurosAtivo: regra.jurosAtivo,
+    moraPct: regra.moraPct,
+    moraAtiva: regra.moraAtiva,
+    diasTolerancia: regra.diasTolerancia,
+    toleranciaAtiva: regra.toleranciaAtiva,
+    inicioJuros: regra.inicioJuros,
+  };
+}
+
+export function regrasEfetivasEmpreendimento(
+  emp: Empreendimento,
+  cfg: Config,
+): RegrasContrato {
+  return {
+    aliquotaTributaria: emp.aliquotaTributaria,
+    socioPct: emp.socioPct,
+    empresaPct: emp.empresaPct,
+    entradaPctCorretor: emp.entradaPctCorretor ?? cfg.entradaPctCorretor,
+    parcelasPctCorretor: emp.parcelasPctCorretor ?? cfg.parcelasPctCorretor,
+    inadimplencia: snapshotInadimplencia(emp.inadimplencia ?? cfg),
   };
 }
 
 function regrasContrato(venda: Venda, emp: Empreendimento, cfg: Config): RegrasContrato {
-  return venda.regras ?? {
-    aliquotaTributaria: emp.aliquotaTributaria,
-    socioPct: emp.socioPct,
-    empresaPct: emp.empresaPct,
-    entradaPctCorretor: cfg.entradaPctCorretor,
-    parcelasPctCorretor: cfg.parcelasPctCorretor,
-    inadimplencia: snapshotInadimplencia(cfg),
-  };
+  return venda.regras ?? regrasEfetivasEmpreendimento(emp, cfg);
 }
 
 // ---------- Context ----------
@@ -406,6 +426,14 @@ function computeReceber(
   return mov;
 }
 
+function vendaQuitadaAposPagamento(parcelas: Parcela[], vendaId: string, parcelaId: string) {
+  const relacionadas = parcelas.filter(
+    (p) => p.vendaId === vendaId && p.status !== "cancelada",
+  );
+  if (relacionadas.length === 0) return false;
+  return relacionadas.every((p) => p.id === parcelaId || p.status === "paga");
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { usuario } = useAuth();
   const usuarioNome = usuario?.nome?.trim() || "Usuário autenticado";
@@ -421,7 +449,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!hydrated) return;
     try {
       window.localStorage.setItem(DATA_KEY, JSON.stringify(state));
-    } catch {}
+    } catch {
+      // Falha de persistência local não deve derrubar a interface.
+    }
   }, [state, hydrated]);
 
   const api = useMemo<Ctx>(() => {
@@ -458,14 +488,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!emp) throw new Error("Empreendimento não encontrado para a venda");
 
         const vId = uid();
-        const regra: RegrasContrato = {
-          aliquotaTributaria: emp.aliquotaTributaria,
-          socioPct: emp.socioPct,
-          empresaPct: emp.empresaPct,
-          entradaPctCorretor: state.config.entradaPctCorretor,
-          parcelasPctCorretor: state.config.parcelasPctCorretor,
-          inadimplencia: snapshotInadimplencia(state.config),
-        };
+        const regra = regrasEfetivasEmpreendimento(emp, state.config);
         const newVenda: Venda = {
           ...v,
           id: vId,
@@ -476,7 +499,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         for (const item of newVenda.composicao) {
           if (item.tipo === "bem") continue;
-          const n = Math.max(1, item.parcelas || 1);
+          const parcelado = item.tipo === "parcelas" || item.tipo === "sinal_parcelado";
+          const n = parcelado ? Math.max(1, item.parcelas || 1) : 1;
           for (let i = 1; i <= n; i++) {
             newParcelas.push({
               id: uid(),
@@ -492,7 +516,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               valor: item.valor,
               valorPago: 0,
               status: "pendente",
-              regrasInadimplencia: { ...regra.inadimplencia },
+              regrasInadimplencia: snapshotInadimplencia(regra.inadimplencia),
             });
           }
         }
@@ -522,32 +546,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const data = dataParam ?? todayISO();
           const dataReferencia = new Date(`${data}T12:00:00`);
           const devido = inadimplenciaCalc(p, s.config, dataReferencia).atualizado;
-          const v = valorRecebido ?? devido;
-          if (v + 0.01 < devido) return s;
+          const valor = valorRecebido ?? devido;
+          if (valor + 0.01 < devido) return s;
 
-          const mov = computeReceber(p, v, data, s, usuarioNome);
+          const mov = computeReceber(p, valor, data, s, usuarioNome);
           if (!mov) return s;
+          const quitada = vendaQuitadaAposPagamento(s.parcelas, p.vendaId, p.id);
+
           return {
             ...s,
             parcelas: s.parcelas.map((x) =>
               x.id === id
-                ? { ...x, status: "paga", valorPago: v, dataPagamento: data }
+                ? { ...x, status: "paga", valorPago: valor, dataPagamento: data }
                 : x,
+            ),
+            vendas: s.vendas.map((v) =>
+              v.id === p.vendaId && quitada ? { ...v, status: "quitada" } : v,
             ),
             movimentos: [...s.movimentos, mov],
           };
         });
       },
       reverterParcela: (id) => {
-        setStateRaw((s) => ({
-          ...s,
-          parcelas: s.parcelas.map((p) =>
-            p.id === id
-              ? { ...p, status: "pendente", valorPago: 0, dataPagamento: undefined }
-              : p,
-          ),
-          movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
-        }));
+        setStateRaw((s) => {
+          const p = s.parcelas.find((x) => x.id === id);
+          if (!p) return s;
+          return {
+            ...s,
+            parcelas: s.parcelas.map((x) =>
+              x.id === id
+                ? { ...x, status: "pendente", valorPago: 0, dataPagamento: undefined }
+                : x,
+            ),
+            vendas: s.vendas.map((v) =>
+              v.id === p.vendaId && v.status === "quitada" ? { ...v, status: "ativa" } : v,
+            ),
+            movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
+          };
+        });
       },
       marcarParcelaPaga: (id, dataPagamento) => {
         setStateRaw((s) => {
@@ -557,6 +593,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const dataReferencia = new Date(`${data}T12:00:00`);
           const devido = inadimplenciaCalc(p, s.config, dataReferencia).atualizado;
           const mov = computeReceber(p, devido, data, s, usuarioNome);
+          const quitada = vendaQuitadaAposPagamento(s.parcelas, p.vendaId, p.id);
+
           return {
             ...s,
             parcelas: s.parcelas.map((x) =>
@@ -564,20 +602,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 ? { ...x, status: "paga", valorPago: devido, dataPagamento: data }
                 : x,
             ),
+            vendas: s.vendas.map((v) =>
+              v.id === p.vendaId && quitada ? { ...v, status: "quitada" } : v,
+            ),
             movimentos: mov ? [...s.movimentos, mov] : s.movimentos,
           };
         });
       },
       desmarcarParcela: (id) => {
-        setStateRaw((s) => ({
-          ...s,
-          parcelas: s.parcelas.map((p) =>
-            p.id === id
-              ? { ...p, status: "pendente", valorPago: 0, dataPagamento: undefined }
-              : p,
-          ),
-          movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
-        }));
+        setStateRaw((s) => {
+          const p = s.parcelas.find((x) => x.id === id);
+          if (!p) return s;
+          return {
+            ...s,
+            parcelas: s.parcelas.map((x) =>
+              x.id === id
+                ? { ...x, status: "pendente", valorPago: 0, dataPagamento: undefined }
+                : x,
+            ),
+            vendas: s.vendas.map((v) =>
+              v.id === p.vendaId && v.status === "quitada" ? { ...v, status: "ativa" } : v,
+            ),
+            movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
+          };
+        });
       },
       updateConfig: (patch) =>
         setStateRaw((s) => ({ ...s, config: { ...s.config, ...patch } })),
@@ -601,17 +649,22 @@ export function useStore() {
 // ---------- Derived selectors ----------
 export function vendaTotais(v: Venda, parcelas: Parcela[]) {
   const ps = parcelas.filter((p) => p.vendaId === v.id);
-  const recebido = ps.reduce((a, p) => a + (p.valorPago || 0), 0);
-  const previsto = ps.reduce((a, p) => a + p.valor, 0) || v.valorTotal;
+  const recebidoFinanceiro = ps.reduce((a, p) => a + (p.valorPago || 0), 0);
+  const bens = v.composicao
+    .filter((item) => item.tipo === "bem")
+    .reduce((a, item) => a + item.valor, 0);
+  const recebido = Math.min(v.valorTotal, recebidoFinanceiro + bens);
+  const previsto = v.valorTotal;
   const saldo = Math.max(0, previsto - recebido);
   return { recebido, previsto, saldo };
 }
 
 export function empTotais(empId: string, vendas: Venda[], parcelas: Parcela[]) {
-  const vs = vendas.filter((v) => v.empreendimentoId === empId);
+  const vs = vendas.filter((v) => v.empreendimentoId === empId && v.status !== "cancelada");
   const vendido = vs.reduce((a, v) => a + v.valorTotal, 0);
+  const vendaIds = new Set(vs.map((v) => v.id));
   const recebido = parcelas
-    .filter((p) => p.empreendimentoId === empId)
+    .filter((p) => p.empreendimentoId === empId && vendaIds.has(p.vendaId))
     .reduce((a, p) => a + (p.valorPago || 0), 0);
   const saldo = Math.max(0, vendido - recebido);
   return { vendas: vs.length, vendido, recebido, saldo };
@@ -701,9 +754,8 @@ export function inadimplenciaCalc(
       ? base * ((regra.jurosPctDia || 0) / 100) * diasEfetivos
       : base * ((regra.jurosPctMes || 0) / 100) * mesesAtraso
     : 0;
-  const mora = regra.moraAtiva && diasEfetivos > 0
-    ? base * ((regra.moraPct || 0) / 100)
-    : 0;
+  const mora =
+    regra.moraAtiva && diasEfetivos > 0 ? base * ((regra.moraPct || 0) / 100) : 0;
   const atualizado = base + correcao + juros + mora;
 
   return { diasAtraso, diasEfetivos, dentroTolerancia, correcao, juros, mora, atualizado };
@@ -758,13 +810,11 @@ export function distribuicaoPrevista(
     if (!emp) continue;
 
     const regra = regrasContrato(v, emp, cfg);
-    const previsto =
-      parcelas.filter((p) => p.vendaId === v.id).reduce((a, p) => a + p.valor, 0) ||
-      v.valorTotal;
+    const previsto = v.valorTotal;
     const imp = previsto * (regra.aliquotaTributaria / 100);
     const com = Math.min(
       Math.max(0, previsto - imp),
-      v.valorTotal * ((v.corretorPct || cfg.corretorPctPadrao) / 100),
+      v.valorTotal * ((v.corretorPct || 0) / 100),
     );
     const restante = Math.max(0, previsto - imp - com);
     const totalPct = regra.socioPct + regra.empresaPct;
