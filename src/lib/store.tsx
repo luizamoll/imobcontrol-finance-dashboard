@@ -23,13 +23,7 @@ export type PagamentoTipo =
   | "sem_sinal"
   | "outro";
 
-export type UnidadeTipo =
-  | "lote"
-  | "apartamento"
-  | "sala"
-  | "casa"
-  | "loja"
-  | "outro";
+export type UnidadeTipo = "lote" | "apartamento" | "sala" | "casa" | "loja" | "outro";
 
 export type EmpreendimentoTipo =
   | "loteamento"
@@ -92,6 +86,19 @@ export interface PagamentoItem {
   bem?: BemMaterial;
 }
 
+export interface RegrasContrato {
+  aliquotaTributaria: number;
+  socioPct: number;
+  empresaPct: number;
+  entradaPctCorretor: number;
+  parcelasPctCorretor: number;
+  inadimplencia: RegrasInadimplencia;
+}
+
+export interface RegrasOperacao extends RegrasContrato {
+  corretorPct: number;
+}
+
 export interface Empreendimento {
   id: string;
   nome: string;
@@ -105,19 +112,26 @@ export interface Empreendimento {
   empresaPct: number;
   corretorPct: number;
   aliquotaTributaria: number;
-  /** Percentual de cada recebimento de entrada destinado à comissão. */
   entradaPctCorretor?: number;
-  /** Percentual de cada recebimento parcelado destinado à comissão. */
   parcelasPctCorretor?: number;
-  /** Regras de atraso próprias deste empreendimento. */
   inadimplencia?: RegrasInadimplencia;
   observacoes?: string;
   status: EmpStatus;
 }
 
+export interface Quadra {
+  id: string;
+  empreendimentoId: string;
+  nome: string;
+  descricao?: string;
+  /** Quando ausente, herda as regras do empreendimento. */
+  regras?: RegrasOperacao;
+}
+
 export interface Matricula {
   id: string;
   empreendimentoId: string;
+  quadraId?: string;
   numero: string;
   unidade: string;
   unidadeTipo?: UnidadeTipo;
@@ -125,17 +139,10 @@ export interface Matricula {
   area: number;
   valorVenda: number;
   status: MatriculaStatus;
+  /** Quando ausente, herda da quadra ou do empreendimento. */
+  regras?: RegrasOperacao;
   compradorNome?: string;
   vendaId?: string;
-}
-
-export interface RegrasContrato {
-  aliquotaTributaria: number;
-  socioPct: number;
-  empresaPct: number;
-  entradaPctCorretor: number;
-  parcelasPctCorretor: number;
-  inadimplencia: RegrasInadimplencia;
 }
 
 export interface Venda {
@@ -169,7 +176,6 @@ export interface Parcela {
   valorPago: number;
   dataPagamento?: string;
   status: ParcelaStatus;
-  /** Snapshot para mudanças futuras não alterarem contratos antigos. */
   regrasInadimplencia?: RegrasInadimplencia;
 }
 
@@ -195,10 +201,7 @@ export interface Movimento {
   socioPctAplicada?: number;
 }
 
-/**
- * Mantido para compatibilidade com dados locais antigos e cadastros auxiliares.
- * Regras financeiras novas devem ser vinculadas ao empreendimento/contrato.
- */
+/** Compatibilidade com dados locais antigos e cadastros auxiliares. */
 export interface Config extends RegrasInadimplencia {
   corretorPctPadrao: number;
   entradaPctCorretor: number;
@@ -225,6 +228,7 @@ export interface TrimestreItem {
 
 export interface State {
   empreendimentos: Empreendimento[];
+  quadras: Quadra[];
   matriculas: Matricula[];
   vendas: Venda[];
   parcelas: Parcela[];
@@ -250,6 +254,7 @@ const DEFAULT_CONFIG: Config = {
 function makeEmptyState(): State {
   return {
     empreendimentos: [],
+    quadras: [],
     matriculas: [],
     vendas: [],
     parcelas: [],
@@ -290,6 +295,7 @@ function loadState(): State {
 
     return {
       empreendimentos: parsed.empreendimentos ?? [],
+      quadras: parsed.quadras ?? [],
       matriculas: parsed.matriculas ?? [],
       vendas: parsed.vendas ?? [],
       parcelas: parsed.parcelas ?? [],
@@ -310,38 +316,58 @@ function loadState(): State {
 }
 
 function snapshotInadimplencia(regra: RegrasInadimplencia): RegrasInadimplencia {
+  return { ...regra };
+}
+
+function snapshotRegrasContrato(regra: RegrasOperacao): RegrasContrato {
   return {
-    correcaoPctMes: regra.correcaoPctMes,
-    correcaoAtiva: regra.correcaoAtiva,
-    correcaoIndice: regra.correcaoIndice,
-    jurosPctMes: regra.jurosPctMes,
-    jurosPctDia: regra.jurosPctDia,
-    jurosTipo: regra.jurosTipo,
-    jurosAtivo: regra.jurosAtivo,
-    moraPct: regra.moraPct,
-    moraAtiva: regra.moraAtiva,
-    diasTolerancia: regra.diasTolerancia,
-    toleranciaAtiva: regra.toleranciaAtiva,
-    inicioJuros: regra.inicioJuros,
+    aliquotaTributaria: regra.aliquotaTributaria,
+    socioPct: regra.socioPct,
+    empresaPct: regra.empresaPct,
+    entradaPctCorretor: regra.entradaPctCorretor,
+    parcelasPctCorretor: regra.parcelasPctCorretor,
+    inadimplencia: snapshotInadimplencia(regra.inadimplencia),
   };
 }
 
 export function regrasEfetivasEmpreendimento(
   emp: Empreendimento,
   cfg: Config,
-): RegrasContrato {
+): RegrasOperacao {
   return {
     aliquotaTributaria: emp.aliquotaTributaria,
     socioPct: emp.socioPct,
     empresaPct: emp.empresaPct,
+    corretorPct: emp.corretorPct,
     entradaPctCorretor: emp.entradaPctCorretor ?? cfg.entradaPctCorretor,
     parcelasPctCorretor: emp.parcelasPctCorretor ?? cfg.parcelasPctCorretor,
     inadimplencia: snapshotInadimplencia(emp.inadimplencia ?? cfg),
   };
 }
 
+export function regrasEfetivasUnidade(
+  emp: Empreendimento,
+  matricula: Matricula,
+  quadra: Quadra | undefined,
+  cfg: Config,
+): { regras: RegrasOperacao; origem: "empreendimento" | "quadra" | "unidade" } {
+  if (matricula.regras) {
+    return {
+      regras: { ...matricula.regras, inadimplencia: { ...matricula.regras.inadimplencia } },
+      origem: "unidade",
+    };
+  }
+  if (quadra?.regras) {
+    return {
+      regras: { ...quadra.regras, inadimplencia: { ...quadra.regras.inadimplencia } },
+      origem: "quadra",
+    };
+  }
+  return { regras: regrasEfetivasEmpreendimento(emp, cfg), origem: "empreendimento" };
+}
+
 function regrasContrato(venda: Venda, emp: Empreendimento, cfg: Config): RegrasContrato {
-  return venda.regras ?? regrasEfetivasEmpreendimento(emp, cfg);
+  return venda.regras ?? snapshotRegrasContrato(regrasEfetivasEmpreendimento(emp, cfg));
 }
 
 // ---------- Context ----------
@@ -351,6 +377,8 @@ interface Ctx {
   resetSeed: () => void;
   addEmpreendimento: (e: Omit<Empreendimento, "id">) => Empreendimento;
   updateEmpreendimento: (id: string, patch: Partial<Empreendimento>) => void;
+  addQuadra: (q: Omit<Quadra, "id">) => Quadra;
+  updateQuadra: (id: string, patch: Partial<Quadra>) => void;
   addMatricula: (m: Omit<Matricula, "id">) => Matricula;
   updateMatricula: (id: string, patch: Partial<Matricula>) => void;
   addVenda: (v: Omit<Venda, "id" | "status" | "regras"> & { status?: VendaStatus }) => Venda;
@@ -473,6 +501,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             x.id === id ? { ...x, ...patch } : x,
           ),
         })),
+      addQuadra: (q) => {
+        const n: Quadra = { ...q, id: uid() };
+        setStateRaw((s) => ({ ...s, quadras: [...s.quadras, n] }));
+        return n;
+      },
+      updateQuadra: (id, patch) =>
+        setStateRaw((s) => ({
+          ...s,
+          quadras: s.quadras.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+        })),
       addMatricula: (m) => {
         const n: Matricula = { ...m, id: uid() };
         setStateRaw((s) => ({ ...s, matriculas: [...s.matriculas, n] }));
@@ -485,15 +523,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })),
       addVenda: (v) => {
         const emp = state.empreendimentos.find((e) => e.id === v.empreendimentoId);
-        if (!emp) throw new Error("Empreendimento não encontrado para a venda");
+        const mat = state.matriculas.find((m) => m.id === v.matriculaId);
+        if (!emp || !mat) throw new Error("Empreendimento ou unidade não encontrados para a venda");
+        const quadra = mat.quadraId ? state.quadras.find((q) => q.id === mat.quadraId) : undefined;
+        const efetiva = regrasEfetivasUnidade(emp, mat, quadra, state.config).regras;
 
         const vId = uid();
-        const regra = regrasEfetivasEmpreendimento(emp, state.config);
         const newVenda: Venda = {
           ...v,
           id: vId,
           status: v.status ?? "ativa",
-          regras: regra,
+          regras: snapshotRegrasContrato(efetiva),
         };
         const newParcelas: Parcela[] = [];
 
@@ -516,7 +556,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               valor: item.valor,
               valorPago: 0,
               status: "pendente",
-              regrasInadimplencia: snapshotInadimplencia(regra.inadimplencia),
+              regrasInadimplencia: snapshotInadimplencia(efetiva.inadimplencia),
             });
           }
         }
@@ -799,6 +839,7 @@ export function distribuicaoPrevista(
   parcelas: Parcela[],
   cfg: Config,
 ) {
+  void parcelas;
   let empresa = 0;
   let socio = 0;
   let imposto = 0;
