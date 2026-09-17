@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -38,17 +39,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { brl0, formatCNPJ, num, pct } from "@/lib/format";
 import {
   empTotais,
+  regrasEfetivasEmpreendimento,
   useStore,
   type Empreendimento,
+  type EmpreendimentoTipo,
   type EmpStatus,
+  type InicioJuros,
+  type JurosTipo,
   type MatriculaStatus,
+  type RegrasContrato,
+  type RegrasInadimplencia,
 } from "@/lib/store";
 
 export const Route = createFileRoute("/empreendimentos/$id")({
   component: EmpreendimentoDetail,
-  head: () => ({
-    meta: [{ title: "Empreendimento · ImobControl" }],
-  }),
+  head: () => ({ meta: [{ title: "Empreendimento · ImobControl" }] }),
   notFoundComponent: () => (
     <PageShell>
       <PageHeader eyebrow="Portfólio" title="Empreendimento não encontrado" />
@@ -67,15 +72,15 @@ function EmpreendimentoDetail() {
 
   if (!emp) throw notFound();
 
+  const regras = regrasEfetivasEmpreendimento(emp, state.config);
   const t = empTotais(emp.id, state.vendas, state.parcelas);
   const matriculas = state.matriculas.filter((m) => m.empreendimentoId === emp.id);
   const vendas = state.vendas.filter((v) => v.empreendimentoId === emp.id);
   const parcelas = state.parcelas.filter((p) => p.empreendimentoId === emp.id);
   const movimentos = state.movimentos.filter((m) => m.empreendimentoId === emp.id);
-  const possuiHistoricoFinanceiro = vendas.length > 0 || parcelas.length > 0 || movimentos.length > 0;
-  const vendidoPct = emp.valorTotal
-    ? Math.min(100, (t.vendido / emp.valorTotal) * 100)
-    : 0;
+  const possuiHistoricoFinanceiro =
+    vendas.length > 0 || parcelas.length > 0 || movimentos.length > 0;
+  const vendidoPct = emp.valorTotal ? Math.min(100, (t.vendido / emp.valorTotal) * 100) : 0;
 
   const excluirEmpreendimento = () => {
     if (possuiHistoricoFinanceiro) {
@@ -109,9 +114,7 @@ function EmpreendimentoDetail() {
       <PageHeader
         eyebrow={emp.spe}
         title={emp.nome}
-        description={
-          emp.observacoes || (emp.cnpj ? `CNPJ ${emp.cnpj}` : "CNPJ não informado")
-        }
+        description={emp.observacoes || (emp.cnpj ? `CNPJ ${emp.cnpj}` : "CNPJ não informado")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <EmpStatusBadge status={emp.status} />
@@ -130,6 +133,7 @@ function EmpreendimentoDetail() {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <EditEmpreendimentoDialog
           emp={emp}
+          regrasAtuais={regras}
           onSave={(patch) => {
             updateEmpreendimento(emp.id, patch);
             toast.success("Empreendimento atualizado");
@@ -196,13 +200,43 @@ function EmpreendimentoDetail() {
             <span className="w-16 text-right text-sm text-muted-foreground">{pct(vendidoPct)}</span>
           </div>
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            <Info label="Tipo" value={tipoLegivel(emp.tipo)} />
             <Info label="Área total" value={`${num(emp.areaTotal)} m²`} />
             <Info label="Unidades cadastradas" value={String(matriculas.length)} />
-            <Info label="Vendas ativas" value={String(t.vendas)} />
-            <Info label="Alíquota tributária" value={`${emp.aliquotaTributaria}%`} />
-            <Info label="% Sócio (saldo líquido)" value={`${emp.socioPct}%`} />
-            <Info label="% Empresa (saldo líquido)" value={`${emp.empresaPct}%`} />
-            <Info label="% Corretor" value={`${emp.corretorPct}%`} />
+            <Info label="Vendas ativas / quitadas" value={String(t.vendas)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+          <div>
+            <CardTitle className="text-base">Regras financeiras — {emp.nome}</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Aplicado a: <strong>Empreendimento · {emp.nome}</strong>. Novas vendas recebem uma cópia
+              destas regras; contratos já existentes não são alterados.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Pencil className="mr-2 h-4 w-4" /> Editar regras
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+            <Info label="Tributação" value={`${regras.aliquotaTributaria}%`} />
+            <Info label="Corretor" value={`${emp.corretorPct}%`} />
+            <Info label="Sócio · saldo líquido" value={`${regras.socioPct}%`} />
+            <Info label="Empresa · saldo líquido" value={`${regras.empresaPct}%`} />
+            <Info label="Entrada → comissão" value={`${regras.entradaPctCorretor}%`} />
+            <Info label="Parcelas → comissão" value={`${regras.parcelasPctCorretor}%`} />
+          </div>
+          <div className="rounded-lg border border-border/60 bg-background/70 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Inadimplência
+            </p>
+            <p className="mt-1 text-sm text-foreground">
+              {resumoInadimplencia(regras.inadimplencia)}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -211,19 +245,19 @@ function EmpreendimentoDetail() {
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle className="flex items-center gap-2 text-base">
             <Building2 className="h-4 w-4 text-primary" />
-            Matrículas / Unidades
+            Unidades / Matrículas
           </CardTitle>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline">
                 <Plus className="mr-2 h-4 w-4" />
-                Nova matrícula
+                Nova unidade
               </Button>
             </DialogTrigger>
             <NewMatriculaDialog
               onSave={(m) => {
                 addMatricula({ ...m, empreendimentoId: emp.id });
-                toast.success("Matrícula cadastrada");
+                toast.success("Unidade cadastrada");
                 setOpen(false);
               }}
             />
@@ -245,7 +279,7 @@ function EmpreendimentoDetail() {
               {matriculas.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                    Nenhuma matrícula cadastrada.
+                    Nenhuma unidade cadastrada.
                   </TableCell>
                 </TableRow>
               )}
@@ -292,25 +326,77 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
+function tipoLegivel(tipo: EmpreendimentoTipo) {
+  const labels: Record<EmpreendimentoTipo, string> = {
+    loteamento: "Loteamento",
+    vertical: "Vertical",
+    horizontal: "Horizontal",
+    comercial: "Comercial",
+    misto: "Misto",
+    outro: "Outro",
+  };
+  return labels[tipo] ?? "Outro";
+}
+
+function resumoInadimplencia(regra: RegrasInadimplencia) {
+  const itens: string[] = [];
+  if (regra.correcaoAtiva) {
+    itens.push(
+      `correção ${regra.correcaoIndice ? `${regra.correcaoIndice} ` : ""}${regra.correcaoPctMes}% a.m.`,
+    );
+  }
+  if (regra.jurosAtivo) {
+    itens.push(
+      regra.jurosTipo === "diario"
+        ? `juros ${regra.jurosPctDia}% a.d.`
+        : `juros ${regra.jurosPctMes}% a.m.`,
+    );
+  }
+  if (regra.moraAtiva) itens.push(`multa ${regra.moraPct}%`);
+  if (regra.toleranciaAtiva) itens.push(`${regra.diasTolerancia} dia(s) de tolerância`);
+  return itens.length > 0 ? itens.join(" · ") : "Sem acréscimos automáticos configurados.";
+}
+
 function EditEmpreendimentoDialog({
   emp,
+  regrasAtuais,
   onSave,
 }: {
   emp: Empreendimento;
+  regrasAtuais: RegrasContrato;
   onSave: (patch: Partial<Empreendimento>) => void;
 }) {
   const [nome, setNome] = useState(emp.nome);
   const [spe, setSpe] = useState(emp.spe);
   const [cnpj, setCnpj] = useState(emp.cnpj);
   const [areaTotal, setAreaTotal] = useState(String(emp.areaTotal || ""));
+  const [tipo, setTipo] = useState<EmpreendimentoTipo>(emp.tipo);
   const [matriculasCount, setMatriculasCount] = useState(String(emp.matriculasCount || ""));
   const [valorTotal, setValorTotal] = useState(String(emp.valorTotal || ""));
-  const [socioPct, setSocioPct] = useState(String(emp.socioPct));
-  const [empresaPct, setEmpresaPct] = useState(String(emp.empresaPct));
+  const [socioPct, setSocioPct] = useState(String(regrasAtuais.socioPct));
+  const [empresaPct, setEmpresaPct] = useState(String(regrasAtuais.empresaPct));
   const [corretorPct, setCorretorPct] = useState(String(emp.corretorPct));
-  const [aliquotaTributaria, setAliquotaTributaria] = useState(String(emp.aliquotaTributaria));
+  const [aliquotaTributaria, setAliquotaTributaria] = useState(
+    String(regrasAtuais.aliquotaTributaria),
+  );
+  const [entradaPct, setEntradaPct] = useState(String(regrasAtuais.entradaPctCorretor));
+  const [parcelasPct, setParcelasPct] = useState(String(regrasAtuais.parcelasPctCorretor));
   const [observacoes, setObservacoes] = useState(emp.observacoes || "");
   const [status, setStatus] = useState<EmpStatus>(emp.status);
+
+  const baseInad = regrasAtuais.inadimplencia;
+  const [correcaoAtiva, setCorrecaoAtiva] = useState(baseInad.correcaoAtiva);
+  const [correcaoIndice, setCorrecaoIndice] = useState(baseInad.correcaoIndice);
+  const [correcaoPct, setCorrecaoPct] = useState(String(baseInad.correcaoPctMes));
+  const [jurosAtivo, setJurosAtivo] = useState(baseInad.jurosAtivo);
+  const [jurosTipo, setJurosTipo] = useState<JurosTipo>(baseInad.jurosTipo);
+  const [jurosPctMes, setJurosPctMes] = useState(String(baseInad.jurosPctMes));
+  const [jurosPctDia, setJurosPctDia] = useState(String(baseInad.jurosPctDia));
+  const [inicioJuros, setInicioJuros] = useState<InicioJuros>(baseInad.inicioJuros);
+  const [moraAtiva, setMoraAtiva] = useState(baseInad.moraAtiva);
+  const [moraPct, setMoraPct] = useState(String(baseInad.moraPct));
+  const [toleranciaAtiva, setToleranciaAtiva] = useState(baseInad.toleranciaAtiva);
+  const [diasTolerancia, setDiasTolerancia] = useState(String(baseInad.diasTolerancia));
 
   const salvar = () => {
     const socio = Number(socioPct) || 0;
@@ -327,29 +413,48 @@ function EditEmpreendimentoDialog({
       return;
     }
 
+    const inadimplencia: RegrasInadimplencia = {
+      correcaoAtiva,
+      correcaoIndice: correcaoIndice.trim(),
+      correcaoPctMes: Number(correcaoPct) || 0,
+      jurosAtivo,
+      jurosTipo,
+      jurosPctMes: Number(jurosPctMes) || 0,
+      jurosPctDia: Number(jurosPctDia) || 0,
+      inicioJuros,
+      moraAtiva,
+      moraPct: Number(moraPct) || 0,
+      toleranciaAtiva,
+      diasTolerancia: Number(diasTolerancia) || 0,
+    };
+
     onSave({
       nome: nome.trim(),
       spe: spe.trim(),
       cnpj,
       areaTotal: Number(areaTotal) || 0,
+      tipo,
       matriculasCount: Number(matriculasCount) || 0,
       valorTotal: Number(valorTotal) || 0,
       socioPct: socio,
       empresaPct: empresa,
       corretorPct: Number(corretorPct) || 0,
       aliquotaTributaria: Number(aliquotaTributaria) || 0,
+      entradaPctCorretor: Number(entradaPct) || 0,
+      parcelasPctCorretor: Number(parcelasPct) || 0,
+      inadimplencia,
       observacoes: observacoes.trim(),
       status,
     });
   };
 
   return (
-    <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+    <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Editar empreendimento</DialogTitle>
+        <DialogTitle>Editar {emp.nome}</DialogTitle>
         <DialogDescription>
-          Corrija dados do projeto quando necessário. Alterações nas regras do empreendimento valem
-          para novas vendas; contratos já registrados preservam as regras que tinham no momento da venda.
+          As regras editadas aqui pertencem ao empreendimento {emp.nome} e só afetam novas vendas.
+          Contratos registrados preservam o snapshot original.
         </DialogDescription>
       </DialogHeader>
 
@@ -371,21 +476,20 @@ function EditEmpreendimentoDialog({
           />
         </div>
         <div>
-          <Label>Área total (m²)</Label>
-          <Input type="number" min="0" value={areaTotal} onChange={(e) => setAreaTotal(e.target.value)} />
-        </div>
-        <div>
-          <Label>Unidades previstas</Label>
-          <Input
-            type="number"
-            min="0"
-            value={matriculasCount}
-            onChange={(e) => setMatriculasCount(e.target.value)}
-          />
-        </div>
-        <div>
-          <Label>VGV / valor total estimado (R$)</Label>
-          <Input type="number" min="0" value={valorTotal} onChange={(e) => setValorTotal(e.target.value)} />
+          <Label>Tipo de empreendimento</Label>
+          <Select value={tipo} onValueChange={(v) => setTipo(v as EmpreendimentoTipo)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="loteamento">Loteamento</SelectItem>
+              <SelectItem value="vertical">Vertical</SelectItem>
+              <SelectItem value="horizontal">Horizontal</SelectItem>
+              <SelectItem value="comercial">Comercial</SelectItem>
+              <SelectItem value="misto">Misto</SelectItem>
+              <SelectItem value="outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>Status</Label>
@@ -401,16 +505,42 @@ function EditEmpreendimentoDialog({
             </SelectContent>
           </Select>
         </div>
+        <div>
+          <Label>Área total (m²)</Label>
+          <Input
+            type="number"
+            min="0"
+            value={areaTotal}
+            onChange={(e) => setAreaTotal(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>Unidades previstas</Label>
+          <Input
+            type="number"
+            min="0"
+            value={matriculasCount}
+            onChange={(e) => setMatriculasCount(e.target.value)}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>VGV / valor total estimado (R$)</Label>
+          <Input
+            type="number"
+            min="0"
+            value={valorTotal}
+            onChange={(e) => setValorTotal(e.target.value)}
+          />
+        </div>
 
-        <div className="sm:col-span-2 rounded-lg border border-border/70 bg-muted/20 p-4">
-          <p className="text-sm font-semibold">Distribuição do saldo líquido</p>
+        <div className="sm:col-span-2 rounded-lg border border-primary/20 bg-primary/5 p-4">
+          <p className="text-sm font-semibold">Regras financeiras — {nome || emp.nome}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Impostos e comissão são descontados primeiro. Sócio + Empresa dividem o valor que sobra e,
-            por isso, precisam somar 100%.
+            Aplicado a: Empreendimento · {nome || emp.nome}
           </p>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <Label>Participação do sócio no saldo líquido (%)</Label>
+              <Label>Sócio no saldo líquido (%)</Label>
               <Input
                 type="number"
                 min="0"
@@ -421,7 +551,7 @@ function EditEmpreendimentoDialog({
               />
             </div>
             <div>
-              <Label>Participação da empresa no saldo líquido (%)</Label>
+              <Label>Empresa no saldo líquido (%)</Label>
               <Input
                 type="number"
                 min="0"
@@ -431,29 +561,153 @@ function EditEmpreendimentoDialog({
                 onChange={(e) => setEmpresaPct(e.target.value)}
               />
             </div>
+            <div>
+              <Label>Comissão do corretor (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={corretorPct}
+                onChange={(e) => setCorretorPct(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Alíquota tributária (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={aliquotaTributaria}
+                onChange={(e) => setAliquotaTributaria(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>% da entrada destinado à comissão</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={entradaPct}
+                onChange={(e) => setEntradaPct(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>% das parcelas destinado à comissão</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={parcelasPct}
+                onChange={(e) => setParcelasPct(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 
-        <div>
-          <Label>Comissão do corretor (%)</Label>
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            value={corretorPct}
-            onChange={(e) => setCorretorPct(e.target.value)}
-          />
+        <div className="sm:col-span-2 rounded-lg border border-border/70 p-4">
+          <p className="text-sm font-semibold">Inadimplência — {nome || emp.nome}</p>
+          <div className="mt-4 space-y-4">
+            <RegraToggle
+              titulo="Correção contratual"
+              ativa={correcaoAtiva}
+              onAtiva={setCorrecaoAtiva}
+            >
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Referência / descrição</Label>
+                  <Input
+                    value={correcaoIndice}
+                    onChange={(e) => setCorrecaoIndice(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">% ao mês</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={correcaoPct}
+                    onChange={(e) => setCorrecaoPct(e.target.value)}
+                  />
+                </div>
+              </div>
+            </RegraToggle>
+
+            <RegraToggle titulo="Juros" ativa={jurosAtivo} onAtiva={setJurosAtivo}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <Label className="text-xs">Periodicidade</Label>
+                  <Select value={jurosTipo} onValueChange={(v) => setJurosTipo(v as JurosTipo)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mensal">Mensal</SelectItem>
+                      <SelectItem value="diario">Diário</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">
+                    {jurosTipo === "diario" ? "% ao dia" : "% ao mês"}
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step={jurosTipo === "diario" ? "0.001" : "0.01"}
+                    value={jurosTipo === "diario" ? jurosPctDia : jurosPctMes}
+                    onChange={(e) =>
+                      jurosTipo === "diario"
+                        ? setJurosPctDia(e.target.value)
+                        : setJurosPctMes(e.target.value)
+                    }
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Início</Label>
+                  <Select
+                    value={inicioJuros}
+                    onValueChange={(v) => setInicioJuros(v as InicioJuros)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vencimento">No vencimento</SelectItem>
+                      <SelectItem value="apos_tolerancia">Após tolerância</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </RegraToggle>
+
+            <RegraToggle titulo="Multa por atraso" ativa={moraAtiva} onAtiva={setMoraAtiva}>
+              <Label className="text-xs">Percentual fixo (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={moraPct}
+                onChange={(e) => setMoraPct(e.target.value)}
+              />
+            </RegraToggle>
+
+            <RegraToggle
+              titulo="Dias de tolerância"
+              ativa={toleranciaAtiva}
+              onAtiva={setToleranciaAtiva}
+            >
+              <Label className="text-xs">Quantidade de dias</Label>
+              <Input
+                type="number"
+                min="0"
+                value={diasTolerancia}
+                onChange={(e) => setDiasTolerancia(e.target.value)}
+              />
+            </RegraToggle>
+          </div>
         </div>
-        <div>
-          <Label>Alíquota tributária (%)</Label>
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            value={aliquotaTributaria}
-            onChange={(e) => setAliquotaTributaria(e.target.value)}
-          />
-        </div>
+
         <div className="sm:col-span-2">
           <Label>Observações</Label>
           <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
@@ -464,6 +718,28 @@ function EditEmpreendimentoDialog({
         <Button onClick={salvar}>Salvar alterações</Button>
       </DialogFooter>
     </DialogContent>
+  );
+}
+
+function RegraToggle({
+  titulo,
+  ativa,
+  onAtiva,
+  children,
+}: {
+  titulo: string;
+  ativa: boolean;
+  onAtiva: (ativa: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <Label className="text-sm font-medium">{titulo}</Label>
+        <Switch checked={ativa} onCheckedChange={onAtiva} />
+      </div>
+      {ativa && <div className="mt-3">{children}</div>}
+    </div>
   );
 }
 
@@ -487,7 +763,10 @@ function NewMatriculaDialog({
   return (
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>Nova matrícula / unidade</DialogTitle>
+        <DialogTitle>Nova unidade</DialogTitle>
+        <DialogDescription>
+          Cadastre a unidade comercializável e, quando houver, o número da matrícula correspondente.
+        </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
