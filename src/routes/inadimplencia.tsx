@@ -52,31 +52,23 @@ function InadimplenciaPage() {
 
   const totOriginal = rows.reduce((a, r) => a + r.p.valor, 0);
   const totAtualizado = rows.reduce((a, r) => a + r.calc.atualizado, 0);
-  const totJurosMora = rows.reduce((a, r) => a + r.calc.juros + r.calc.mora + r.calc.correcao, 0);
+  const totJurosMora = rows.reduce(
+    (a, r) => a + r.calc.juros + r.calc.mora + r.calc.correcao,
+    0,
+  );
 
   return (
     <PageShell>
       <PageHeader
         eyebrow="Cobrança"
         title="Inadimplência"
-        description={`Regras vigentes: ${
-          state.config.correcaoAtiva
-            ? `correção ${state.config.correcaoIndice} ${state.config.correcaoPctMes}% a.m.`
-            : "correção desativada"
-        } · ${
-          state.config.jurosAtivo
-            ? `juros ${state.config.jurosTipo === "diario" ? `${state.config.jurosPctDia}% a.d.` : `${state.config.jurosPctMes}% a.m.`}`
-            : "juros desativados"
-        } · ${state.config.moraAtiva ? `mora ${state.config.moraPct}%` : "mora desativada"} · ${
-          state.config.toleranciaAtiva ? `${state.config.diasTolerancia} dias de tolerância` : "sem tolerância"
-        }.`}
+        description="Cada parcela é atualizada pelas regras congeladas no próprio contrato. O filtro de empreendimento muda apenas o que você está consultando, não a regra aplicada aos demais contratos."
       />
-
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Mini label="Parcelas em atraso" value={String(rows.length)} />
         <Mini label="Valor original" value={brl0(totOriginal)} />
-        <Mini label="Acréscimos" value={brl0(totJurosMora)} tone="warning" />
+        <Mini label="Acréscimos contratuais" value={brl0(totJurosMora)} tone="warning" />
         <Mini label="Valor atualizado" value={brl0(totAtualizado)} tone="destructive" />
       </div>
 
@@ -85,18 +77,26 @@ function InadimplenciaPage() {
           <div>
             <Label>Empreendimento</Label>
             <Select value={empFilter} onValueChange={setEmpFilter}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 {state.empreendimentos.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.nome}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="sm:col-span-2">
             <Label>Buscar cliente</Label>
-            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nome do cliente" />
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Nome do cliente"
+            />
           </div>
         </CardContent>
       </Card>
@@ -115,7 +115,7 @@ function InadimplenciaPage() {
                 <TableHead className="text-right">Original</TableHead>
                 <TableHead className="text-right">Correção</TableHead>
                 <TableHead className="text-right">Juros</TableHead>
-                <TableHead className="text-right">Mora</TableHead>
+                <TableHead className="text-right">Multa</TableHead>
                 <TableHead className="text-right">Atualizado</TableHead>
                 <TableHead className="text-right">Ação</TableHead>
               </TableRow>
@@ -125,7 +125,7 @@ function InadimplenciaPage() {
                 <TableRow>
                   <TableCell colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
                     <AlertOctagon className="mx-auto mb-2 h-8 w-8 opacity-40" />
-                    Nenhuma parcela em atraso 🎉
+                    Nenhuma parcela em atraso.
                   </TableCell>
                 </TableRow>
               )}
@@ -133,11 +133,19 @@ function InadimplenciaPage() {
                 const emp = state.empreendimentos.find((e) => e.id === p.empreendimentoId);
                 const mat = state.matriculas.find((m) => m.id === p.matriculaId);
                 const gravidade =
-                  calc.diasAtraso > 60 ? "destructive" : calc.diasAtraso > 15 ? "warning" : "muted";
+                  calc.diasAtraso > 60
+                    ? "destructive"
+                    : calc.diasAtraso > 15
+                      ? "warning"
+                      : "muted";
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">
-                      <Link to="/vendas/$id" params={{ id: p.vendaId }} className="hover:text-primary">
+                      <Link
+                        to="/vendas/$id"
+                        params={{ id: p.vendaId }}
+                        className="hover:text-primary"
+                      >
                         {p.compradorNome}
                       </Link>
                     </TableCell>
@@ -160,17 +168,25 @@ function InadimplenciaPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{brl0(p.valor)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{brl0(calc.correcao)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{brl0(calc.juros)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{brl0(calc.mora)}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums text-destructive">{brl0(calc.atualizado)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {brl0(calc.correcao)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {brl0(calc.juros)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {brl0(calc.mora)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums text-destructive">
+                      {brl0(calc.atualizado)}
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => {
                           receberParcela(p.id, calc.atualizado);
-                          toast.success("Recebimento com acréscimos registrado");
+                          toast.success("Recebimento com acréscimos contratuais registrado");
                         }}
                       >
                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
@@ -187,7 +203,15 @@ function InadimplenciaPage() {
   );
 }
 
-function Mini({ label, value, tone }: { label: string; value: string; tone?: "destructive" | "warning" }) {
+function Mini({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "destructive" | "warning";
+}) {
   const cls =
     tone === "destructive"
       ? "text-destructive"
