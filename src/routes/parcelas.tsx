@@ -74,7 +74,7 @@ function ParcelasPage() {
       <PageHeader
         eyebrow="Cobrança"
         title="Parcelas"
-        description="Acompanhe as parcelas dos contratos. Valores vencidos exibem os acréscimos conforme as regras atuais de inadimplência."
+        description="Acompanhe as parcelas dos contratos. Valores vencidos são atualizados com a regra congelada em cada contrato, preservando o que foi negociado naquela venda."
       />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -89,19 +89,28 @@ function ParcelasPage() {
           <div>
             <Label>Empreendimento</Label>
             <Select value={empFilter} onValueChange={setEmpFilter}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 {state.empreendimentos.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.nome}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label>Status</Label>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as ParcelaStatus | "todos")}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => setStatusFilter(v as ParcelaStatus | "todos")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="pendente">Pendente</SelectItem>
@@ -113,7 +122,11 @@ function ParcelasPage() {
           </div>
           <div className="sm:col-span-2">
             <Label>Buscar por cliente ou descrição</Label>
-            <Input placeholder="Ex.: João, Sinal, Parcela 3..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <Input
+              placeholder="Ex.: João, entrada, parcela..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -148,7 +161,9 @@ function ParcelasPage() {
                     <TableCell className="text-sm font-medium">{p.compradorNome}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{emp?.nome}</TableCell>
                     <TableCell className="text-sm">{p.origemDescricao}</TableCell>
-                    <TableCell className="text-sm">{p.numero}/{p.totalParcelas}</TableCell>
+                    <TableCell className="text-sm">
+                      {p.numero}/{p.totalParcelas}
+                    </TableCell>
                     <TableCell className="text-sm">{formatDate(p.vencimento)}</TableCell>
                     <TableCell className="text-right font-medium">
                       {brl0(p.status === "vencida" ? p.valorCobrado : p.valor)}
@@ -158,10 +173,19 @@ function ParcelasPage() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell><ParcelaStatusBadge status={p.status} /></TableCell>
+                    <TableCell>
+                      <ParcelaStatusBadge status={p.status} />
+                    </TableCell>
                     <TableCell className="text-right">
                       {p.status === "paga" ? (
-                        <Button size="sm" variant="ghost" onClick={() => { desmarcarParcela(p.id); toast("Recebimento revertido"); }}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            desmarcarParcela(p.id);
+                            toast("Recebimento revertido");
+                          }}
+                        >
                           <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reverter
                         </Button>
                       ) : p.status === "cancelada" ? (
@@ -174,7 +198,7 @@ function ParcelasPage() {
                             receberParcela(p.id, p.valorCobrado);
                             toast.success(
                               p.status === "vencida"
-                                ? "Parcela recebida com os acréscimos aplicáveis"
+                                ? "Parcela recebida com os acréscimos contratuais"
                                 : "Recebimento registrado",
                             );
                           }}
@@ -194,8 +218,21 @@ function ParcelasPage() {
   );
 }
 
-function MiniStat({ label, value, tone }: { label: string; value: string; tone?: "success" | "destructive" }) {
-  const cls = tone === "success" ? "text-success" : tone === "destructive" ? "text-destructive" : "text-foreground";
+function MiniStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "success" | "destructive";
+}) {
+  const cls =
+    tone === "success"
+      ? "text-success"
+      : tone === "destructive"
+        ? "text-destructive"
+        : "text-foreground";
   return (
     <Card className="border-border/70">
       <CardContent className="p-4">
