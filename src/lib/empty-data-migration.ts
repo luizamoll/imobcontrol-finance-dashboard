@@ -3,6 +3,7 @@ const RESET_MARKER_KEY = "imobcontrol.clean-start.v2";
 
 const cleanState = {
   empreendimentos: [],
+  quadras: [],
   matriculas: [],
   vendas: [],
   parcelas: [],
@@ -26,7 +27,7 @@ const cleanState = {
     inicioJuros: "apos_tolerancia",
     recebedores: [],
     statusVenda: ["ativa", "cancelada", "quitada"],
-    formasPagamento: ["À vista", "Sinal + parcelas", "Sem sinal", "Bem material", "Outro"],
+    formasPagamento: ["À vista", "Sinal + parcelas", "Bem material", "Outro"],
     aliquotasPorSpe: {},
   },
   trimestres: [],
