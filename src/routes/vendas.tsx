@@ -7,16 +7,9 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -32,9 +25,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { VendaStatusBadge } from "@/components/status-badges";
 import {
+  regrasEfetivasUnidade,
   useStore,
   vendaTotais,
   type PagamentoItem,
@@ -56,13 +58,12 @@ function VendasPage() {
       <PageHeader
         eyebrow="Comercial"
         title="Vendas"
-        description="Registre novos contratos, composição de pagamento e comissionamento."
+        description="Registre o valor negociado, a composição real do pagamento e as regras aplicáveis ao contrato."
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Nova venda
+                <Plus className="mr-2 h-4 w-4" /> Nova venda
               </Button>
             </DialogTrigger>
             <NewVendaDialog onClose={() => setOpen(false)} />
@@ -82,7 +83,7 @@ function VendasPage() {
                 <TableHead>Data</TableHead>
                 <TableHead className="text-right">Valor total</TableHead>
                 <TableHead className="text-right">Recebido</TableHead>
-                <TableHead className="text-right">Saldo</TableHead>
+                <TableHead className="text-right">Saldo financeiro</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -101,7 +102,11 @@ function VendasPage() {
                 return (
                   <TableRow key={v.id}>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <Link
+                        to="/vendas/$id"
+                        params={{ id: v.id }}
+                        className="flex items-center gap-2 hover:text-primary"
+                      >
                         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
                           <ShoppingCart className="h-4 w-4" />
                         </div>
@@ -109,7 +114,7 @@ function VendasPage() {
                           <div className="text-sm font-medium">{mat?.numero || "—"}</div>
                           <div className="text-xs text-muted-foreground">{mat?.unidade}</div>
                         </div>
-                      </div>
+                      </Link>
                     </TableCell>
                     <TableCell className="text-sm">{v.compradorNome}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
@@ -130,9 +135,7 @@ function VendasPage() {
                     <TableCell className="text-right font-medium">{brl0(v.valorTotal)}</TableCell>
                     <TableCell className="text-right text-success">{brl0(t.recebido)}</TableCell>
                     <TableCell className="text-right">{brl0(t.saldo)}</TableCell>
-                    <TableCell>
-                      <VendaStatusBadge status={v.status} />
-                    </TableCell>
+                    <TableCell><VendaStatusBadge status={v.status} /></TableCell>
                   </TableRow>
                 );
               })}
@@ -179,20 +182,26 @@ function descricaoPlaceholder(tipo: PagamentoTipo) {
 
 function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const { state, addVenda } = useStore();
-  const [empId, setEmpId] = useState<string>("");
-  const [matId, setMatId] = useState<string>("");
+  const [empId, setEmpId] = useState("");
+  const [matId, setMatId] = useState("");
   const [comprador, setComprador] = useState("");
   const [valorNegociado, setValorNegociado] = useState("");
   const [dataContrato, setDataContrato] = useState(todayISO());
-  const [corretor, setCorretor] = useState(
-    state.config.recebedores.find((r) => r.tipo === "corretor")?.nome || "",
-  );
+  const [corretor, setCorretor] = useState("");
   const [corretorPct, setCorretorPct] = useState("0");
   const [obs, setObs] = useState("");
   const [items, setItems] = useState<PagamentoItem[]>([]);
 
   const empreendimento = state.empreendimentos.find((e) => e.id === empId);
   const matricula = state.matriculas.find((m) => m.id === matId);
+  const quadra = matricula?.quadraId
+    ? state.quadras.find((q) => q.id === matricula.quadraId)
+    : undefined;
+  const regraSelecionada =
+    empreendimento && matricula
+      ? regrasEfetivasUnidade(empreendimento, matricula, quadra, state.config)
+      : null;
+
   const matriculas = useMemo(
     () =>
       state.matriculas.filter(
@@ -248,6 +257,11 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       });
       return;
     }
+    const pctCorretor = Number(corretorPct) || 0;
+    if (pctCorretor > 0 && !corretor) {
+      toast.error("Selecione o corretor responsável ou informe comissão de 0%");
+      return;
+    }
 
     addVenda({
       empreendimentoId: empId,
@@ -256,7 +270,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       valorTotal: valorContrato,
       dataContrato,
       corretorNome: corretor,
-      corretorPct: Number(corretorPct) || 0,
+      corretorPct: pctCorretor,
       observacoes: obs,
       composicao: items,
     });
@@ -265,9 +279,13 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+    <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Nova venda</DialogTitle>
+        <DialogDescription>
+          Selecione primeiro o empreendimento e a unidade. O sistema identifica a regra financeira
+          mais específica disponível e congela essa regra no contrato.
+        </DialogDescription>
       </DialogHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -279,19 +297,14 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
               setEmpId(value);
               setMatId("");
               setValorNegociado("");
+              setCorretorPct("0");
               setItems([]);
-              const selecionado = state.empreendimentos.find((e) => e.id === value);
-              setCorretorPct(String(selecionado?.corretorPct ?? 0));
             }}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
             <SelectContent>
               {state.empreendimentos.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.nome}
-                </SelectItem>
+                <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -306,6 +319,18 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
               const selecionada = state.matriculas.find((m) => m.id === value);
               setValorNegociado(selecionada?.valorVenda ? String(selecionada.valorVenda) : "");
               setItems([]);
+              if (empreendimento && selecionada) {
+                const q = selecionada.quadraId
+                  ? state.quadras.find((item) => item.id === selecionada.quadraId)
+                  : undefined;
+                const efetiva = regrasEfetivasUnidade(
+                  empreendimento,
+                  selecionada,
+                  q,
+                  state.config,
+                );
+                setCorretorPct(String(efetiva.regras.corretorPct));
+              }
             }}
             disabled={!empId || matriculas.length === 0}
           >
@@ -322,18 +347,21 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             </SelectTrigger>
             <SelectContent>
               {matriculas.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.numero} · {m.unidade}
-                </SelectItem>
+                <SelectItem key={m.id} value={m.id}>{m.numero} · {m.unidade}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {empId && matriculas.length === 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Cadastre uma unidade com status Disponível antes de registrar a venda.
-            </p>
-          )}
         </div>
+
+        {regraSelecionada && empreendimento && (
+          <div className="sm:col-span-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
+            <span className="text-muted-foreground">Regra financeira identificada: </span>
+            <strong>{descricaoOrigemRegra(regraSelecionada.origem, empreendimento.nome, quadra?.nome)}</strong>
+            <span className="text-muted-foreground">
+              {` · tributação ${regraSelecionada.regras.aliquotaTributaria}% · corretor ${regraSelecionada.regras.corretorPct}% · sócio ${regraSelecionada.regras.socioPct}% · empresa ${regraSelecionada.regras.empresaPct}%`}
+            </span>
+          </div>
+        )}
 
         <div className="sm:col-span-2">
           <Label>Comprador</Label>
@@ -363,27 +391,17 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
 
         <div>
           <Label>Data do contrato</Label>
-          <Input
-            type="date"
-            value={dataContrato}
-            onChange={(e) => setDataContrato(e.target.value)}
-          />
+          <Input type="date" value={dataContrato} onChange={(e) => setDataContrato(e.target.value)} />
         </div>
 
         <div>
           <Label>Corretor responsável</Label>
           <Select value={corretor} onValueChange={setCorretor}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione, se houver" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Selecione, se houver" /></SelectTrigger>
             <SelectContent>
               {state.config.recebedores
                 .filter((r) => r.tipo === "corretor")
-                .map((r) => (
-                  <SelectItem key={r.nome} value={r.nome}>
-                    {r.nome}
-                  </SelectItem>
-                ))}
+                .map((r) => <SelectItem key={r.nome} value={r.nome}>{r.nome}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -398,9 +416,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             onChange={(e) => setCorretorPct(e.target.value)}
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            {empreendimento
-              ? `Regra carregada de ${empreendimento.nome}. Se este contrato tiver uma exceção, informe-a aqui.`
-              : "Selecione o empreendimento para carregar a regra dele."}
+            Carregada da regra efetiva da unidade. Altere somente se este contrato tiver uma exceção
+            específica de comissão.
           </p>
         </div>
       </div>
@@ -412,35 +429,23 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
           <div>
             <h3 className="text-sm font-semibold">Composição do pagamento</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Adicione somente as partes que existem neste contrato. “Sem sinal” não é uma forma de
-              pagamento: basta não adicionar um sinal.
+              Adicione somente o que existe no contrato. “Sem sinal” não é forma de pagamento: se não
+              houver entrada, simplesmente não adicione um sinal.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Button size="sm" variant="outline" onClick={() => adicionar("avista")}>
-              + À vista
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => adicionar("sinal")}>
-              + Sinal
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => adicionar("sinal_parcelado")}>
-              + Sinal parcelado
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => adicionar("parcelas")}>
-              + Parcelas
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => adicionar("bem")}>
-              + Bem
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => adicionar("outro")}>
-              + Outro
-            </Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("avista")}>+ À vista</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("sinal")}>+ Sinal</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("sinal_parcelado")}>+ Sinal parcelado</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("parcelas")}>+ Parcelas</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("bem")}>+ Bem</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("outro")}>+ Outro</Button>
           </div>
         </div>
 
         {items.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/80 px-5 py-8 text-center text-sm text-muted-foreground">
-            Nenhuma forma de pagamento adicionada. Escolha acima como esta venda foi negociada.
+            Nenhuma forma de pagamento adicionada.
           </div>
         ) : (
           <div className="space-y-3">
@@ -448,10 +453,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
               const parcelado = itemParcelado(item.tipo);
               const subtotal = item.valor * (parcelado ? Math.max(1, item.parcelas) : 1);
               return (
-                <div
-                  key={item.id}
-                  className="rounded-lg border border-border/70 bg-muted/20 p-3"
-                >
+                <div key={item.id} className="rounded-lg border border-border/70 bg-muted/20 p-3">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
                     <div className="sm:col-span-2">
                       <Label className="text-xs">Tipo</Label>
@@ -459,9 +461,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                         value={item.tipo}
                         onValueChange={(value) => alterarTipo(idx, value as PagamentoTipo)}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="avista">À vista</SelectItem>
                           <SelectItem value="sinal">Sinal</SelectItem>
@@ -479,9 +479,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                         value={item.descricao}
                         onChange={(e) =>
                           setItems((atuais) =>
-                            atuais.map((x, i) =>
-                              i === idx ? { ...x, descricao: e.target.value } : x,
-                            ),
+                            atuais.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x),
                           )
                         }
                         placeholder={descricaoPlaceholder(item.tipo)}
@@ -489,18 +487,14 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                     </div>
 
                     <div className={parcelado ? "" : "sm:col-span-2"}>
-                      <Label className="text-xs">
-                        {parcelado ? "Valor por parcela" : "Valor"}
-                      </Label>
+                      <Label className="text-xs">{parcelado ? "Valor por parcela" : "Valor"}</Label>
                       <Input
                         type="number"
                         min="0"
                         value={item.valor || ""}
                         onChange={(e) =>
                           setItems((atuais) =>
-                            atuais.map((x, i) =>
-                              i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x,
-                            ),
+                            atuais.map((x, i) => i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x),
                           )
                         }
                       />
@@ -535,9 +529,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                         value={item.primeiroVencimento}
                         onChange={(e) =>
                           setItems((atuais) =>
-                            atuais.map((x, i) =>
-                              i === idx ? { ...x, primeiroVencimento: e.target.value } : x,
-                            ),
+                            atuais.map((x, i) => i === idx ? { ...x, primeiroVencimento: e.target.value } : x),
                           )
                         }
                       />
@@ -551,34 +543,26 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                           placeholder="Ex.: veículo, modelo, placa ou outra identificação"
                           onChange={(e) =>
                             setItems((atuais) =>
-                              atuais.map((x, i) =>
-                                i === idx ? { ...x, observacoes: e.target.value } : x,
-                              ),
+                              atuais.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x),
                             )
                           }
                         />
                       </div>
                     )}
 
-                    <div className="flex items-end justify-between gap-3 sm:col-span-1 sm:justify-end">
-                      <div className="text-xs sm:hidden">
-                        <span className="text-muted-foreground">Subtotal: </span>
-                        <strong>{brl0(subtotal)}</strong>
-                      </div>
+                    <div className="flex items-end justify-end sm:col-span-1">
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() =>
-                          setItems((atuais) => atuais.filter((_, i) => i !== idx))
-                        }
+                        onClick={() => setItems((atuais) => atuais.filter((_, i) => i !== idx))}
                         aria-label="Remover item"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   </div>
-                  <div className="mt-2 hidden text-right text-xs sm:block">
-                    <span className="text-muted-foreground">Subtotal desta composição: </span>
+                  <div className="mt-2 text-right text-xs">
+                    <span className="text-muted-foreground">Subtotal: </span>
                     <strong>{brl0(subtotal)}</strong>
                   </div>
                 </div>
@@ -588,21 +572,11 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="mt-3 grid gap-2 rounded-lg border border-border/70 bg-muted/40 px-4 py-3 text-sm sm:grid-cols-3">
-          <div>
-            <div className="text-xs text-muted-foreground">Valor negociado</div>
-            <div className="font-semibold">{brl0(valorContrato)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Composição informada</div>
-            <div className="font-semibold">{brl0(totalComposicao)}</div>
-          </div>
+          <ResumoValor label="Valor negociado" value={valorContrato} />
+          <ResumoValor label="Composição informada" value={totalComposicao} />
           <div className="sm:text-right">
             <div className="text-xs text-muted-foreground">Diferença</div>
-            <div
-              className={`font-semibold ${
-                valorContrato > 0 && !composicaoConfere ? "text-destructive" : "text-success"
-              }`}
-            >
+            <div className={`font-semibold ${valorContrato > 0 && !composicaoConfere ? "text-destructive" : "text-success"}`}>
               {brl0(Math.abs(diferenca))}
             </div>
           </div>
@@ -620,11 +594,28 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       </div>
 
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>
-          Cancelar
-        </Button>
+        <Button variant="ghost" onClick={onClose}>Cancelar</Button>
         <Button onClick={submit}>Registrar venda</Button>
       </DialogFooter>
     </DialogContent>
+  );
+}
+
+function descricaoOrigemRegra(
+  origem: "empreendimento" | "quadra" | "unidade",
+  empreendimento: string,
+  quadra?: string,
+) {
+  if (origem === "unidade") return "regra própria da unidade";
+  if (origem === "quadra") return `regra da ${quadra || "quadra"}`;
+  return `regra do empreendimento ${empreendimento}`;
+}
+
+function ResumoValor({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-semibold">{brl0(value)}</div>
+    </div>
   );
 }
