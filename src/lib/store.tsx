@@ -324,8 +324,8 @@ function snapshotRegrasContrato(regra: RegrasOperacao): RegrasContrato {
     aliquotaTributaria: regra.aliquotaTributaria,
     socioPct: regra.socioPct,
     empresaPct: regra.empresaPct,
-    entradaPctCorretor: regra.entradaPctCorretor,
-    parcelasPctCorretor: regra.parcelasPctCorretor,
+    entradaPctCorretor: regra.corretorPct,
+    parcelasPctCorretor: regra.corretorPct,
     inadimplencia: snapshotInadimplencia(regra.inadimplencia),
   };
 }
@@ -339,8 +339,8 @@ export function regrasEfetivasEmpreendimento(
     socioPct: emp.socioPct,
     empresaPct: emp.empresaPct,
     corretorPct: emp.corretorPct,
-    entradaPctCorretor: emp.entradaPctCorretor ?? cfg.entradaPctCorretor,
-    parcelasPctCorretor: emp.parcelasPctCorretor ?? cfg.parcelasPctCorretor,
+    entradaPctCorretor: emp.corretorPct,
+    parcelasPctCorretor: emp.corretorPct,
     inadimplencia: snapshotInadimplencia(emp.inadimplencia ?? cfg),
   };
 }
