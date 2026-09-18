@@ -753,6 +753,84 @@ export function comissaoDaVenda(
   return { total, pago: total - restante, saldo: restante, repasses };
 }
 
+export function previsaoQuitacaoComissao(
+  v: Venda,
+  parcelas: Parcela[],
+  cfg: Config,
+  movimentos?: Movimento[],
+) {
+  const comissao = comissaoDaVenda(v, parcelas, cfg, movimentos);
+  if (comissao.total <= 0 || comissao.saldo <= 0.01) {
+    return {
+      quitada: true,
+      saldo: 0,
+      recebimentosRestantes: 0,
+      parcelasRestantes: 0,
+      entradasRestantes: 0,
+      dataPrevista: undefined as string | undefined,
+      parcelaQuitacao: undefined as Parcela | undefined,
+      coberturaSuficiente: true,
+    };
+  }
+
+  const percentual = Math.max(0, v.corretorPct || 0);
+  if (percentual <= 0) {
+    return {
+      quitada: false,
+      saldo: comissao.saldo,
+      recebimentosRestantes: 0,
+      parcelasRestantes: 0,
+      entradasRestantes: 0,
+      dataPrevista: undefined as string | undefined,
+      parcelaQuitacao: undefined as Parcela | undefined,
+      coberturaSuficiente: false,
+    };
+  }
+
+  const pendentes = parcelas
+    .filter(
+      (p) =>
+        p.vendaId === v.id &&
+        p.status !== "paga" &&
+        p.status !== "cancelada",
+    )
+    .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+
+  let restante = comissao.saldo;
+  let recebimentosRestantes = 0;
+  let parcelasRestantes = 0;
+  let entradasRestantes = 0;
+  let parcelaQuitacao: Parcela | undefined;
+
+  for (const p of pendentes) {
+    const repassePrevisto = Math.max(0, p.valor) * (percentual / 100);
+    if (repassePrevisto <= 0) continue;
+
+    recebimentosRestantes += 1;
+    if (p.origemTipo === "parcelas" || p.origemTipo === "sinal_parcelado") {
+      parcelasRestantes += 1;
+    } else {
+      entradasRestantes += 1;
+    }
+
+    restante -= Math.min(restante, repassePrevisto);
+    parcelaQuitacao = p;
+
+    if (restante <= 0.01) break;
+  }
+
+  return {
+    quitada: false,
+    saldo: comissao.saldo,
+    recebimentosRestantes,
+    parcelasRestantes,
+    entradasRestantes,
+    dataPrevista: restante <= 0.01 ? parcelaQuitacao?.vencimento : undefined,
+    parcelaQuitacao: restante <= 0.01 ? parcelaQuitacao : undefined,
+    coberturaSuficiente: restante <= 0.01,
+  };
+}
+
 export function inadimplenciaCalc(
   parcela: Parcela,
   cfg: Config,
