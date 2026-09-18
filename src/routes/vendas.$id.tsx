@@ -193,9 +193,9 @@ function VendaDetail() {
             </div>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            Regra deste contrato: {regras.entradaPctCorretor}% de cada recebimento de entrada e{" "}
-            {regras.parcelasPctCorretor}% de cada parcela recebida podem ser destinados à comissão,
-            sempre limitados ao total de {brl0(c.total)}.
+            Regra deste contrato: {v.corretorPct}% de cada recebimento financeiro é destinado à comissão
+            até atingir o total de {brl0(c.total)}. Depois da quitação, os próximos recebimentos geram
+            comissão de R$ 0.
           </p>
         </CardContent>
       </Card>
