@@ -411,12 +411,7 @@ function computeReceber(
     .filter((m) => m.vendaId === venda.id)
     .reduce((a, m) => a + m.comissaoPaga, 0);
   const restanteComissao = Math.max(0, comissaoTotal - jaPago);
-  const pctCor =
-    parcela.origemTipo === "sinal" ||
-    parcela.origemTipo === "sinal_parcelado" ||
-    parcela.origemTipo === "avista"
-      ? regra.entradaPctCorretor
-      : regra.parcelasPctCorretor;
+  const pctCor = Math.max(0, venda.corretorPct || 0);
 
   let comissaoUsada = valorRecebido * (pctCor / 100);
   if (comissaoUsada > restanteComissao) comissaoUsada = restanteComissao;
@@ -741,17 +736,9 @@ export function comissaoDaVenda(
     valorParcela: number;
     valorRepasse: number;
   }[] = [];
-  const entradaPct = v.regras?.entradaPctCorretor ?? cfg.entradaPctCorretor;
-  const parcelasPct = v.regras?.parcelasPctCorretor ?? cfg.parcelasPctCorretor;
-
   for (const p of ps) {
     if (restante <= 0) break;
-    const pct =
-      p.origemTipo === "sinal" ||
-      p.origemTipo === "sinal_parcelado" ||
-      p.origemTipo === "avista"
-        ? entradaPct
-        : parcelasPct;
+    const pct = Math.max(0, v.corretorPct || 0);
     let repasse = p.valorPago * (pct / 100);
     if (repasse > restante) repasse = restante;
     restante -= repasse;
