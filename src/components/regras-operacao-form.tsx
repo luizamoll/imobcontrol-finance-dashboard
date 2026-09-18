@@ -50,25 +50,26 @@ export function RegrasOperacaoForm({
           onChange={(n) => patch({ empresaPct: n })}
         />
         <NumberField
-          label="Comissão do corretor (%)"
+          label="Comissão do corretor (% sobre a venda)"
           value={value.corretorPct}
-          onChange={(n) => patch({ corretorPct: n })}
+          onChange={(n) =>
+            patch({
+              corretorPct: n,
+              entradaPctCorretor: n,
+              parcelasPctCorretor: n,
+            })
+          }
         />
         <NumberField
           label="Alíquota tributária (%)"
           value={value.aliquotaTributaria}
           onChange={(n) => patch({ aliquotaTributaria: n })}
         />
-        <NumberField
-          label="% da entrada destinado à comissão"
-          value={value.entradaPctCorretor}
-          onChange={(n) => patch({ entradaPctCorretor: n })}
-        />
-        <NumberField
-          label="% das parcelas destinado à comissão"
-          value={value.parcelasPctCorretor}
-          onChange={(n) => patch({ parcelasPctCorretor: n })}
-        />
+        <div className="sm:col-span-2 rounded-md border border-border/60 bg-muted/20 p-3 text-xs leading-5 text-muted-foreground">
+          O mesmo percentual da comissão é aplicado a cada valor recebido da venda — entrada, pagamento
+          à vista ou parcela — até atingir o total devido ao corretor. Depois da quitação, os próximos
+          recebimentos não geram nova comissão.
+        </div>
       </div>
 
       <div className="rounded-lg border border-border/70 p-3">
