@@ -419,7 +419,7 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
               />
             </div>
             <div>
-              <Label>Comissão do corretor (%)</Label>
+              <Label>Comissão total do corretor (% sobre o contrato)</Label>
               <Input
                 type="number"
                 min="0"
@@ -439,7 +439,7 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
               />
             </div>
             <div>
-              <Label>% da entrada destinado à comissão</Label>
+              <Label>% de cada recebimento de entrada destinado à comissão</Label>
               <Input
                 type="number"
                 min="0"
@@ -449,7 +449,7 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
               />
             </div>
             <div>
-              <Label>% das parcelas destinado à comissão</Label>
+              <Label>% de cada parcela recebida destinado à comissão</Label>
               <Input
                 type="number"
                 min="0"
@@ -458,6 +458,13 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
                 onChange={(e) => setParcelasPct(e.target.value)}
               />
             </div>
+          </div>
+          <div className="mt-4 rounded-md border border-border/60 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">
+            <strong className="text-foreground">Como funciona a comissão:</strong>{" "}
+            a comissão total do corretor é calculada sobre o valor do contrato. A entrada e as parcelas
+            apenas definem quanto de cada recebimento será usado para quitar essa comissão. Quando o total
+            devido ao corretor for atingido, os próximos recebimentos deixam automaticamente de gerar
+            comissão.
           </div>
         </div>
 
