@@ -447,8 +447,8 @@ function ResumoRegras({ regras }: { regras: RegrasOperacao }) {
         <Info label="Corretor" value={`${regras.corretorPct}%`} />
         <Info label="Sócio · saldo líquido" value={`${regras.socioPct}%`} />
         <Info label="Empresa · saldo líquido" value={`${regras.empresaPct}%`} />
-        <Info label="Entrada → comissão" value={`${regras.entradaPctCorretor}%`} />
-        <Info label="Parcelas → comissão" value={`${regras.parcelasPctCorretor}%`} />
+        <Info label="Entrada recebida → comissão" value={`${regras.entradaPctCorretor}%`} />
+        <Info label="Parcela recebida → comissão" value={`${regras.parcelasPctCorretor}%`} />
       </div>
       <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm">
         <span className="text-muted-foreground">Inadimplência: </span>
