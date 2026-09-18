@@ -447,8 +447,7 @@ function ResumoRegras({ regras }: { regras: RegrasOperacao }) {
         <Info label="Corretor" value={`${regras.corretorPct}%`} />
         <Info label="Sócio · saldo líquido" value={`${regras.socioPct}%`} />
         <Info label="Empresa · saldo líquido" value={`${regras.empresaPct}%`} />
-        <Info label="Entrada recebida → comissão" value={`${regras.entradaPctCorretor}%`} />
-        <Info label="Parcela recebida → comissão" value={`${regras.parcelasPctCorretor}%`} />
+        <Info label="Repasse por recebimento" value={`${regras.corretorPct}%`} />
       </div>
       <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm">
         <span className="text-muted-foreground">Inadimplência: </span>
@@ -808,8 +807,8 @@ function EditEmpreendimentoDialog({
       empresaPct: regras.empresaPct,
       corretorPct: regras.corretorPct,
       aliquotaTributaria: regras.aliquotaTributaria,
-      entradaPctCorretor: regras.entradaPctCorretor,
-      parcelasPctCorretor: regras.parcelasPctCorretor,
+      entradaPctCorretor: regras.corretorPct,
+      parcelasPctCorretor: regras.corretorPct,
       inadimplencia: cloneRegras(regras).inadimplencia,
       observacoes: observacoes.trim(),
       status,
