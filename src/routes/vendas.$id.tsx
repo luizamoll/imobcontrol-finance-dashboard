@@ -75,6 +75,21 @@ function VendaDetail() {
     });
   const movs = state.movimentos.filter((m) => m.vendaId === v.id);
   const c = comissaoDaVenda(v, state.parcelas, state.config, state.movimentos);
+  const comissaoProgresso = c.total > 0 ? Math.min(100, (c.pago / c.total) * 100) : 100;
+  const ultimoRepasseComissao = [...c.repasses].reverse().find((r) => r.valorRepasse > 0);
+  const parcelaQuitacaoComissao = ultimoRepasseComissao
+    ? state.parcelas.find((p) => p.id === ultimoRepasseComissao.parcelaId)
+    : undefined;
+  const comissaoQuitada = c.saldo <= 0.01;
+  const comissaoStatus = comissaoQuitada
+    ? parcelaQuitacaoComissao?.origemTipo === "sinal" ||
+      parcelaQuitacaoComissao?.origemTipo === "sinal_parcelado" ||
+      parcelaQuitacaoComissao?.origemTipo === "avista"
+      ? "Comissão quitada pela entrada/recebimento inicial. Os próximos recebimentos não geram nova comissão."
+      : parcelaQuitacaoComissao
+        ? `Comissão quitada na parcela ${parcelaQuitacaoComissao.numero}/${parcelaQuitacaoComissao.totalParcelas}. As próximas parcelas não geram nova comissão.`
+        : "Comissão totalmente quitada. Os próximos recebimentos não geram nova comissão."
+    : `Em pagamento. Faltam ${brl0(c.saldo)} para quitar a comissão do corretor.`;
   const imposto = movs.reduce((a, m) => a + m.impostoReservado, 0);
   const empresa = movs.reduce((a, m) => a + m.empresaValor, 0);
   const socio = movs.reduce((a, m) => a + m.socioValor, 0);
@@ -135,6 +150,53 @@ function VendaDetail() {
               value={regras.inadimplencia.jurosAtivo || regras.inadimplencia.moraAtiva || regras.inadimplencia.correcaoAtiva ? "Configurado" : "Sem acréscimos"}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CircleDollarSign className="h-4 w-4" />
+            Acompanhamento da comissão do corretor
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            O sistema acumula os repasses até atingir a comissão total do contrato e interrompe
+            automaticamente novos repasses depois da quitação.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Comissão contratada</p>
+              <p className="font-semibold">{brl0(c.total)} · {v.corretorPct}%</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Já paga</p>
+              <p className="font-semibold text-success">{brl0(c.pago)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Saldo da comissão</p>
+              <p className="font-semibold">{brl0(c.saldo)}</p>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Progresso da comissão</span>
+              <span>{pct(comissaoProgresso)}</span>
+            </div>
+            <Progress value={comissaoProgresso} className="h-2" />
+          </div>
+          <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-sm">
+            <div className="flex items-start gap-2">
+              {comissaoQuitada && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />}
+              <span>{comissaoStatus}</span>
+            </div>
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Regra deste contrato: {regras.entradaPctCorretor}% de cada recebimento de entrada e{" "}
+            {regras.parcelasPctCorretor}% de cada parcela recebida podem ser destinados à comissão,
+            sempre limitados ao total de {brl0(c.total)}.
+          </p>
         </CardContent>
       </Card>
 
