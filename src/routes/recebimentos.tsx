@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { ParcelaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -53,9 +53,11 @@ function RecebimentosPage() {
   const [valor, setValor] = useState("");
   const [data, setData] = useState(todayISO());
 
-  const hoje = new Date();
+  const hoje = useMemo(() => new Date(), []);
 
   const parcelas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
     return state.parcelas
       .map((p) => {
         const calc = inadimplenciaCalc(p, state.config, hoje);
@@ -70,16 +72,75 @@ function RecebimentosPage() {
         origem === "todos"
           ? true
           : origem === "sinal"
-            ? p.origemTipo === "sinal" || p.origemTipo === "sinal_parcelado" || p.origemTipo === "avista"
+            ? p.origemTipo === "sinal" ||
+              p.origemTipo === "sinal_parcelado" ||
+              p.origemTipo === "avista"
             : p.origemTipo === "parcelas",
       )
-      .filter((p) =>
-        busca
-          ? p.compradorNome.toLowerCase().includes(busca.toLowerCase())
-          : true,
-      )
-      .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
-  }, [state.parcelas, state.config, empFilter, origem, busca]);
+      .filter((p) => {
+        if (!termo) return true;
+        const emp = state.empreendimentos.find((e) => e.id === p.empreendimentoId);
+        const mat = state.matriculas.find((m) => m.id === p.matriculaId);
+        const venda = state.vendas.find((v) => v.id === p.vendaId);
+        const texto = [
+          p.compradorNome,
+          emp?.nome,
+          emp?.spe,
+          mat?.unidade,
+          mat?.numero,
+          venda?.corretorNome,
+          venda?.dataContrato,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return texto.includes(termo);
+      })
+      .sort((a, b) => {
+        if (a.status === "vencida" && b.status !== "vencida") return -1;
+        if (a.status !== "vencida" && b.status === "vencida") return 1;
+        return a.vencimento.localeCompare(b.vencimento);
+      });
+  }, [
+    state.parcelas,
+    state.config,
+    state.empreendimentos,
+    state.matriculas,
+    state.vendas,
+    empFilter,
+    origem,
+    busca,
+    hoje,
+  ]);
+
+  const grupos = useMemo(() => {
+    const map = new Map<string, typeof parcelas>();
+
+    for (const p of parcelas) {
+      const atuais = map.get(p.vendaId) ?? [];
+      atuais.push(p);
+      map.set(p.vendaId, atuais);
+    }
+
+    return [...map.entries()]
+      .map(([vendaId, ps]) => {
+        const venda = state.vendas.find((v) => v.id === vendaId);
+        const emp = state.empreendimentos.find((e) => e.id === ps[0]?.empreendimentoId);
+        const mat = state.matriculas.find((m) => m.id === ps[0]?.matriculaId);
+        const total = ps.reduce((a, p) => a + p.valorCobrado, 0);
+        const vencidas = ps.filter((p) => p.status === "vencida").length;
+        const proximoVencimento = ps
+          .map((p) => p.vencimento)
+          .sort((a, b) => a.localeCompare(b))[0];
+
+        return { vendaId, venda, emp, mat, parcelas: ps, total, vencidas, proximoVencimento };
+      })
+      .sort((a, b) => {
+        if (a.vencidas > 0 && b.vencidas === 0) return -1;
+        if (a.vencidas === 0 && b.vencidas > 0) return 1;
+        return (a.proximoVencimento || "").localeCompare(b.proximoVencimento || "");
+      });
+  }, [parcelas, state.vendas, state.empreendimentos, state.matriculas]);
 
   const totalAReceber = parcelas.reduce((a, p) => a + p.valorCobrado, 0);
   const totalVencido = parcelas
@@ -111,14 +172,14 @@ function RecebimentosPage() {
       <PageHeader
         eyebrow="Operacional"
         title="Central de Recebimentos"
-        description="Registre os pagamentos em um único lugar. Parcelas vencidas já consideram as regras de correção, juros, multa e tolerância configuradas."
+        description="Recebimentos agrupados por venda para identificar rapidamente cliente, empreendimento, unidade e parcelas que ainda exigem ação."
       />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Mini label="Vendas com recebimentos abertos" value={String(grupos.length)} />
         <Mini label="Parcelas em aberto" value={String(parcelas.length)} />
         <Mini label="Total a receber" value={brl0(totalAReceber)} />
         <Mini label="Vencidas atualizadas" value={brl0(totalVencido)} tone="destructive" />
-        <Mini label="Empreendimentos" value={String(state.empreendimentos.length)} />
       </div>
 
       <Card className="border-border/70">
@@ -147,76 +208,127 @@ function RecebimentosPage() {
             </Select>
           </div>
           <div className="sm:col-span-2">
-            <Label>Buscar cliente</Label>
+            <Label>Buscar venda</Label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-8" placeholder="Nome do cliente" value={busca} onChange={(e) => setBusca(e.target.value)} />
+              <Input
+                className="pl-8"
+                placeholder="Cliente, empreendimento, unidade, matrícula ou corretor"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+              />
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="border-border/70">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Empreendimento</TableHead>
-                <TableHead>Unidade</TableHead>
-                <TableHead>Origem</TableHead>
-                <TableHead>Parcela</TableHead>
-                <TableHead>Vencimento</TableHead>
-                <TableHead className="text-right">Valor a receber</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ação</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {parcelas.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
-                    <Inbox className="mx-auto mb-2 h-8 w-8 opacity-40" />
-                    Nenhum recebimento pendente para os filtros selecionados.
-                  </TableCell>
-                </TableRow>
-              )}
-              {parcelas.map((p) => {
-                const emp = state.empreendimentos.find((e) => e.id === p.empreendimentoId);
-                const mat = state.matriculas.find((m) => m.id === p.matriculaId);
-                return (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium">
-                      <Link to="/vendas/$id" params={{ id: p.vendaId }} className="hover:text-primary">
-                        {p.compradorNome}
+      {grupos.length === 0 ? (
+        <Card className="border-dashed border-border/80">
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            <Inbox className="mx-auto mb-2 h-8 w-8 opacity-40" />
+            Nenhum recebimento pendente para os filtros selecionados.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {grupos.map((grupo) => (
+            <Card key={grupo.vendaId} className="overflow-hidden border-border/70">
+              <CardHeader className="border-b border-border/60 bg-muted/20">
+                <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <Link
+                        to="/vendas/$id"
+                        params={{ id: grupo.vendaId }}
+                        className="text-base font-semibold text-foreground hover:text-primary"
+                      >
+                        {grupo.venda?.compradorNome || grupo.parcelas[0]?.compradorNome}
                       </Link>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{emp?.nome}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{mat?.unidade}</TableCell>
-                    <TableCell className="text-sm">{p.origemDescricao}</TableCell>
-                    <TableCell className="text-sm tabular-nums">{p.numero}/{p.totalParcelas}</TableCell>
-                    <TableCell className="text-sm">{formatDate(p.vencimento)}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {brl0(p.valorCobrado)}
-                      {p.calc.diasAtraso > 0 && p.valorCobrado !== p.valor && (
-                        <div className="text-[11px] font-normal text-muted-foreground">
-                          original {brl0(p.valor)}
-                        </div>
+                      {grupo.vencidas > 0 && (
+                        <span className="text-xs font-medium text-destructive">
+                          {grupo.vencidas} vencida{grupo.vencidas === 1 ? "" : "s"}
+                        </span>
                       )}
-                    </TableCell>
-                    <TableCell><ParcelaStatusBadge status={p.status} /></TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" onClick={() => abrirRecebimento(p)}>
-                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Receber
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      {grupo.emp?.nome || "Empreendimento não identificado"} · Unidade{" "}
+                      {grupo.mat?.unidade || "—"} · Matrícula {grupo.mat?.numero || "—"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Contrato de {formatDate(grupo.venda?.dataContrato)} · Corretor:{" "}
+                      {grupo.venda?.corretorNome || "—"}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Em aberto</div>
+                      <div className="font-semibold">{grupo.parcelas.length} recebimento(s)</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Total em aberto</div>
+                      <div className="font-semibold">{brl0(grupo.total)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Próximo vencimento</div>
+                      <div className="font-semibold">{formatDate(grupo.proximoVencimento)}</div>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Origem</TableHead>
+                        <TableHead>Parcela</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead className="text-right">Valor a receber</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Ação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {grupo.parcelas.map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell className="text-sm">
+                            <div className="font-medium">{p.origemDescricao}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {p.origemTipo === "sinal" || p.origemTipo === "sinal_parcelado"
+                                ? "Entrada"
+                                : p.origemTipo === "avista"
+                                  ? "À vista"
+                                  : "Recebimento contratual"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm tabular-nums">
+                            {p.numero}/{p.totalParcelas}
+                          </TableCell>
+                          <TableCell className="text-sm">{formatDate(p.vencimento)}</TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            {brl0(p.valorCobrado)}
+                            {p.calc.diasAtraso > 0 && p.valorCobrado !== p.valor && (
+                              <div className="text-[11px] font-normal text-muted-foreground">
+                                original {brl0(p.valor)}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell><ParcelaStatusBadge status={p.status} /></TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" onClick={() => abrirRecebimento(p)}>
+                              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Receber
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Dialog open={!!selecionada} onOpenChange={(o) => !o && setSelecionada(null)}>
         <DialogContent className="max-w-md">
@@ -228,10 +340,13 @@ function RecebimentosPage() {
               <div className="rounded-md border border-border/70 bg-muted/30 p-3">
                 <div className="font-medium">{selecionada.compradorNome}</div>
                 <div className="text-xs text-muted-foreground">
-                  {state.empreendimentos.find((e) => e.id === selecionada.empreendimentoId)?.nome} · {state.matriculas.find((m) => m.id === selecionada.matriculaId)?.unidade}
+                  {state.empreendimentos.find((e) => e.id === selecionada.empreendimentoId)?.nome} ·
+                  Unidade {state.matriculas.find((m) => m.id === selecionada.matriculaId)?.unidade || "—"} ·
+                  Matrícula {state.matriculas.find((m) => m.id === selecionada.matriculaId)?.numero || "—"}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {selecionada.origemDescricao} · vence em {formatDate(selecionada.vencimento)}
+                  {selecionada.origemDescricao} · {selecionada.numero}/{selecionada.totalParcelas} · vence em{" "}
+                  {formatDate(selecionada.vencimento)}
                 </div>
               </div>
 
