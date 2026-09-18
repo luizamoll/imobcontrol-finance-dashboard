@@ -33,7 +33,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { brl0, formatDate, pct } from "@/lib/format";
-import { comissaoDaVenda, distribuicaoPrevista, useStore } from "@/lib/store";
+import { comissaoDaVenda, distribuicaoPrevista, previsaoQuitacaoComissao, useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/recebedores")({
   component: RecebedoresPage,
@@ -302,19 +302,26 @@ function RecebedoresPage() {
                     <TableHead className="text-right">Comissão</TableHead>
                     <TableHead className="text-right">Repassado</TableHead>
                     <TableHead className="text-right">Saldo</TableHead>
+                    <TableHead>Previsão para quitar</TableHead>
                     <TableHead>Último repasse</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {state.vendas.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
                         Nenhuma venda registrada.
                       </TableCell>
                     </TableRow>
                   )}
                   {state.vendas.map((v) => {
                     const c = comissaoDaVenda(v, state.parcelas, state.config, state.movimentos);
+                    const previsao = previsaoQuitacaoComissao(
+                      v,
+                      state.parcelas,
+                      state.config,
+                      state.movimentos,
+                    );
                     const last = c.repasses.at(-1);
                     const mat = state.matriculas.find((m) => m.id === v.matriculaId);
                     const emp = state.empreendimentos.find((e) => e.id === v.empreendimentoId);
@@ -346,6 +353,32 @@ function RecebedoresPage() {
                         </TableCell>
                         <TableCell className="text-right text-success">{brl0(c.pago)}</TableCell>
                         <TableCell className="text-right">{brl0(c.saldo)}</TableCell>
+                        <TableCell className="text-sm">
+                          {previsao.quitada ? (
+                            <div className="font-medium text-success">Comissão quitada</div>
+                          ) : previsao.coberturaSuficiente ? (
+                            <>
+                              <div className="font-medium">
+                                {previsao.parcelasRestantes === 1
+                                  ? "1 parcela"
+                                  : `${previsao.parcelasRestantes} parcelas`}
+                                {previsao.entradasRestantes > 0
+                                  ? ` + ${previsao.entradasRestantes} recebimento(s) inicial(is)`
+                                  : ""}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                previsão até {previsao.dataPrevista ? formatDate(previsao.dataPrevista) : "—"}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="font-medium text-warning-foreground">Agenda insuficiente</div>
+                              <div className="text-xs text-muted-foreground">
+                                Os recebimentos cadastrados não quitam todo o saldo da comissão.
+                              </div>
+                            </>
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {last ? `${formatDate(last.data)} · ${brl0(last.valorRepasse)}` : "—"}
                         </TableCell>
