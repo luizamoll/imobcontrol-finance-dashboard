@@ -247,7 +247,7 @@ function RecebedoresPage() {
                 <TableBody>
                   {corretores.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                         Nenhuma comissão vinculada a vendas ainda.
                       </TableCell>
                     </TableRow>
@@ -354,15 +354,21 @@ function RecebedoresPage() {
                         <TableCell className="text-right text-success">{brl0(c.pago)}</TableCell>
                         <TableCell className="text-right">{brl0(c.saldo)}</TableCell>
                         <TableCell className="text-sm">
-                          {previsao.quitada ? (
+                          {c.total <= 0 ? (
+                            <div className="font-medium text-muted-foreground">Sem comissão</div>
+                          ) : previsao.quitada ? (
                             <div className="font-medium text-success">Comissão quitada</div>
                           ) : previsao.coberturaSuficiente ? (
                             <>
                               <div className="font-medium">
-                                {previsao.parcelasRestantes === 1
-                                  ? "1 parcela"
-                                  : `${previsao.parcelasRestantes} parcelas`}
-                                {previsao.entradasRestantes > 0
+                                {previsao.parcelasRestantes > 0
+                                  ? previsao.parcelasRestantes === 1
+                                    ? "1 parcela"
+                                    : `${previsao.parcelasRestantes} parcelas`
+                                  : previsao.entradasRestantes === 1
+                                    ? "1 recebimento inicial"
+                                    : `${previsao.entradasRestantes} recebimentos iniciais`}
+                                {previsao.parcelasRestantes > 0 && previsao.entradasRestantes > 0
                                   ? ` + ${previsao.entradasRestantes} recebimento(s) inicial(is)`
                                   : ""}
                               </div>
