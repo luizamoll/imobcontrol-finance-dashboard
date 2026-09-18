@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Inbox, Search } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Inbox, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -52,6 +52,7 @@ function RecebimentosPage() {
   const [selecionada, setSelecionada] = useState<Parcela | null>(null);
   const [valor, setValor] = useState("");
   const [data, setData] = useState(todayISO());
+  const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(() => new Set());
 
   const hoje = useMemo(() => new Date(), []);
 
@@ -167,12 +168,21 @@ function RecebimentosPage() {
     ? inadimplenciaCalc(selecionada, state.config, new Date())
     : null;
 
+  const alternarGrupo = (vendaId: string) => {
+    setGruposAbertos((atuais) => {
+      const proximos = new Set(atuais);
+      if (proximos.has(vendaId)) proximos.delete(vendaId);
+      else proximos.add(vendaId);
+      return proximos;
+    });
+  };
+
   return (
     <PageShell>
       <PageHeader
         eyebrow="Operacional"
         title="Central de Recebimentos"
-        description="Recebimentos agrupados por venda para identificar rapidamente cliente, empreendimento, unidade e parcelas que ainda exigem ação."
+        description="Cada venda aparece em um bloco próprio e as parcelas ficam recolhidas até você abrir o contrato. Assim, novos recebimentos não se misturam em uma lista única."
       />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -259,24 +269,43 @@ function RecebimentosPage() {
                       {grupo.venda?.corretorNome || "—"}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Em aberto</div>
-                      <div className="font-semibold">{grupo.parcelas.length} recebimento(s)</div>
+                  <div className="flex flex-col gap-3 lg:items-end">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Em aberto</div>
+                        <div className="font-semibold">{grupo.parcelas.length} recebimento(s)</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Total em aberto</div>
+                        <div className="font-semibold">{brl0(grupo.total)}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Próximo vencimento</div>
+                        <div className="font-semibold">{formatDate(grupo.proximoVencimento)}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Total em aberto</div>
-                      <div className="font-semibold">{brl0(grupo.total)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Próximo vencimento</div>
-                      <div className="font-semibold">{formatDate(grupo.proximoVencimento)}</div>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => alternarGrupo(grupo.vendaId)}
+                      className="w-full justify-between sm:w-auto sm:min-w-40"
+                    >
+                      {gruposAbertos.has(grupo.vendaId)
+                        ? "Ocultar parcelas"
+                        : `Ver parcelas (${grupo.parcelas.length})`}
+                      {gruposAbertos.has(grupo.vendaId) ? (
+                        <ChevronUp className="ml-2 h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      )}
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
+              {gruposAbertos.has(grupo.vendaId) && (
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -323,8 +352,9 @@ function RecebimentosPage() {
                       ))}
                     </TableBody>
                   </Table>
-                </div>
-              </CardContent>
+                  </div>
+                </CardContent>
+              )}
             </Card>
           ))}
         </div>
