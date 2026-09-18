@@ -55,12 +55,23 @@ export const todayISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-// Timezone-safe: opera em UTC para evitar divergências entre servidor e navegador
+// Timezone-safe e com ajuste para o último dia do mês.
+// Ex.: 31/01 + 1 mês = 28/02 (ou 29/02), sem "pular" para março.
 export const addMonths = (iso: string, months: number) => {
   const [y, m, day] = (iso || "").slice(0, 10).split("-").map(Number);
-  const d = new Date(Date.UTC(y || 1970, (m || 1) - 1, day || 1));
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
+  const baseYear = y || 1970;
+  const baseMonth = (m || 1) - 1;
+  const baseDay = day || 1;
+
+  const targetIndex = baseMonth + months;
+  const targetYear = baseYear + Math.floor(targetIndex / 12);
+  const targetMonth = ((targetIndex % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  const clampedDay = Math.min(baseDay, lastDay);
+
+  return new Date(Date.UTC(targetYear, targetMonth, clampedDay))
+    .toISOString()
+    .slice(0, 10);
 };
 
 export const uid = () =>
