@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Building, Plus, Trash2, User, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -247,7 +247,7 @@ function RecebedoresPage() {
                 <TableBody>
                   {corretores.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
                         Nenhuma comissão vinculada a vendas ainda.
                       </TableCell>
                     </TableRow>
@@ -286,15 +286,19 @@ function RecebedoresPage() {
             <CardHeader>
               <CardTitle className="text-base">Repasses por venda</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Regra atual: {state.config.entradaPctCorretor}% da entrada + {state.config.parcelasPctCorretor}% das parcelas, limitada ao total da comissão contratual.
+                Em cada venda, o percentual de comissão definido no próprio contrato é aplicado a cada
+                valor recebido até quitar a comissão total. Depois da quitação, novos recebimentos não
+                geram comissão.
               </p>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Venda</TableHead>
+                    <TableHead>Venda / contrato</TableHead>
+                    <TableHead>Empreendimento / unidade</TableHead>
                     <TableHead>Corretor</TableHead>
+                    <TableHead className="text-right">Valor da venda</TableHead>
                     <TableHead className="text-right">Comissão</TableHead>
                     <TableHead className="text-right">Repassado</TableHead>
                     <TableHead className="text-right">Saldo</TableHead>
@@ -313,14 +317,33 @@ function RecebedoresPage() {
                     const c = comissaoDaVenda(v, state.parcelas, state.config, state.movimentos);
                     const last = c.repasses.at(-1);
                     const mat = state.matriculas.find((m) => m.id === v.matriculaId);
+                    const emp = state.empreendimentos.find((e) => e.id === v.empreendimentoId);
                     return (
                       <TableRow key={v.id}>
                         <TableCell className="text-sm">
-                          <div className="font-medium">{mat?.numero || "—"}</div>
-                          <div className="text-xs text-muted-foreground">{v.compradorNome}</div>
+                          <Link
+                            to="/vendas/$id"
+                            params={{ id: v.id }}
+                            className="font-medium text-foreground hover:text-primary"
+                          >
+                            {v.compradorNome}
+                          </Link>
+                          <div className="text-xs text-muted-foreground">
+                            Contrato de {formatDate(v.dataContrato)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="font-medium">{emp?.nome || "—"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Unidade {mat?.unidade || "—"} · Matrícula {mat?.numero || "—"}
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm">{v.corretorNome || "—"}</TableCell>
-                        <TableCell className="text-right">{brl0(c.total)}</TableCell>
+                        <TableCell className="text-right">{brl0(v.valorTotal)}</TableCell>
+                        <TableCell className="text-right">
+                          <div>{brl0(c.total)}</div>
+                          <div className="text-[11px] text-muted-foreground">{pct(v.corretorPct)} da venda</div>
+                        </TableCell>
                         <TableCell className="text-right text-success">{brl0(c.pago)}</TableCell>
                         <TableCell className="text-right">{brl0(c.saldo)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
