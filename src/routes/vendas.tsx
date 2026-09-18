@@ -42,7 +42,7 @@ import {
   type PagamentoItem,
   type PagamentoTipo,
 } from "@/lib/store";
-import { brl0, formatDate, todayISO, uid } from "@/lib/format";
+import { addMonths, brl0, formatDate, todayISO, uid } from "@/lib/format";
 
 export const Route = createFileRoute("/vendas")({
   component: VendasPage,
@@ -147,14 +147,15 @@ function VendasPage() {
   );
 }
 
-function emptyItem(tipo: PagamentoTipo): PagamentoItem {
+function emptyItem(tipo: PagamentoTipo, dataContrato: string): PagamentoItem {
+  const parcelado = tipo === "parcelas" || tipo === "sinal_parcelado";
   return {
     id: uid(),
     tipo,
     descricao: "",
     valor: 0,
     parcelas: 1,
-    primeiroVencimento: todayISO(),
+    primeiroVencimento: parcelado ? addMonths(dataContrato, 1) : dataContrato,
     status: "pendente",
   };
 }
@@ -220,7 +221,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const composicaoConfere = valorContrato > 0 && Math.abs(diferenca) <= 0.01;
 
   const adicionar = (tipo: PagamentoTipo) => {
-    setItems((atuais) => [...atuais, emptyItem(tipo)]);
+    setItems((atuais) => [...atuais, emptyItem(tipo, dataContrato)]);
   };
 
   const alterarTipo = (idx: number, tipo: PagamentoTipo) => {
@@ -522,7 +523,13 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
 
                     <div className="sm:col-span-2">
                       <Label className="text-xs">
-                        {parcelado ? "Primeiro vencimento" : item.tipo === "bem" ? "Data prevista" : "Vencimento"}
+                        {item.tipo === "parcelas"
+                          ? "Primeira parcela"
+                          : item.tipo === "sinal_parcelado"
+                            ? "1º vencimento do sinal"
+                            : item.tipo === "bem"
+                              ? "Data prevista"
+                              : "Vencimento"}
                       </Label>
                       <Input
                         type="date"
@@ -533,6 +540,12 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                           )
                         }
                       />
+                      {parcelado && (
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                          As próximas parcelas serão geradas mensalmente a partir desta data. Você não precisa
+                          configurar uma por uma.
+                        </p>
+                      )}
                     </div>
 
                     {item.tipo === "bem" && (
@@ -561,9 +574,22 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                       </Button>
                     </div>
                   </div>
-                  <div className="mt-2 text-right text-xs">
-                    <span className="text-muted-foreground">Subtotal: </span>
-                    <strong>{brl0(subtotal)}</strong>
+                  <div className="mt-2 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                    {parcelado ? (
+                      <span className="text-muted-foreground">
+                        Agenda: {item.parcelas} {item.parcelas === 1 ? "parcela" : "parcelas"} mensais ·{" "}
+                        {formatDate(item.primeiroVencimento)}
+                        {item.parcelas > 1
+                          ? ` até ${formatDate(addMonths(item.primeiroVencimento, item.parcelas - 1))}`
+                          : ""}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+                    <span>
+                      <span className="text-muted-foreground">Subtotal: </span>
+                      <strong>{brl0(subtotal)}</strong>
+                    </span>
                   </div>
                 </div>
               );
