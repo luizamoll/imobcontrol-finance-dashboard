@@ -10,9 +10,11 @@ O projeto nasceu de uma necessidade real de organizar regras financeiras que fic
 
 ## Status
 
-**Interface funcional · Back-end Java em evolução**
+**Interface funcional · autenticação Java/PostgreSQL ativa · dados operacionais ainda em migração**
 
-A aplicação web atual já concentra o fluxo financeiro e as regras de negócio de demonstração. A API em Java/Spring Boot foi iniciada e será evoluída por módulos, mantendo o projeto executável e compreensível em cada etapa.
+A aplicação já possui autenticação e estrutura de usuários/empresas no back-end Java com persistência em banco. O fluxo financeiro da interface continua funcional, mas empreendimentos, unidades, vendas, parcelas, recebimentos, movimentos e configurações financeiras ainda são persistidos no `localStorage` do navegador.
+
+Por isso, a versão atual é adequada para desenvolvimento e homologação, mas a migração desses dados operacionais para a API Java/PostgreSQL é requisito antes de uso produtivo com dados financeiros reais.
 
 ## Funcionalidades atuais
 
@@ -58,12 +60,12 @@ O início da API está documentado em [`backend/README.md`](backend/README.md).
 
 ```mermaid
 flowchart LR
-    A["Interface React + TypeScript<br/>Atual"] --> B["API Java + Spring Boot<br/>Em construção"]
-    B --> C["Serviços e regras de domínio<br/>Próxima etapa"]
-    C --> D[("PostgreSQL<br/>Planejado")]
+    A["Interface React + TypeScript"] --> B["API Java + Spring Boot"]
+    B --> C[("PostgreSQL")]
+    A -. "dados operacionais ainda locais" .-> D[("localStorage")]
 ```
 
-A migração está sendo feita gradualmente: primeiro a estrutura da API, depois persistência, regras financeiras no servidor e integração completa com a interface.
+Autenticação e identidade já passam pela API/banco. A próxima etapa estrutural é mover o estado operacional financeiro do navegador para serviços Java e PostgreSQL, com isolamento por empresa.
 
 ## Estrutura do repositório
 
@@ -128,6 +130,7 @@ GET /actuator/health
 - [Arquitetura e domínio](docs/ARQUITETURA.md)
 - [Roadmap técnico](docs/ROADMAP.md)
 - [Documentação do back-end](backend/README.md)
+- [Preparação para hospedagem](deploy/README.md)
 
 ## Objetivo técnico
 
