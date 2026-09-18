@@ -231,8 +231,6 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
   const [empresaPct, setEmpresaPct] = useState("");
   const [corretorPct, setCorretorPct] = useState("");
   const [aliq, setAliq] = useState("");
-  const [entradaPct, setEntradaPct] = useState("");
-  const [parcelasPct, setParcelasPct] = useState("");
   const [obs, setObs] = useState("");
   const [status, setStatus] = useState<EmpStatus>("planejamento");
 
@@ -291,8 +289,8 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
       empresaPct: empresa,
       corretorPct: Number(corretorPct) || 0,
       aliquotaTributaria: Number(aliq) || 0,
-      entradaPctCorretor: Number(entradaPct) || 0,
-      parcelasPctCorretor: Number(parcelasPct) || 0,
+      entradaPctCorretor: Number(corretorPct) || 0,
+      parcelasPctCorretor: Number(corretorPct) || 0,
       inadimplencia,
       observacoes: obs.trim(),
       status,
@@ -438,33 +436,18 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
                 onChange={(e) => setAliq(e.target.value)}
               />
             </div>
-            <div>
-              <Label>% de cada recebimento de entrada destinado à comissão</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={entradaPct}
-                onChange={(e) => setEntradaPct(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>% de cada parcela recebida destinado à comissão</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={parcelasPct}
-                onChange={(e) => setParcelasPct(e.target.value)}
-              />
+            <div className="sm:col-span-2 rounded-md border border-border/60 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">
+              <strong className="text-foreground">Repasse da comissão:</strong>{" "}
+              o mesmo percentual da comissão do corretor é aplicado a cada valor efetivamente recebido,
+              seja entrada, pagamento à vista ou parcela, até que o total da comissão do contrato seja
+              quitado. Depois disso, os recebimentos seguintes não geram nova comissão.
             </div>
           </div>
           <div className="mt-4 rounded-md border border-border/60 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">
             <strong className="text-foreground">Como funciona a comissão:</strong>{" "}
-            a comissão total do corretor é calculada sobre o valor do contrato. A entrada e as parcelas
-            apenas definem quanto de cada recebimento será usado para quitar essa comissão. Quando o total
-            devido ao corretor for atingido, os próximos recebimentos deixam automaticamente de gerar
-            comissão.
+            a comissão total é calculada sobre o valor do contrato e o mesmo percentual é aplicado a
+            cada recebimento financeiro até atingir esse total. O sistema limita automaticamente o último
+            repasse e zera a comissão dos recebimentos seguintes.
           </div>
         </div>
 
