@@ -1,6 +1,6 @@
 import { Bell, HelpCircle, LogOut, Search } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -14,6 +14,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/lib/auth";
+import { brl0, formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
 function iniciais(nome: string) {
@@ -42,6 +43,7 @@ export function AppHeader() {
   const { state } = useStore();
   const [busca, setBusca] = useState("");
   const [buscaAberta, setBuscaAberta] = useState(false);
+  const [notificacoesLidas, setNotificacoesLidas] = useState<Set<string>>(() => new Set());
 
   async function handleLogout() {
     await sair();
@@ -121,22 +123,77 @@ export function AppHeader() {
     return itens.slice(0, 8);
   }, [state, termo, navigate]);
 
-  const alertas = useMemo(() => {
+  const notificacoes = useMemo(() => {
     const agora = new Date();
     const limite = new Date();
     limite.setDate(limite.getDate() + 7);
 
-    const vencidas = state.parcelas.filter(
-      (p) => p.status !== "paga" && p.status !== "cancelada" && new Date(`${p.vencimento}T23:59:59`) < agora,
-    );
-    const proximas = state.parcelas.filter((p) => {
-      if (p.status === "paga" || p.status === "cancelada") return false;
-      const venc = new Date(`${p.vencimento}T23:59:59`);
-      return venc >= agora && venc <= limite;
-    });
+    return state.parcelas
+      .filter((p) => p.status !== "paga" && p.status !== "cancelada")
+      .map((p) => {
+        const vencimento = new Date(`${p.vencimento}T23:59:59`);
+        const vencida = vencimento < agora;
+        const proxima = !vencida && vencimento <= limite;
+        if (!vencida && !proxima) return null;
 
-    return { vencidas, proximas, total: vencidas.length + proximas.length };
-  }, [state.parcelas]);
+        const venda = state.vendas.find((v) => v.id === p.vendaId);
+        const emp = state.empreendimentos.find((e) => e.id === p.empreendimentoId);
+        const mat = state.matriculas.find((m) => m.id === p.matriculaId);
+        const categoria = vencida ? "vencida" : "proxima";
+
+        return {
+          id: `${categoria}:${p.id}:${p.vencimento}`,
+          categoria,
+          vendaId: p.vendaId,
+          titulo: `${p.compradorNome} · ${p.origemDescricao || "Parcela"} ${p.numero}/${p.totalParcelas}`,
+          detalhe: [
+            vencida ? `Venceu em ${formatDate(p.vencimento)}` : `Vence em ${formatDate(p.vencimento)}`,
+            brl0(p.valor),
+            emp?.nome,
+            mat?.unidade ? `Unidade ${mat.unidade}` : undefined,
+            venda?.corretorNome ? `Corretor: ${venda.corretorNome}` : undefined,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          vencimento: p.vencimento,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort((a, b) => {
+        if (a.categoria === "vencida" && b.categoria !== "vencida") return -1;
+        if (a.categoria !== "vencida" && b.categoria === "vencida") return 1;
+        return a.vencimento.localeCompare(b.vencimento);
+      });
+  }, [state.parcelas, state.vendas, state.empreendimentos, state.matriculas]);
+
+  const chaveNotificacoes = usuario ? `imobcontrol.notifications.read.${usuario.id}` : "";
+
+  useEffect(() => {
+    if (!chaveNotificacoes) {
+      setNotificacoesLidas(new Set());
+      return;
+    }
+    try {
+      const salvas = JSON.parse(window.localStorage.getItem(chaveNotificacoes) || "[]");
+      setNotificacoesLidas(new Set(Array.isArray(salvas) ? salvas : []));
+    } catch {
+      setNotificacoesLidas(new Set());
+    }
+  }, [chaveNotificacoes]);
+
+  const notificacoesNaoLidas = notificacoes.filter((item) => !notificacoesLidas.has(item.id));
+
+  const marcarNotificacoesComoLidas = () => {
+    if (!chaveNotificacoes || notificacoes.length === 0) return;
+    const proximas = new Set(notificacoesLidas);
+    notificacoes.forEach((item) => proximas.add(item.id));
+    setNotificacoesLidas(proximas);
+    try {
+      window.localStorage.setItem(chaveNotificacoes, JSON.stringify([...proximas]));
+    } catch {
+      // Falha local não deve impedir o uso das notificações.
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur">
@@ -229,7 +286,7 @@ export function AppHeader() {
           </PopoverContent>
         </Popover>
 
-        <Popover>
+        <Popover onOpenChange={(open) => open && marcarNotificacoesComoLidas()}>
           <PopoverTrigger asChild>
             <Button
               variant="ghost"
@@ -239,47 +296,64 @@ export function AppHeader() {
               aria-label="Notificações"
             >
               <Bell className="h-4 w-4" />
-              {alertas.total > 0 && (
+              {notificacoesNaoLidas.length > 0 && (
                 <span className="absolute right-1.5 top-1.5 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-semibold leading-none text-destructive-foreground">
-                  {alertas.total > 9 ? "9+" : alertas.total}
+                  {notificacoesNaoLidas.length > 9 ? "9+" : notificacoesNaoLidas.length}
                 </span>
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-80">
+          <PopoverContent align="end" className="w-[380px] max-w-[calc(100vw-2rem)]">
             <div className="mb-3">
               <p className="text-sm font-semibold">Notificações</p>
-              <p className="text-xs text-muted-foreground">Pendências calculadas com os dados da operação.</p>
+              <p className="text-xs text-muted-foreground">
+                {notificacoes.length === 0
+                  ? "Nenhuma pendência ativa."
+                  : `${notificacoes.length} pendência${notificacoes.length === 1 ? "" : "s"} ativa${notificacoes.length === 1 ? "" : "s"} · ${notificacoesNaoLidas.length} nova${notificacoesNaoLidas.length === 1 ? "" : "s"}`}
+              </p>
             </div>
-            {alertas.total === 0 ? (
+            {notificacoes.length === 0 ? (
               <div className="rounded-md bg-muted/30 px-3 py-5 text-center text-sm text-muted-foreground">
                 Nenhuma pendência no momento.
               </div>
             ) : (
-              <div className="space-y-2">
-                {alertas.vencidas.length > 0 && (
+              <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                {notificacoes.slice(0, 12).map((item) => (
                   <button
+                    key={item.id}
                     type="button"
-                    className="w-full rounded-md border border-destructive/20 bg-destructive/5 p-3 text-left hover:bg-destructive/10"
-                    onClick={() => void navigate({ to: "/inadimplencia" })}
+                    className={
+                      item.categoria === "vencida"
+                        ? "w-full rounded-md border border-destructive/20 bg-destructive/5 p-3 text-left hover:bg-destructive/10"
+                        : "w-full rounded-md border border-border/70 p-3 text-left hover:bg-muted/40"
+                    }
+                    onClick={() =>
+                      void navigate({ to: "/vendas/$id", params: { id: item.vendaId } })
+                    }
                   >
-                    <div className="text-sm font-medium text-foreground">
-                      {alertas.vencidas.length} parcela{alertas.vencidas.length === 1 ? "" : "s"} em atraso
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground">{item.titulo}</div>
+                        <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                          {item.detalhe}
+                        </div>
+                      </div>
+                      <span
+                        className={
+                          item.categoria === "vencida"
+                            ? "shrink-0 rounded-full bg-destructive/10 px-2 py-1 text-[10px] font-semibold text-destructive"
+                            : "shrink-0 rounded-full bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground"
+                        }
+                      >
+                        {item.categoria === "vencida" ? "Atrasada" : "Próxima"}
+                      </span>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">Abrir inadimplência →</div>
                   </button>
-                )}
-                {alertas.proximas.length > 0 && (
-                  <button
-                    type="button"
-                    className="w-full rounded-md border border-border/70 p-3 text-left hover:bg-muted/40"
-                    onClick={() => void navigate({ to: "/recebimentos" })}
-                  >
-                    <div className="text-sm font-medium text-foreground">
-                      {alertas.proximas.length} vencimento{alertas.proximas.length === 1 ? "" : "s"} nos próximos 7 dias
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">Abrir recebimentos →</div>
-                  </button>
+                ))}
+                {notificacoes.length > 12 && (
+                  <div className="px-2 py-1 text-center text-xs text-muted-foreground">
+                    Mais {notificacoes.length - 12} pendências ativas.
+                  </div>
                 )}
               </div>
             )}
