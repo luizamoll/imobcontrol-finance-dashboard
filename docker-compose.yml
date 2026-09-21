@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-imobcontrol}
+      POSTGRES_USER: ${DB_USER:-imobcontrol}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-imobcontrol} -d ${DB_NAME:-imobcontrol}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      PORT: 8081
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-imobcontrol}
+      DB_USER: ${DB_USER:-imobcontrol}
+      DB_PASSWORD: ${DB_PASSWORD}
+      IMOB_ADMIN_NAME: ${IMOB_ADMIN_NAME:-Administrador ImobControl}
+      IMOB_ADMIN_EMAIL: ${IMOB_ADMIN_EMAIL}
+      IMOB_ADMIN_PASSWORD: ${IMOB_ADMIN_PASSWORD}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+    depends_on:
+      - backend
+
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:

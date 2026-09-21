@@ -15,15 +15,15 @@ export function AlertsPanel() {
   const { state } = useStore();
   const today = new Date();
   const vencidas = state.parcelas.filter(
-    (p) => p.status === "pendente" && new Date(p.vencimento) < today,
+    (p) => p.status !== "paga" && p.status !== "cancelada" && new Date(`${p.vencimento}T23:59:59`) < today,
   );
   const vencidasTotal = vencidas.reduce((a, p) => a + p.valor, 0);
   const pagasHoje = state.parcelas.filter(
-    (p) => p.status === "paga" && p.dataPagamento && new Date(p.dataPagamento).toDateString() === today.toDateString(),
+    (p) => p.status === "paga" && p.dataPagamento && new Date(`${p.dataPagamento}T12:00:00`).toDateString() === today.toDateString(),
   );
   const pagasHojeTotal = pagasHoje.reduce((a, p) => a + p.valorPago, 0);
   const repassesPendentes = state.vendas.reduce(
-    (a, v) => a + (comissaoDaVenda(v, state.parcelas, state.config).saldo > 0 ? 1 : 0),
+    (a, v) => a + (comissaoDaVenda(v, state.parcelas, state.config, state.movimentos).saldo > 0 ? 1 : 0),
     0,
   );
 
@@ -33,7 +33,7 @@ export function AlertsPanel() {
       tone: "destructive" as const,
       title: `${vencidas.length} parcelas vencidas`,
       description: `${brl0(vencidasTotal)} em atraso na carteira`,
-      to: "/parcelas",
+      to: "/inadimplencia",
       action: "Ver inadimplência",
     },
     {
@@ -41,16 +41,16 @@ export function AlertsPanel() {
       tone: "success" as const,
       title: `${pagasHoje.length} pagamentos registrados hoje`,
       description: `Total: ${brl0(pagasHojeTotal)}`,
-      to: "/parcelas",
-      action: "Ver conciliação",
+      to: "/recebimentos",
+      action: "Ver recebimentos",
     },
     {
       icon: Send,
       tone: "primary" as const,
-      title: `${repassesPendentes} repasses de comissão pendentes`,
-      description: "Corretores aguardando quitação",
+      title: `${repassesPendentes} comissões com saldo a repassar`,
+      description: "Acompanhe o que já foi pago e o saldo de cada corretor",
       to: "/recebedores",
-      action: "Aprovar repasses",
+      action: "Ver repasses",
     },
     {
       icon: Wallet,

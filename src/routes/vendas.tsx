@@ -7,16 +7,9 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -31,16 +24,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { VendaStatusBadge } from "@/components/status-badges";
 import {
+  regrasEfetivasUnidade,
   useStore,
   vendaTotais,
   type PagamentoItem,
   type PagamentoTipo,
 } from "@/lib/store";
-import { brl0, formatDate, todayISO, uid } from "@/lib/format";
+import { addMonths, brl0, formatDate, todayISO, uid } from "@/lib/format";
 
 export const Route = createFileRoute("/vendas")({
   component: VendasPage,
@@ -48,7 +50,7 @@ export const Route = createFileRoute("/vendas")({
 });
 
 function VendasPage() {
-  const { state, addVenda } = useStore();
+  const { state } = useStore();
   const [open, setOpen] = useState(false);
 
   return (
@@ -56,13 +58,12 @@ function VendasPage() {
       <PageHeader
         eyebrow="Comercial"
         title="Vendas"
-        description="Registre novos contratos, composição de pagamento e comissionamento."
+        description="Registre o valor negociado, a composição real do pagamento e as regras aplicáveis ao contrato."
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Nova venda
+                <Plus className="mr-2 h-4 w-4" /> Nova venda
               </Button>
             </DialogTrigger>
             <NewVendaDialog onClose={() => setOpen(false)} />
@@ -82,7 +83,7 @@ function VendasPage() {
                 <TableHead>Data</TableHead>
                 <TableHead className="text-right">Valor total</TableHead>
                 <TableHead className="text-right">Recebido</TableHead>
-                <TableHead className="text-right">Saldo</TableHead>
+                <TableHead className="text-right">Saldo financeiro</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -101,7 +102,11 @@ function VendasPage() {
                 return (
                   <TableRow key={v.id}>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <Link
+                        to="/vendas/$id"
+                        params={{ id: v.id }}
+                        className="flex items-center gap-2 hover:text-primary"
+                      >
                         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
                           <ShoppingCart className="h-4 w-4" />
                         </div>
@@ -109,17 +114,23 @@ function VendasPage() {
                           <div className="text-sm font-medium">{mat?.numero || "—"}</div>
                           <div className="text-xs text-muted-foreground">{mat?.unidade}</div>
                         </div>
-                      </div>
+                      </Link>
                     </TableCell>
                     <TableCell className="text-sm">{v.compradorNome}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {emp ? (
-                        <Link to="/empreendimentos/$id" params={{ id: emp.id }} className="hover:text-primary">
+                        <Link
+                          to="/empreendimentos/$id"
+                          params={{ id: emp.id }}
+                          className="hover:text-primary"
+                        >
                           {emp.nome}
                         </Link>
-                      ) : "—"}
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
-                    <TableCell className="text-sm">{v.corretorNome}</TableCell>
+                    <TableCell className="text-sm">{v.corretorNome || "—"}</TableCell>
                     <TableCell className="text-sm">{formatDate(v.dataContrato)}</TableCell>
                     <TableCell className="text-right font-medium">{brl0(v.valorTotal)}</TableCell>
                     <TableCell className="text-right text-success">{brl0(t.recebido)}</TableCell>
@@ -136,49 +147,131 @@ function VendasPage() {
   );
 }
 
-function emptyItem(tipo: PagamentoTipo = "sinal"): PagamentoItem {
+function emptyItem(tipo: PagamentoTipo, dataContrato: string): PagamentoItem {
+  const parcelado = tipo === "parcelas" || tipo === "sinal_parcelado";
   return {
     id: uid(),
     tipo,
-    descricao: tipo === "sinal" ? "Sinal na assinatura" : "Parcelas mensais",
+    descricao: "",
     valor: 0,
-    parcelas: tipo === "parcelas" ? 12 : 1,
-    primeiroVencimento: todayISO(),
+    parcelas: 1,
+    primeiroVencimento: parcelado ? addMonths(dataContrato, 1) : dataContrato,
     status: "pendente",
   };
 }
 
+function itemParcelado(tipo: PagamentoTipo) {
+  return tipo === "parcelas" || tipo === "sinal_parcelado";
+}
+
+function descricaoPlaceholder(tipo: PagamentoTipo) {
+  switch (tipo) {
+    case "avista":
+      return "Ex.: pagamento integral na assinatura";
+    case "sinal":
+      return "Ex.: entrada na assinatura";
+    case "sinal_parcelado":
+      return "Ex.: entrada parcelada";
+    case "parcelas":
+      return "Ex.: parcelas mensais";
+    case "bem":
+      return "Ex.: veículo dado como parte do pagamento";
+    default:
+      return "Descreva esta parte do pagamento";
+  }
+}
+
 function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const { state, addVenda } = useStore();
-  const [empId, setEmpId] = useState<string>("");
-  const [matId, setMatId] = useState<string>("");
+  const [empId, setEmpId] = useState("");
+  const [matId, setMatId] = useState("");
   const [comprador, setComprador] = useState("");
+  const [valorNegociado, setValorNegociado] = useState("");
   const [dataContrato, setDataContrato] = useState(todayISO());
-  const [corretor, setCorretor] = useState(state.config.recebedores.find((r) => r.tipo === "corretor")?.nome || "");
-  const [corretorPct, setCorretorPct] = useState(String(state.config.corretorPctPadrao));
+  const [corretor, setCorretor] = useState("");
+  const [corretorPct, setCorretorPct] = useState("0");
   const [obs, setObs] = useState("");
-  const [items, setItems] = useState<PagamentoItem[]>([emptyItem("sinal"), emptyItem("parcelas")]);
+  const [items, setItems] = useState<PagamentoItem[]>([]);
+
+  const empreendimento = state.empreendimentos.find((e) => e.id === empId);
+  const matricula = state.matriculas.find((m) => m.id === matId);
+  const quadra = matricula?.quadraId
+    ? state.quadras.find((q) => q.id === matricula.quadraId)
+    : undefined;
+  const regraSelecionada =
+    empreendimento && matricula
+      ? regrasEfetivasUnidade(empreendimento, matricula, quadra, state.config)
+      : null;
 
   const matriculas = useMemo(
-    () => state.matriculas.filter((m) => m.empreendimentoId === empId && m.status !== "vendido"),
+    () =>
+      state.matriculas.filter(
+        (m) => m.empreendimentoId === empId && m.status === "disponivel",
+      ),
     [state.matriculas, empId],
   );
 
-  const totalComposicao = items.reduce((a, i) => a + i.valor * (i.tipo === "parcelas" || i.tipo === "sinal_parcelado" ? i.parcelas : 1), 0);
+  const totalComposicao = items.reduce(
+    (total, item) =>
+      total + item.valor * (itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1),
+    0,
+  );
+  const valorContrato = Number(valorNegociado) || 0;
+  const diferenca = valorContrato - totalComposicao;
+  const composicaoConfere = valorContrato > 0 && Math.abs(diferenca) <= 0.01;
+
+  const adicionar = (tipo: PagamentoTipo) => {
+    setItems((atuais) => [...atuais, emptyItem(tipo, dataContrato)]);
+  };
+
+  const alterarTipo = (idx: number, tipo: PagamentoTipo) => {
+    setItems((atuais) =>
+      atuais.map((item, i) =>
+        i === idx
+          ? {
+              ...item,
+              tipo,
+              descricao: "",
+              parcelas: itemParcelado(tipo) ? Math.max(1, item.parcelas || 1) : 1,
+            }
+          : item,
+      ),
+    );
+  };
 
   const submit = () => {
-    if (!empId || !matId || !comprador) {
-      toast.error("Preencha empreendimento, matrícula e comprador");
+    if (!empId || !matId || !comprador.trim()) {
+      toast.error("Preencha empreendimento, unidade e comprador");
       return;
     }
+    if (valorContrato <= 0) {
+      toast.error("Informe o valor negociado do contrato");
+      return;
+    }
+    if (items.length === 0 || items.some((item) => item.valor <= 0)) {
+      toast.error("Informe a composição real do pagamento");
+      return;
+    }
+    if (!composicaoConfere) {
+      toast.error("A composição do pagamento não fecha com o valor negociado", {
+        description: `Valor negociado: ${brl0(valorContrato)} · composição: ${brl0(totalComposicao)}.`,
+      });
+      return;
+    }
+    const pctCorretor = Number(corretorPct) || 0;
+    if (pctCorretor > 0 && !corretor) {
+      toast.error("Selecione o corretor responsável ou informe comissão de 0%");
+      return;
+    }
+
     addVenda({
       empreendimentoId: empId,
       matriculaId: matId,
-      compradorNome: comprador,
-      valorTotal: totalComposicao,
+      compradorNome: comprador.trim(),
+      valorTotal: valorContrato,
       dataContrato,
       corretorNome: corretor,
-      corretorPct: Number(corretorPct) || 0,
+      corretorPct: pctCorretor,
       observacoes: obs,
       composicao: items,
     });
@@ -187,14 +280,28 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Nova venda</DialogTitle>
+        <DialogDescription>
+          Selecione primeiro o empreendimento e a unidade. O sistema identifica a regra financeira
+          mais específica disponível e congela essa regra no contrato.
+        </DialogDescription>
       </DialogHeader>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <Label>Empreendimento</Label>
-          <Select value={empId} onValueChange={(v) => { setEmpId(v); setMatId(""); }}>
+          <Select
+            value={empId}
+            onValueChange={(value) => {
+              setEmpId(value);
+              setMatId("");
+              setValorNegociado("");
+              setCorretorPct("0");
+              setItems([]);
+            }}
+          >
             <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
             <SelectContent>
               {state.empreendimentos.map((e) => (
@@ -203,10 +310,42 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             </SelectContent>
           </Select>
         </div>
+
         <div>
           <Label>Matrícula / Unidade</Label>
-          <Select value={matId} onValueChange={setMatId} disabled={!empId}>
-            <SelectTrigger><SelectValue placeholder={empId ? "Selecione" : "Escolha o empreendimento"} /></SelectTrigger>
+          <Select
+            value={matId}
+            onValueChange={(value) => {
+              setMatId(value);
+              const selecionada = state.matriculas.find((m) => m.id === value);
+              setValorNegociado(selecionada?.valorVenda ? String(selecionada.valorVenda) : "");
+              setItems([]);
+              if (empreendimento && selecionada) {
+                const q = selecionada.quadraId
+                  ? state.quadras.find((item) => item.id === selecionada.quadraId)
+                  : undefined;
+                const efetiva = regrasEfetivasUnidade(
+                  empreendimento,
+                  selecionada,
+                  q,
+                  state.config,
+                );
+                setCorretorPct(String(efetiva.regras.corretorPct));
+              }
+            }}
+            disabled={!empId || matriculas.length === 0}
+          >
+            <SelectTrigger>
+              <SelectValue
+                placeholder={
+                  !empId
+                    ? "Escolha o empreendimento"
+                    : matriculas.length === 0
+                      ? "Nenhuma unidade disponível"
+                      : "Selecione"
+                }
+              />
+            </SelectTrigger>
             <SelectContent>
               {matriculas.map((m) => (
                 <SelectItem key={m.id} value={m.id}>{m.numero} · {m.unidade}</SelectItem>
@@ -214,105 +353,265 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             </SelectContent>
           </Select>
         </div>
+
+        {regraSelecionada && empreendimento && (
+          <div className="sm:col-span-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
+            <span className="text-muted-foreground">Regra financeira identificada: </span>
+            <strong>{descricaoOrigemRegra(regraSelecionada.origem, empreendimento.nome, quadra?.nome)}</strong>
+            <span className="text-muted-foreground">
+              {` · tributação ${regraSelecionada.regras.aliquotaTributaria}% · corretor ${regraSelecionada.regras.corretorPct}% · sócio ${regraSelecionada.regras.socioPct}% · empresa ${regraSelecionada.regras.empresaPct}%`}
+            </span>
+          </div>
+        )}
+
         <div className="sm:col-span-2">
           <Label>Comprador</Label>
-          <Input value={comprador} onChange={(e) => setComprador(e.target.value)} />
+          <Input
+            value={comprador}
+            onChange={(e) => setComprador(e.target.value)}
+            placeholder="Nome do comprador"
+          />
         </div>
+
+        <div>
+          <Label>Valor negociado do contrato (R$)</Label>
+          <Input
+            type="number"
+            min="0"
+            value={valorNegociado}
+            onChange={(e) => setValorNegociado(e.target.value)}
+            placeholder="Informe o valor efetivamente negociado"
+          />
+          {matricula && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Valor cadastrado da unidade: {brl0(matricula.valorVenda)}. Altere apenas se a venda tiver
+              negociação diferente.
+            </p>
+          )}
+        </div>
+
         <div>
           <Label>Data do contrato</Label>
           <Input type="date" value={dataContrato} onChange={(e) => setDataContrato(e.target.value)} />
         </div>
+
         <div>
           <Label>Corretor responsável</Label>
           <Select value={corretor} onValueChange={setCorretor}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Selecione, se houver" /></SelectTrigger>
             <SelectContent>
-              {state.config.recebedores.filter((r) => r.tipo === "corretor").map((r) => (
-                <SelectItem key={r.nome} value={r.nome}>{r.nome}</SelectItem>
-              ))}
+              {state.config.recebedores
+                .filter((r) => r.tipo === "corretor")
+                .map((r) => <SelectItem key={r.nome} value={r.nome}>{r.nome}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
+
         <div>
-          <Label>% Comissão</Label>
-          <Input type="number" value={corretorPct} onChange={(e) => setCorretorPct(e.target.value)} />
+          <Label>% Comissão do corretor</Label>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            value={corretorPct}
+            onChange={(e) => setCorretorPct(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Carregada da regra efetiva da unidade. Altere somente se este contrato tiver uma exceção
+            específica de comissão.
+          </p>
         </div>
       </div>
 
       <Separator className="my-2" />
 
       <div>
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-3 flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="text-sm font-semibold">Composição do pagamento</h3>
-            <p className="text-xs text-muted-foreground">
-              Combine à vista, sinal, parcelas ou bem material como parte do pagamento.
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Adicione somente o que existe no contrato. “Sem sinal” não é forma de pagamento: se não
+              houver entrada, simplesmente não adicione um sinal.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setItems((x) => [...x, emptyItem("sinal")])}>
-              + Sinal
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setItems((x) => [...x, emptyItem("parcelas")])}>
-              + Parcelas
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setItems((x) => [...x, emptyItem("bem")])}>
-              + Bem
-            </Button>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <Button size="sm" variant="outline" onClick={() => adicionar("avista")}>+ À vista</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("sinal")}>+ Sinal</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("sinal_parcelado")}>+ Sinal parcelado</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("parcelas")}>+ Parcelas</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("bem")}>+ Bem</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("outro")}>+ Outro</Button>
           </div>
         </div>
-        <div className="space-y-3">
-          {items.map((it, idx) => (
-            <div key={it.id} className="grid grid-cols-1 gap-2 rounded-lg border border-border/70 bg-muted/20 p-3 sm:grid-cols-6">
-              <div className="sm:col-span-2">
-                <Label className="text-xs">Tipo</Label>
-                <Select value={it.tipo} onValueChange={(v) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, tipo: v as PagamentoTipo } : x))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="avista">À vista</SelectItem>
-                    <SelectItem value="sinal">Sinal</SelectItem>
-                    <SelectItem value="sinal_parcelado">Sinal parcelado</SelectItem>
-                    <SelectItem value="parcelas">Parcelas mensais</SelectItem>
-                    <SelectItem value="sem_sinal">Sem sinal</SelectItem>
-                    <SelectItem value="bem">Bem material</SelectItem>
-                    <SelectItem value="outro">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="sm:col-span-2">
-                <Label className="text-xs">Descrição</Label>
-                <Input value={it.descricao} onChange={(e) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))} />
-              </div>
-              <div>
-                <Label className="text-xs">Valor unitário</Label>
-                <Input type="number" value={it.valor || ""} onChange={(e) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x))} />
-              </div>
-              <div>
-                <Label className="text-xs">Nº parcelas</Label>
-                <Input type="number" value={it.parcelas} onChange={(e) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, parcelas: Number(e.target.value) || 1 } : x))} />
-              </div>
-              <div className="sm:col-span-2">
-                <Label className="text-xs">Primeiro vencimento</Label>
-                <Input type="date" value={it.primeiroVencimento} onChange={(e) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, primeiroVencimento: e.target.value } : x))} />
-              </div>
-              {it.tipo === "bem" && (
-                <div className="sm:col-span-4">
-                  <Label className="text-xs">Bem material (descrição)</Label>
-                  <Input placeholder="Ex.: Veículo modelo XYZ, placa ABC-1234" onChange={(e) => setItems((arr) => arr.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x))} />
+
+        {items.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/80 px-5 py-8 text-center text-sm text-muted-foreground">
+            Nenhuma forma de pagamento adicionada.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item, idx) => {
+              const parcelado = itemParcelado(item.tipo);
+              const subtotal = item.valor * (parcelado ? Math.max(1, item.parcelas) : 1);
+              return (
+                <div key={item.id} className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Tipo</Label>
+                      <Select
+                        value={item.tipo}
+                        onValueChange={(value) => alterarTipo(idx, value as PagamentoTipo)}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="avista">À vista</SelectItem>
+                          <SelectItem value="sinal">Sinal</SelectItem>
+                          <SelectItem value="sinal_parcelado">Sinal parcelado</SelectItem>
+                          <SelectItem value="parcelas">Parcelas</SelectItem>
+                          <SelectItem value="bem">Bem material</SelectItem>
+                          <SelectItem value="outro">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Descrição</Label>
+                      <Input
+                        value={item.descricao}
+                        onChange={(e) =>
+                          setItems((atuais) =>
+                            atuais.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x),
+                          )
+                        }
+                        placeholder={descricaoPlaceholder(item.tipo)}
+                      />
+                    </div>
+
+                    <div className={parcelado ? "" : "sm:col-span-2"}>
+                      <Label className="text-xs">{parcelado ? "Valor por parcela" : "Valor"}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={item.valor || ""}
+                        onChange={(e) =>
+                          setItems((atuais) =>
+                            atuais.map((x, i) => i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x),
+                          )
+                        }
+                      />
+                    </div>
+
+                    {parcelado && (
+                      <div>
+                        <Label className="text-xs">Nº de parcelas</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.parcelas}
+                          onChange={(e) =>
+                            setItems((atuais) =>
+                              atuais.map((x, i) =>
+                                i === idx
+                                  ? { ...x, parcelas: Math.max(1, Number(e.target.value) || 1) }
+                                  : x,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                    )}
+
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">
+                        {item.tipo === "parcelas"
+                          ? "Primeira parcela"
+                          : item.tipo === "sinal_parcelado"
+                            ? "1º vencimento do sinal"
+                            : item.tipo === "bem"
+                              ? "Data prevista"
+                              : "Vencimento"}
+                      </Label>
+                      <Input
+                        type="date"
+                        value={item.primeiroVencimento}
+                        onChange={(e) =>
+                          setItems((atuais) =>
+                            atuais.map((x, i) => i === idx ? { ...x, primeiroVencimento: e.target.value } : x),
+                          )
+                        }
+                      />
+                      {parcelado && (
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                          As próximas parcelas serão geradas mensalmente a partir desta data. Você não precisa
+                          configurar uma por uma.
+                        </p>
+                      )}
+                    </div>
+
+                    {item.tipo === "bem" && (
+                      <div className="sm:col-span-3">
+                        <Label className="text-xs">Detalhes do bem</Label>
+                        <Input
+                          value={item.observacoes || ""}
+                          placeholder="Ex.: veículo, modelo, placa ou outra identificação"
+                          onChange={(e) =>
+                            setItems((atuais) =>
+                              atuais.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x),
+                            )
+                          }
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-end justify-end sm:col-span-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setItems((atuais) => atuais.filter((_, i) => i !== idx))}
+                        aria-label="Remover item"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                    {parcelado ? (
+                      <span className="text-muted-foreground">
+                        Agenda: {item.parcelas} {item.parcelas === 1 ? "parcela" : "parcelas"} mensais ·{" "}
+                        {formatDate(item.primeiroVencimento)}
+                        {item.parcelas > 1
+                          ? ` até ${formatDate(addMonths(item.primeiroVencimento, item.parcelas - 1))}`
+                          : ""}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+                    <span>
+                      <span className="text-muted-foreground">Subtotal: </span>
+                      <strong>{brl0(subtotal)}</strong>
+                    </span>
+                  </div>
                 </div>
-              )}
-              <div className="flex items-end justify-end">
-                <Button size="icon" variant="ghost" onClick={() => setItems((arr) => arr.filter((_, i) => i !== idx))}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="mt-3 grid gap-2 rounded-lg border border-border/70 bg-muted/40 px-4 py-3 text-sm sm:grid-cols-3">
+          <ResumoValor label="Valor negociado" value={valorContrato} />
+          <ResumoValor label="Composição informada" value={totalComposicao} />
+          <div className="sm:text-right">
+            <div className="text-xs text-muted-foreground">Diferença</div>
+            <div className={`font-semibold ${valorContrato > 0 && !composicaoConfere ? "text-destructive" : "text-success"}`}>
+              {brl0(Math.abs(diferenca))}
             </div>
-          ))}
+          </div>
         </div>
-        <div className="mt-3 flex items-center justify-between rounded-lg border border-border/70 bg-muted/40 px-4 py-3 text-sm">
-          <span className="text-muted-foreground">Valor total do contrato</span>
-          <span className="text-base font-semibold">{brl0(totalComposicao)}</span>
-        </div>
+        {valorContrato > 0 && !composicaoConfere && (
+          <p className="mt-2 text-xs text-destructive">
+            A composição precisa totalizar exatamente o valor negociado antes de registrar a venda.
+          </p>
+        )}
       </div>
 
       <div>
@@ -325,5 +624,24 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         <Button onClick={submit}>Registrar venda</Button>
       </DialogFooter>
     </DialogContent>
+  );
+}
+
+function descricaoOrigemRegra(
+  origem: "empreendimento" | "quadra" | "unidade",
+  empreendimento: string,
+  quadra?: string,
+) {
+  if (origem === "unidade") return "regra própria da unidade";
+  if (origem === "quadra") return `regra da ${quadra || "quadra"}`;
+  return `regra do empreendimento ${empreendimento}`;
+}
+
+function ResumoValor({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-semibold">{brl0(value)}</div>
+    </div>
   );
 }
