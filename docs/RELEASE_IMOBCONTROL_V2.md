@@ -14,7 +14,7 @@
 - [ ] Cadastro de comprador com CPF, CEP, endereco, estado civil, profissao e contatos, acessivel apenas aos usuarios autorizados da empresa.
 - [ ] Vincular comprador cadastrado a vendas sem duplicar dados.
 - [ ] Permitir editar dados cadastrais da venda; alteracoes de valor, parcelas e regras requerem fluxo financeiro explicito e auditado.
-- [ ] Substituir favicon e simbolo de cifrao pela marca ImobControl; revisar icones da interface.
+- [ ] Substituir favicon e simbolo de cifrao pela marca ImobControl, preservando integralmente a paleta, layout, componentes e estética atuais do projeto.
 - [ ] Preparar exportacao/recuperacao dos dados locais existentes antes de qualquer migracao.
 - [ ] Validar em dois navegadores/usuarios distintos na mesma empresa e em empresas distintas.
 - [ ] Build frontend + testes backend + teste de deploy em homologacao.
@@ -23,6 +23,10 @@
 ## Fluxo de publicacao
 
 Desenvolver nesta branch, abrir PR para `main`, rodar CI e revisar dados/testes. Somente depois publicar na Hostinger e no host da API. O link publico permanece o mesmo.
+
+## Regra visual
+
+A identidade atual da interface e a fonte de verdade. Nao redesenhar telas, nao trocar a paleta existente e nao aplicar uma nova direcao estetica. Branding nesta release significa apenas criar logo/favicons/assinatura de marca compativeis com o produto atual e substituir marcas temporarias, apos aprovacao.
 
 ## Regra de seguranca
 
