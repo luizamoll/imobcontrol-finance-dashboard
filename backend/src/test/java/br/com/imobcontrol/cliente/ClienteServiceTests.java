@@ -66,16 +66,18 @@ class ClienteServiceTests {
     @Test
     void impedeSobrescritaDeEdicaoAntiga() {
         Usuario ana = criarUsuario(criarEmpresa(), "ana");
-        ClienteResponse criado = clientes.cadastrar(autenticacao(ana), null, dados(null, null));
+        ClienteResponse criado = clientes.cadastrar(autenticacao(ana), null, dados("Compradora original", null, null));
         ClienteResponse atualizado = clientes.atualizar(
-                autenticacao(ana), null, criado.id(), dados(null, criado.versao())
+                autenticacao(ana), null, criado.id(),
+                dados("Compradora atualizada", null, criado.versao())
         );
         assertEquals(criado.versao() + 1, atualizado.versao());
 
         ResponseStatusException conflito = assertThrows(
                 ResponseStatusException.class,
                 () -> clientes.atualizar(
-                        autenticacao(ana), null, criado.id(), dados(null, criado.versao())
+                        autenticacao(ana), null, criado.id(),
+                        dados("Edição desatualizada", null, criado.versao())
                 )
         );
         assertEquals(HttpStatus.CONFLICT, conflito.getStatusCode());
@@ -115,8 +117,12 @@ class ClienteServiceTests {
     }
 
     private ClienteRequest dados(String cpf, Long versao) {
+        return dados("Compradora de teste", cpf, versao);
+    }
+
+    private ClienteRequest dados(String nome, String cpf, Long versao) {
         return new ClienteRequest(
-                "Compradora de teste", cpf, null, null, null, null, null,
+                nome, cpf, null, null, null, null, null,
                 null, null, null, null, null, null, versao
         );
     }
