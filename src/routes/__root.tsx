@@ -17,6 +17,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
 import { StoreProvider } from "@/lib/store";
 import { AuthGate, AuthProvider } from "@/lib/auth";
+import { TenantProvider } from "@/lib/tenant";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -142,7 +143,8 @@ function RootComponent() {
           </>
         ) : (
           <AuthGate>
-            <StoreProvider>
+            <TenantProvider>
+              <StoreProvider>
               <SidebarProvider>
                 <div className="flex min-h-screen w-full bg-background">
                   <AppSidebar />
@@ -155,7 +157,8 @@ function RootComponent() {
                 </div>
                 <Toaster position="top-right" />
               </SidebarProvider>
-            </StoreProvider>
+              </StoreProvider>
+            </TenantProvider>
           </AuthGate>
         )}
       </AuthProvider>

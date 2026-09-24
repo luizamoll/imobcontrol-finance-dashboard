@@ -1,4 +1,4 @@
-import { Bell, HelpCircle, LogOut, Search } from "lucide-react";
+import { Bell, Building2, HelpCircle, LogOut, Search } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -12,10 +12,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/lib/auth";
 import { brl0, formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
+import { useTenant } from "@/lib/tenant";
 
 function iniciais(nome: string) {
   return nome
@@ -41,6 +49,8 @@ export function AppHeader() {
   const navigate = useNavigate();
   const { usuario, sair } = useAuth();
   const { state } = useStore();
+  const { empresas, empresaAtualId, carregando: carregandoEmpresas, selecionarEmpresa } =
+    useTenant();
   const [busca, setBusca] = useState("");
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [notificacoesLidas, setNotificacoesLidas] = useState<Set<string>>(() => new Set());
@@ -244,6 +254,37 @@ export function AppHeader() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        {usuario?.perfil === "SUPER_ADMIN" && (
+          <div className="hidden min-w-48 lg:block">
+            <Select
+              value={empresaAtualId != null ? String(empresaAtualId) : ""}
+              onValueChange={(value) => selecionarEmpresa(Number(value))}
+              disabled={carregandoEmpresas || empresas.length === 0}
+            >
+              <SelectTrigger className="h-9 border-border/70 bg-background">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <SelectValue
+                    placeholder={
+                      carregandoEmpresas
+                        ? "Carregando empresas..."
+                        : empresas.length === 0
+                          ? "Nenhuma empresa"
+                          : "Selecionar empresa"
+                    }
+                  />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {empresas.map((empresa) => (
+                  <SelectItem key={empresa.id} value={String(empresa.id)}>
+                    {empresa.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="h-9 w-9" title="Ajuda" aria-label="Ajuda">

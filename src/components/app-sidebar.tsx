@@ -9,6 +9,7 @@ import {
   FileBarChart,
   Settings,
   CircleDollarSign,
+  ContactRound,
   Inbox,
   AlertOctagon,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const principal = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Empreendimentos", url: "/empreendimentos", icon: Building2 },
   { title: "Vendas", url: "/vendas", icon: ShoppingCart },
+  { title: "Clientes", url: "/clientes", icon: ContactRound },
   { title: "Central de Recebimentos", url: "/recebimentos", icon: Inbox },
   { title: "Parcelas", url: "/parcelas", icon: CalendarClock },
   { title: "Inadimplência", url: "/inadimplencia", icon: AlertOctagon },
