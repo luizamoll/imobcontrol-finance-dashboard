@@ -104,7 +104,7 @@ CREATE TABLE vendas (
     CONSTRAINT fk_vendas_atualizado_por FOREIGN KEY (atualizado_por_usuario_id) REFERENCES usuarios(id)
 );
 
-CREATE UNIQUE INDEX uk_venda_ativa_por_unidade
+CREATE INDEX idx_vendas_empresa_unidade_status
     ON vendas(empresa_id, unidade_id, status);
 CREATE INDEX idx_vendas_empresa_cliente ON vendas(empresa_id, cliente_id, data_contrato);
 CREATE INDEX idx_vendas_empresa_emp ON vendas(empresa_id, empreendimento_id, data_contrato);
