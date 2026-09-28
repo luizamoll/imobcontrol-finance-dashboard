@@ -558,13 +558,24 @@ function EditarVendaDialog({
     venda.composicao.map((item) => ({ ...item })),
   );
 
-  const totalComposicao = composicao.reduce(
+  const totalVenda = Number(valorTotal) || 0;
+  const totalVendaCentavos = Math.round(totalVenda * 100);
+  const totalComposicaoCentavos = composicao.reduce((total, item) => {
+    const quantidade = itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1;
+    return total + Math.round(item.valor * 100) * quantidade;
+  }, 0);
+  const totalComposicao = totalComposicaoCentavos / 100;
+  const diferencaCentavos = totalVendaCentavos - totalComposicaoCentavos;
+  const parcelasAjustaveis = composicao.reduce(
     (total, item) =>
-      total + item.valor * (itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1),
+      total + (itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 0),
     0,
   );
-  const totalVenda = Number(valorTotal) || 0;
-  const composicaoConfere = Math.abs(totalComposicao - totalVenda) <= 0.01;
+  const limiteArredondamentoCentavos = Math.max(1, Math.ceil(parcelasAjustaveis / 2));
+  const composicaoConfere =
+    diferencaCentavos === 0 ||
+    (parcelasAjustaveis > 0 &&
+      Math.abs(diferencaCentavos) <= limiteArredondamentoCentavos);
 
   const adicionar = (tipo: PagamentoTipo) => {
     setComposicao((itens) => [
@@ -596,7 +607,7 @@ function EditarVendaDialog({
       return;
     }
     if (!possuiRecebimentos && (totalVenda <= 0 || !composicaoConfere)) {
-      toast.error("O valor da venda e a composição do pagamento precisam fechar");
+      toast.error("A composição não fecha com o valor da venda. Diferenças normais de arredondamento de parcelas são ajustadas automaticamente.");
       return;
     }
 
