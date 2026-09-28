@@ -12,11 +12,12 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { apiJson } from "@/lib/api";
 import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +50,7 @@ import {
 } from "@/components/ui/table";
 import { addMonths, brl0, formatDate, pct, uid } from "@/lib/format";
 import { useLiveNow } from "@/lib/use-live-now";
+import { useTenant } from "@/lib/tenant";
 import {
   comissaoDaVenda,
   distribuicaoPrevista,
@@ -72,10 +74,44 @@ export const Route = createFileRoute("/vendas/$id")({
   ),
 });
 
+type ClienteEdicao = {
+  id: number;
+  nome: string;
+  cpf: string | null;
+};
+
+type PaginaClientesEdicao = {
+  content: ClienteEdicao[];
+};
+
 function VendaDetail() {
   const { id } = Route.useParams();
+  const { empresaAtualId } = useTenant();
   const { state, receberParcela, reverterParcela, updateVenda } = useStore();
   const [editarAberta, setEditarAberta] = useState(false);
+  const [clientes, setClientes] = useState<ClienteEdicao[]>([]);
+  useEffect(() => {
+    if (!empresaAtualId) {
+      setClientes([]);
+      return;
+    }
+
+    let cancelado = false;
+    void apiJson<PaginaClientesEdicao>("/api/clientes?pagina=0&tamanho=100", {
+      empresaId: empresaAtualId,
+    })
+      .then((pagina) => {
+        if (!cancelado) setClientes(pagina.content);
+      })
+      .catch(() => {
+        if (!cancelado) setClientes([]);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId]);
+
   const v = state.vendas.find((x) => x.id === id);
   if (!v) throw notFound();
 
@@ -147,6 +183,7 @@ function VendaDetail() {
       <Dialog open={editarAberta} onOpenChange={setEditarAberta}>
         <EditarVendaDialog
           venda={v}
+          clientes={clientes}
           possuiRecebimentos={movs.length > 0}
           onSalvar={async (patch) => {
             try {
@@ -495,16 +532,19 @@ function VendaDetail() {
 
 function EditarVendaDialog({
   venda,
+  clientes,
   possuiRecebimentos,
   onSalvar,
   onClose,
 }: {
   venda: Venda;
+  clientes: ClienteEdicao[];
   possuiRecebimentos: boolean;
   onSalvar: (patch: Partial<Venda>) => void;
   onClose: () => void;
 }) {
-  const [compradorNome, setCompradorNome] = useState(venda.compradorNome);
+  const [clienteId, setClienteId] = useState(venda.clienteId ?? "");
+  const clienteSelecionado = clientes.find((cliente) => String(cliente.id) === clienteId);
   const [valorTotal, setValorTotal] = useState(String(venda.valorTotal));
   const [dataContrato, setDataContrato] = useState(venda.dataContrato);
   const [corretorNome, setCorretorNome] = useState(venda.corretorNome);
@@ -547,8 +587,8 @@ function EditarVendaDialog({
   const salvar = () => {
     const comissao = Number(corretorPct) || 0;
     const repasse = Number(repassePct) || 0;
-    if (!compradorNome.trim()) {
-      toast.error("Informe o comprador");
+    if (!clienteId || !clienteSelecionado) {
+      toast.error("Selecione o cliente");
       return;
     }
     if (comissao < 0 || comissao > 100 || repasse < 0 || repasse > 100) {
@@ -561,7 +601,8 @@ function EditarVendaDialog({
     }
 
     onSalvar({
-      compradorNome: compradorNome.trim(),
+      clienteId,
+      compradorNome: clienteSelecionado.nome,
       ...(!possuiRecebimentos
         ? { valorTotal: totalVenda, composicao }
         : {}),
@@ -586,8 +627,29 @@ function EditarVendaDialog({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <Label>Comprador</Label>
-          <Input value={compradorNome} onChange={(e) => setCompradorNome(e.target.value)} />
+          <Label>Cliente / Comprador</Label>
+          <Select
+            value={clienteId}
+            onValueChange={setClienteId}
+            disabled={possuiRecebimentos}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione o cliente" />
+            </SelectTrigger>
+            <SelectContent>
+              {clientes.map((cliente) => (
+                <SelectItem key={cliente.id} value={String(cliente.id)}>
+                  {cliente.nome}
+                  {cliente.cpf ? ` · CPF ${cliente.cpf}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {possuiRecebimentos && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              O comprador fica bloqueado após o primeiro recebimento para preservar o histórico.
+            </p>
+          )}
         </div>
         <div>
           <Label>Valor total da venda</Label>
