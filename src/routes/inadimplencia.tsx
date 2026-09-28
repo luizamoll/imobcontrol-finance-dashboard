@@ -185,9 +185,17 @@ function InadimplenciaPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          receberParcela(p.id, calc.atualizado);
-                          toast.success("Recebimento com acréscimos contratuais registrado");
+                        onClick={async () => {
+                          try {
+                            await receberParcela(p.id, calc.atualizado);
+                            toast.success("Recebimento com acréscimos contratuais registrado");
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : "Não foi possível registrar o recebimento",
+                            );
+                          }
                         }}
                       >
                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
