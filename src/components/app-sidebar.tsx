@@ -11,12 +11,10 @@ import {
   CircleDollarSign,
   ContactRound,
   Inbox,
-  AlertOctagon,
-  ShieldCheck,
-  SlidersHorizontal,
+  AlertOctagon
 } from "lucide-react";
 
-import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant";
 
 import {
   Sidebar,
@@ -51,7 +49,7 @@ const gestao = [
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const { usuario } = useAuth();
+  const { empresaAtual } = useTenant();
   const collapsed = state === "collapsed";
   const currentPath = useRouterState({
     select: (r) => r.location.pathname,
@@ -72,8 +70,8 @@ export function AppSidebar() {
               <span className="text-sm font-semibold text-sidebar-foreground">
                 ImobControl
               </span>
-              <span className="text-xs text-sidebar-foreground/60">
-                Gestão imobiliária
+              <span className="max-w-40 truncate text-xs text-sidebar-foreground/60">
+                {empresaAtual?.nome ?? "Gestão imobiliária"}
               </span>
             </div>
           )}
@@ -125,39 +123,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {usuario?.perfil === "SUPER_ADMIN" && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Administração</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={currentPath === "/admin"}
-                    tooltip="Painel administrativo"
-                  >
-                    <Link to="/admin">
-                      <SlidersHorizontal className="h-4 w-4" />
-                      <span>Painel administrativo</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive("/admin/usuarios")}
-                    tooltip="Controle de usuários"
-                  >
-                    <Link to="/admin/usuarios">
-                      <ShieldCheck className="h-4 w-4" />
-                      <span>Controle de usuários</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
 
       </SidebarContent>
 
