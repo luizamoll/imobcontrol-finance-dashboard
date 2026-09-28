@@ -14,15 +14,20 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -32,15 +37,18 @@ public class AuthController {
     private final AuthService authService;
     private final UsuarioRepository usuarioRepository;
     private final SecurityContextRepository securityContextRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public AuthController(
             AuthService authService,
             UsuarioRepository usuarioRepository,
-            SecurityContextRepository securityContextRepository
+            SecurityContextRepository securityContextRepository,
+            PasswordEncoder passwordEncoder
     ) {
         this.authService = authService;
         this.usuarioRepository = usuarioRepository;
         this.securityContextRepository = securityContextRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @PostMapping("/login")
@@ -70,6 +78,49 @@ public class AuthController {
         return AuthResponse.from(usuario);
     }
 
+    @PutMapping("/minha-conta")
+    public AuthResponse atualizarMinhaConta(
+            Authentication authentication,
+            @Valid @RequestBody MinhaContaRequest body,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+
+        if (!passwordEncoder.matches(body.senhaAtual(), usuario.getSenhaHash())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Senha atual incorreta");
+        }
+
+        String novoEmail = body.email().trim().toLowerCase();
+        if (!novoEmail.equalsIgnoreCase(usuario.getEmail())
+                && usuarioRepository.existsByEmailIgnoreCase(novoEmail)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado");
+        }
+
+        if (body.novaSenha() != null && !body.novaSenha().isBlank() && body.novaSenha().length() < 8) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A nova senha deve ter pelo menos 8 caracteres");
+        }
+
+        usuario.setEmail(novoEmail);
+        if (body.novaSenha() != null && !body.novaSenha().isBlank()) {
+            usuario.setSenhaHash(passwordEncoder.encode(body.novaSenha()));
+        }
+        Usuario salvo = usuarioRepository.saveAndFlush(usuario);
+
+        Authentication novaAutenticacao = UsernamePasswordAuthenticationToken.authenticated(
+                salvo.getEmail(),
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + salvo.getPerfil().name()))
+        );
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(novaAutenticacao);
+        SecurityContextHolder.setContext(context);
+        securityContextRepository.saveContext(context, request, response);
+
+        return AuthResponse.from(salvo);
+    }
+
     @GetMapping("/csrf")
     public Map<String, String> csrf(CsrfToken token) {
         return Map.of(
@@ -91,6 +142,13 @@ public class AuthController {
     public record LoginRequest(
             @NotBlank @Email String email,
             @NotBlank String senha
+    ) {
+    }
+
+    public record MinhaContaRequest(
+            @NotBlank @Email String email,
+            @NotBlank String senhaAtual,
+            String novaSenha
     ) {
     }
 
