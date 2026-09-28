@@ -93,9 +93,9 @@ export interface RegrasContrato {
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
   /** Percentual de cada recebimento usado para quitar a comissão contratada. */
-  repasseComissaoPct: number;
+  repasseComissaoPct?: number;
   /** Quando true, multa/juros/correção também entram na base do repasse. */
-  comissaoSobreAcrescimos: boolean;
+  comissaoSobreAcrescimos?: boolean;
   inadimplencia: RegrasInadimplencia;
 }
 
