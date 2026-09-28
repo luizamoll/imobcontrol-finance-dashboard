@@ -15,6 +15,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { CurrencyInput } from "@/components/currency-input";
 import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { apiJson } from "@/lib/api";
@@ -48,7 +49,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { addMonths, brl0, formatDate, pct, uid } from "@/lib/format";
+import { addMonths, brl, formatDate, pct, uid } from "@/lib/format";
 import { useLiveNow } from "@/lib/use-live-now";
 import { useTenant } from "@/lib/tenant";
 import {
@@ -149,7 +150,7 @@ function VendaDetail() {
       : parcelaQuitacaoComissao
         ? `Comissão quitada na parcela ${parcelaQuitacaoComissao.numero}/${parcelaQuitacaoComissao.totalParcelas}. As próximas parcelas não geram nova comissão.`
         : "Comissão totalmente quitada. Os próximos recebimentos não geram nova comissão."
-    : `Em pagamento. Faltam ${brl0(c.saldo)} para quitar a comissão do corretor.`;
+    : `Em pagamento. Faltam ${brl(c.saldo)} para quitar a comissão do corretor.`;
   const imposto = movs.reduce((a, m) => a + m.impostoReservado, 0);
   const empresa = movs.reduce((a, m) => a + m.empresaValor, 0);
   const socio = movs.reduce((a, m) => a + m.socioValor, 0);
@@ -208,13 +209,13 @@ function VendaDetail() {
           <FlowItem
             icon={CircleDollarSign}
             label="Valor"
-            value={brl0(v.valorTotal)}
+            value={brl(v.valorTotal)}
             sub={`Corretor: ${v.corretorNome || "—"}`}
           />
           <FlowItem
             icon={Receipt}
             label="Liquidado"
-            value={brl0(totais.recebido)}
+            value={brl(totais.recebido)}
             sub={`${pct(progresso)} do contrato`}
           />
         </CardContent>
@@ -255,15 +256,15 @@ function VendaDetail() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <p className="text-xs text-muted-foreground">Comissão contratada</p>
-              <p className="font-semibold">{brl0(c.total)} · {v.corretorPct}%</p>
+              <p className="font-semibold">{brl(c.total)} · {v.corretorPct}%</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Já paga</p>
-              <p className="font-semibold text-success">{brl0(c.pago)}</p>
+              <p className="font-semibold text-success">{brl(c.pago)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Saldo da comissão</p>
-              <p className="font-semibold">{brl0(c.saldo)}</p>
+              <p className="font-semibold">{brl(c.saldo)}</p>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -280,7 +281,7 @@ function VendaDetail() {
             </div>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            Regra deste contrato: a comissão total é {v.corretorPct}% da venda ({brl0(c.total)}).
+            Regra deste contrato: a comissão total é {v.corretorPct}% da venda ({brl(c.total)}).
             A cada entrada ou parcela, {(v.repasseComissaoPct ?? regras.repasseComissaoPct ?? 50)}% do valor-base
             é destinado ao corretor até atingir esse teto. Depois da quitação, os próximos recebimentos
             geram comissão de R$ 0. Acréscimos por atraso: {(v.comissaoSobreAcrescimos ?? regras.comissaoSobreAcrescimos)
@@ -311,10 +312,10 @@ function VendaDetail() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold">{brl0(it.valor * quantidade)}</div>
+                    <div className="font-semibold">{brl(it.valor * quantidade)}</div>
                     <div className="text-xs text-muted-foreground">
                       {parcelado && quantidade > 1
-                        ? `${quantidade}x de ${brl0(it.valor)}`
+                        ? `${quantidade}x de ${brl(it.valor)}`
                         : it.tipo === "bem"
                           ? "parte do pagamento"
                           : "pagamento único"}
@@ -350,7 +351,7 @@ function VendaDetail() {
               icon={Users}
               label={`Comissão do corretor · ${v.corretorNome || "—"}`}
               value={c.pago}
-              sub={`Total: ${brl0(c.total)} · Saldo: ${brl0(c.saldo)}`}
+              sub={`Total: ${brl(c.total)} · Saldo: ${brl(c.saldo)}`}
             />
             <Row icon={Building2} label={`Empresa (${regras.empresaPct}%)`} value={empresa} />
             <Row icon={User} label={`Sócio (${regras.socioPct}%)`} value={socio} />
@@ -388,15 +389,15 @@ function VendaDetail() {
                   </TableCell>
                   <TableCell className="text-sm">{formatDate(p.vencimento)}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {brl0(p.status === "vencida" ? p.valorCobrado : p.valor)}
+                    {brl(p.status === "vencida" ? p.valorCobrado : p.valor)}
                     {p.status === "vencida" && p.valorCobrado !== p.valor && (
                       <div className="text-[11px] text-muted-foreground">
-                        original {brl0(p.valor)}
+                        original {brl(p.valor)}
                       </div>
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-success">
-                    {brl0(p.valorPago)}
+                    {brl(p.valorPago)}
                   </TableCell>
                   <TableCell>
                     <ParcelaStatusBadge status={p.status} />
@@ -500,25 +501,25 @@ function VendaDetail() {
                   <TableCell className="text-sm text-muted-foreground">{m.usuario}</TableCell>
                   <TableCell className="text-sm">{m.origemDescricao}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {brl0(m.valorRecebido)}
+                    {brl(m.valorRecebido)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {brl0(m.impostoReservado)}
+                    {brl(m.impostoReservado)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {brl0(m.comissaoBaseCalculo ?? m.valorRecebido)}
+                    {brl(m.comissaoBaseCalculo ?? m.valorRecebido)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {(m.comissaoRepassePctAplicado ?? v.repasseComissaoPct ?? regras.repasseComissaoPct ?? 50)}%
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {brl0(m.comissaoPaga)}
+                    {brl(m.comissaoPaga)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {m.saldoComissaoApos == null ? "—" : brl0(m.saldoComissaoApos)}
+                    {m.saldoComissaoApos == null ? "—" : brl(m.saldoComissaoApos)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{brl0(m.empresaValor)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{brl0(m.socioValor)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{brl(m.empresaValor)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{brl(m.socioValor)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -545,7 +546,7 @@ function EditarVendaDialog({
 }) {
   const [clienteId, setClienteId] = useState(venda.clienteId ?? "");
   const clienteSelecionado = clientes.find((cliente) => String(cliente.id) === clienteId);
-  const [valorTotal, setValorTotal] = useState(String(venda.valorTotal));
+  const [valorTotal, setValorTotal] = useState(venda.valorTotal);
   const [dataContrato, setDataContrato] = useState(venda.dataContrato);
   const [corretorNome, setCorretorNome] = useState(venda.corretorNome);
   const [corretorPct, setCorretorPct] = useState(String(venda.corretorPct));
@@ -558,7 +559,7 @@ function EditarVendaDialog({
     venda.composicao.map((item) => ({ ...item })),
   );
 
-  const totalVenda = Number(valorTotal) || 0;
+  const totalVenda = valorTotal;
   const totalVendaCentavos = Math.round(totalVenda * 100);
   const totalComposicaoCentavos = composicao.reduce((total, item) => {
     const quantidade = itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1;
@@ -664,12 +665,11 @@ function EditarVendaDialog({
         </div>
         <div>
           <Label>Valor total da venda</Label>
-          <Input
-            type="number"
-            min="0"
+          <CurrencyInput
             value={valorTotal}
+            onValueChange={setValorTotal}
             disabled={possuiRecebimentos}
-            onChange={(e) => setValorTotal(e.target.value)}
+            placeholder="Ex.: 100.000,00"
           />
         </div>
         <div>
@@ -725,7 +725,7 @@ function EditarVendaDialog({
             <p className="mt-1 text-xs text-muted-foreground">
               {possuiRecebimentos
                 ? "Bloqueada porque já existem recebimentos registrados."
-                : `Total da composição: ${brl0(totalComposicao)}`}
+                : `Total da composição: ${brl(totalComposicao)}`}
             </p>
           </div>
           {!possuiRecebimentos && (
@@ -780,16 +780,15 @@ function EditarVendaDialog({
                 </div>
                 <div>
                   <Label className="text-xs">{parcelado ? "Valor/parcela" : "Valor"}</Label>
-                  <Input
-                    type="number"
-                    min="0"
+                  <CurrencyInput
                     value={item.valor}
                     disabled={possuiRecebimentos}
-                    onChange={(e) =>
+                    onValueChange={(valor) =>
                       setComposicao((atuais) =>
-                        atuais.map((x, i) => (i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x)),
+                        atuais.map((x, i) => (i === idx ? { ...x, valor } : x)),
                       )
                     }
+                    placeholder="0,00"
                   />
                 </div>
                 <div>
@@ -920,7 +919,7 @@ function Row({
           {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
         </div>
       </div>
-      <span className="font-semibold tabular-nums">{brl0(value)}</span>
+      <span className="font-semibold tabular-nums">{brl(value)}</span>
     </div>
   );
 }
