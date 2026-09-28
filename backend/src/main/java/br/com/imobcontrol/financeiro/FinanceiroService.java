@@ -1,0 +1,667 @@
+package br.com.imobcontrol.financeiro;
+
+import br.com.imobcontrol.cliente.AuditoriaOperacional;
+import br.com.imobcontrol.cliente.AuditoriaOperacionalRepository;
+import br.com.imobcontrol.cliente.Cliente;
+import br.com.imobcontrol.cliente.ClienteRepository;
+import br.com.imobcontrol.operacao.Empreendimento;
+import br.com.imobcontrol.operacao.EmpreendimentoRepository;
+import br.com.imobcontrol.operacao.Quadra;
+import br.com.imobcontrol.operacao.QuadraRepository;
+import br.com.imobcontrol.operacao.Unidade;
+import br.com.imobcontrol.operacao.UnidadeRepository;
+import br.com.imobcontrol.tenant.TenantContextService;
+import br.com.imobcontrol.tenant.UsuarioRepository;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Objects;
+
+@Service
+public class FinanceiroService {
+
+    private static final BigDecimal CEM = new BigDecimal("100");
+    private static final BigDecimal TRINTA = new BigDecimal("30");
+
+    private final VendaRepository vendas;
+    private final PagamentoItemRepository pagamentos;
+    private final ParcelaRepository parcelas;
+    private final MovimentoRepository movimentos;
+    private final EmpreendimentoRepository empreendimentos;
+    private final QuadraRepository quadras;
+    private final UnidadeRepository unidades;
+    private final ClienteRepository clientes;
+    private final UsuarioRepository usuarios;
+    private final AuditoriaOperacionalRepository auditoria;
+    private final TenantContextService tenants;
+    private final JsonMapper json;
+
+    public FinanceiroService(
+            VendaRepository vendas,
+            PagamentoItemRepository pagamentos,
+            ParcelaRepository parcelas,
+            MovimentoRepository movimentos,
+            EmpreendimentoRepository empreendimentos,
+            QuadraRepository quadras,
+            UnidadeRepository unidades,
+            ClienteRepository clientes,
+            UsuarioRepository usuarios,
+            AuditoriaOperacionalRepository auditoria,
+            TenantContextService tenants,
+            JsonMapper json
+    ) {
+        this.vendas = vendas;
+        this.pagamentos = pagamentos;
+        this.parcelas = parcelas;
+        this.movimentos = movimentos;
+        this.empreendimentos = empreendimentos;
+        this.quadras = quadras;
+        this.unidades = unidades;
+        this.clientes = clientes;
+        this.usuarios = usuarios;
+        this.auditoria = auditoria;
+        this.tenants = tenants;
+        this.json = json;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<VendaResponse> listarVendas(
+            Authentication auth, Long empresaSolicitada, int pagina, int tamanho
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        if (pagina < 0 || tamanho < 1 || tamanho > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paginação inválida");
+        }
+        return vendas.findByEmpresaId(
+                ctx.empresaId(),
+                PageRequest.of(pagina, tamanho, Sort.by(Sort.Direction.DESC, "dataContrato", "id"))
+        ).map(v -> toVendaResponse(ctx.empresaId(), v));
+    }
+
+    @Transactional(readOnly = true)
+    public VendaResponse detalharVenda(Authentication auth, Long empresaSolicitada, Long id) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        return toVendaResponse(ctx.empresaId(), venda(ctx.empresaId(), id));
+    }
+
+    @Transactional
+    public VendaResponse criarVenda(
+            Authentication auth, Long empresaSolicitada, VendaRequest body
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Empreendimento emp = empreendimento(ctx.empresaId(), body.empreendimentoId());
+        Unidade unidade = unidade(ctx.empresaId(), body.unidadeId());
+        Cliente cliente = cliente(ctx.empresaId(), body.clienteId());
+
+        if (!Objects.equals(unidade.getEmpreendimentoId(), emp.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A unidade não pertence ao empreendimento");
+        }
+        if (!"disponivel".equalsIgnoreCase(unidade.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "A unidade não está disponível");
+        }
+        if (vendas.existsByEmpresaIdAndUnidadeIdAndStatus(ctx.empresaId(), unidade.getId(), "ativa")) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Já existe venda ativa para esta unidade");
+        }
+
+        validarComposicao(body);
+
+        JsonNode regras = regrasEfetivas(emp, unidade);
+        Venda venda = new Venda();
+        venda.setEmpresaId(ctx.empresaId());
+        venda.setEmpreendimentoId(emp.getId());
+        venda.setUnidadeId(unidade.getId());
+        venda.setClienteId(cliente.getId());
+        venda.setValorTotal(moeda(body.valorTotal()));
+        venda.setDataContrato(body.dataContrato());
+        venda.setCorretorNome(texto(body.corretorNome()));
+        venda.setCorretorPct(percentual(body.corretorPct()));
+        venda.setRepasseComissaoPct(percentual(body.repasseComissaoPct()));
+        venda.setComissaoSobreAcrescimos(body.comissaoSobreAcrescimos());
+        venda.setObservacoes(texto(body.observacoes()));
+        venda.setStatus("ativa");
+        venda.setRegrasJson(escrever(regras));
+        venda.setCriadoPorUsuarioId(ctx.usuarioId());
+        venda.setAtualizadoPorUsuarioId(ctx.usuarioId());
+
+        Venda salva = vendas.saveAndFlush(venda);
+        criarComposicaoEParcelas(ctx.empresaId(), salva, body.composicao(), regras);
+
+        unidade.setStatus("vendido");
+        unidade.setAtualizadoPorUsuarioId(ctx.usuarioId());
+        unidades.saveAndFlush(unidade);
+
+        registrar(ctx, "VENDA", salva.getId(), "CRIACAO");
+        return toVendaResponse(ctx.empresaId(), salva);
+    }
+
+    @Transactional
+    public VendaResponse atualizarVenda(
+            Authentication auth, Long empresaSolicitada, Long id, VendaRequest body
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Venda atual = venda(ctx.empresaId(), id);
+        exigirVersao(body.versao(), atual.getVersao());
+
+        if (!Objects.equals(atual.getEmpreendimentoId(), body.empreendimentoId())
+                || !Objects.equals(atual.getUnidadeId(), body.unidadeId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Não é permitido mover uma venda para outro empreendimento ou unidade"
+            );
+        }
+
+        cliente(ctx.empresaId(), body.clienteId());
+        boolean possuiRecebimentos =
+                movimentos.existsByEmpresaIdAndVendaIdAndEstornadoFalse(ctx.empresaId(), atual.getId());
+
+        if (possuiRecebimentos) {
+            if (!Objects.equals(atual.getClienteId(), body.clienteId())
+                    || atual.getValorTotal().compareTo(moeda(body.valorTotal())) != 0
+                    || !mesmaComposicao(ctx.empresaId(), atual.getId(), body.composicao())) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "A venda já possui recebimentos. Cliente, valor e parcelas não podem ser reescritos."
+                );
+            }
+        } else {
+            validarComposicao(body);
+            atual.setClienteId(body.clienteId());
+            atual.setValorTotal(moeda(body.valorTotal()));
+            pagamentos.deleteByEmpresaIdAndVendaId(ctx.empresaId(), atual.getId());
+            parcelas.deleteByEmpresaIdAndVendaId(ctx.empresaId(), atual.getId());
+            criarComposicaoEParcelas(
+                    ctx.empresaId(),
+                    atual,
+                    body.composicao(),
+                    ler(atual.getRegrasJson())
+            );
+        }
+
+        atual.setDataContrato(body.dataContrato());
+        atual.setCorretorNome(texto(body.corretorNome()));
+        atual.setCorretorPct(percentual(body.corretorPct()));
+        atual.setRepasseComissaoPct(percentual(body.repasseComissaoPct()));
+        atual.setComissaoSobreAcrescimos(body.comissaoSobreAcrescimos());
+        atual.setObservacoes(texto(body.observacoes()));
+        atual.setAtualizadoPorUsuarioId(ctx.usuarioId());
+
+        Venda salva = vendas.saveAndFlush(atual);
+        registrar(ctx, "VENDA", salva.getId(), "ATUALIZACAO");
+        return toVendaResponse(ctx.empresaId(), salva);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ParcelaResponse> listarParcelas(Authentication auth, Long empresaSolicitada) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        return parcelas.findAllByEmpresaIdOrderByVencimentoAscIdAsc(ctx.empresaId())
+                .stream()
+                .map(p -> toParcelaResponse(ctx.empresaId(), p))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<MovimentoResponse> listarMovimentos(Authentication auth, Long empresaSolicitada) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        return movimentos.findAllByEmpresaIdAndEstornadoFalseOrderByDataMovimentoDescIdDesc(ctx.empresaId())
+                .stream()
+                .map(m -> toMovimentoResponse(ctx.empresaId(), m))
+                .toList();
+    }
+
+    @Transactional
+    public MovimentoResponse receber(
+            Authentication auth,
+            Long empresaSolicitada,
+            Long parcelaId,
+            RecebimentoRequest body
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Parcela parcela = parcela(ctx.empresaId(), parcelaId);
+        if ("paga".equalsIgnoreCase(parcela.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta parcela já está paga");
+        }
+        if ("cancelada".equalsIgnoreCase(parcela.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Parcela cancelada não pode ser recebida");
+        }
+
+        Venda venda = venda(ctx.empresaId(), parcela.getVendaId());
+        LocalDate data = body.data() == null ? LocalDate.now() : body.data();
+        BigDecimal corrigido = valorCorrigido(parcela, data);
+        BigDecimal recebido = body.valorRecebido() == null ? corrigido : moeda(body.valorRecebido());
+        if (recebido.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor recebido inválido");
+        }
+
+        JsonNode regras = ler(venda.getRegrasJson());
+        BigDecimal aliquota = decimal(regras, "aliquotaTributaria", BigDecimal.ZERO);
+        BigDecimal empresaPct = decimal(regras, "empresaPct", BigDecimal.ZERO);
+        BigDecimal socioPct = decimal(regras, "socioPct", BigDecimal.ZERO);
+
+        BigDecimal imposto = porcentagem(recebido, aliquota);
+        BigDecimal comissaoTotal = porcentagem(venda.getValorTotal(), venda.getCorretorPct());
+        BigDecimal comissaoJaPaga = movimentos
+                .findAllByEmpresaIdAndVendaIdAndEstornadoFalseOrderByDataMovimentoAscIdAsc(
+                        ctx.empresaId(), venda.getId()
+                )
+                .stream()
+                .map(Movimento::getComissaoPaga)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal saldoComissaoAntes = maxZero(comissaoTotal.subtract(comissaoJaPaga));
+        BigDecimal acrescimos = maxZero(recebido.subtract(parcela.getValor()));
+        BigDecimal baseComissao = venda.isComissaoSobreAcrescimos()
+                ? recebido
+                : recebido.min(parcela.getValor());
+        BigDecimal comissaoTeorica = porcentagem(baseComissao, venda.getRepasseComissaoPct());
+        BigDecimal comissao = comissaoTeorica.min(saldoComissaoAntes);
+        BigDecimal limiteDepoisImposto = maxZero(recebido.subtract(imposto));
+        if (comissao.compareTo(limiteDepoisImposto) > 0) comissao = limiteDepoisImposto;
+
+        BigDecimal restante = maxZero(recebido.subtract(imposto).subtract(comissao));
+        BigDecimal totalSplit = empresaPct.add(socioPct);
+        BigDecimal empresaValor = BigDecimal.ZERO;
+        BigDecimal socioValor = BigDecimal.ZERO;
+        if (totalSplit.signum() > 0) {
+            empresaValor = moeda(restante.multiply(empresaPct).divide(totalSplit, 8, RoundingMode.HALF_UP));
+            socioValor = moeda(restante.subtract(empresaValor));
+        }
+
+        Movimento mov = new Movimento();
+        mov.setEmpresaId(ctx.empresaId());
+        mov.setParcelaId(parcela.getId());
+        mov.setVendaId(venda.getId());
+        mov.setEmpreendimentoId(parcela.getEmpreendimentoId());
+        mov.setUnidadeId(parcela.getUnidadeId());
+        mov.setClienteId(parcela.getClienteId());
+        mov.setCorretorNome(venda.getCorretorNome());
+        mov.setOrigem(parcela.getOrigemTipo());
+        mov.setOrigemDescricao(parcela.getOrigemDescricao());
+        mov.setDataMovimento(data);
+        mov.setUsuarioId(ctx.usuarioId());
+        mov.setValorRecebido(recebido);
+        mov.setImpostoReservado(imposto);
+        mov.setComissaoPaga(comissao);
+        mov.setEmpresaValor(empresaValor);
+        mov.setSocioValor(socioValor);
+        mov.setAliquotaTributariaAplicada(aliquota);
+        mov.setEmpresaPctAplicada(empresaPct);
+        mov.setSocioPctAplicada(socioPct);
+        mov.setComissaoBaseCalculo(baseComissao);
+        mov.setComissaoRepassePctAplicado(venda.getRepasseComissaoPct());
+        mov.setComissaoSobreAcrescimosAplicada(venda.isComissaoSobreAcrescimos());
+        mov.setAcrescimosRecebidos(acrescimos);
+        mov.setComissaoTeorica(comissaoTeorica);
+        mov.setSaldoComissaoApos(maxZero(saldoComissaoAntes.subtract(comissao)));
+        Movimento salvo = movimentos.saveAndFlush(mov);
+
+        parcela.setValorPago(recebido);
+        parcela.setDataPagamento(data);
+        parcela.setStatus("paga");
+        parcelas.saveAndFlush(parcela);
+
+        boolean faltaPagar = parcelas.findAllByEmpresaIdAndVendaIdOrderByVencimentoAscIdAsc(
+                        ctx.empresaId(), venda.getId()
+                )
+                .stream()
+                .anyMatch(p -> !"paga".equalsIgnoreCase(p.getStatus())
+                        && !"cancelada".equalsIgnoreCase(p.getStatus()));
+        if (!faltaPagar) {
+            venda.setStatus("quitada");
+            venda.setAtualizadoPorUsuarioId(ctx.usuarioId());
+            vendas.saveAndFlush(venda);
+        }
+
+        registrar(ctx, "PARCELA", parcela.getId(), "RECEBIMENTO");
+        return toMovimentoResponse(ctx.empresaId(), salvo);
+    }
+
+    @Transactional
+    public void reverterRecebimento(
+            Authentication auth, Long empresaSolicitada, Long parcelaId
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Parcela parcela = parcela(ctx.empresaId(), parcelaId);
+        Movimento mov = movimentos
+                .findFirstByEmpresaIdAndParcelaIdAndEstornadoFalseOrderByIdDesc(
+                        ctx.empresaId(), parcelaId
+                )
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Nenhum recebimento ativo encontrado"
+                ));
+
+        mov.setEstornado(true);
+        mov.setEstornadoEm(LocalDateTime.now());
+        mov.setEstornadoPorUsuarioId(ctx.usuarioId());
+        movimentos.saveAndFlush(mov);
+
+        parcela.setValorPago(BigDecimal.ZERO);
+        parcela.setDataPagamento(null);
+        parcela.setStatus(LocalDate.now().isAfter(parcela.getVencimento()) ? "vencida" : "pendente");
+        parcelas.saveAndFlush(parcela);
+
+        Venda venda = venda(ctx.empresaId(), parcela.getVendaId());
+        if ("quitada".equalsIgnoreCase(venda.getStatus())) {
+            venda.setStatus("ativa");
+            venda.setAtualizadoPorUsuarioId(ctx.usuarioId());
+            vendas.saveAndFlush(venda);
+        }
+
+        registrar(ctx, "PARCELA", parcela.getId(), "RECEBIMENTO_ESTORNADO");
+    }
+
+    private void criarComposicaoEParcelas(
+            Long empresaId,
+            Venda venda,
+            List<VendaRequest.PagamentoRequest> itens,
+            JsonNode regras
+    ) {
+        JsonNode inadimplencia = regras.path("inadimplencia");
+        String inadJson = inadimplencia.isMissingNode() || inadimplencia.isNull()
+                ? null
+                : escrever(inadimplencia);
+
+        for (var item : itens) {
+            PagamentoItem p = new PagamentoItem();
+            p.setEmpresaId(empresaId);
+            p.setVendaId(venda.getId());
+            p.setTipo(item.tipo());
+            p.setDescricao(texto(item.descricao()));
+            p.setValor(moeda(item.valor()));
+            p.setParcelas(item.parcelas());
+            p.setPrimeiroVencimento(item.primeiroVencimento());
+            p.setStatus(texto(item.status()) == null ? "pendente" : item.status());
+            pagamentos.save(p);
+
+            if ("bem".equalsIgnoreCase(item.tipo())) continue;
+            int quantidade = parcelado(item.tipo()) ? Math.max(1, item.parcelas()) : 1;
+            for (int numero = 1; numero <= quantidade; numero++) {
+                Parcela parcela = new Parcela();
+                parcela.setEmpresaId(empresaId);
+                parcela.setVendaId(venda.getId());
+                parcela.setEmpreendimentoId(venda.getEmpreendimentoId());
+                parcela.setUnidadeId(venda.getUnidadeId());
+                parcela.setClienteId(venda.getClienteId());
+                parcela.setOrigemTipo(item.tipo());
+                parcela.setOrigemDescricao(texto(item.descricao()) == null ? item.tipo() : item.descricao());
+                parcela.setNumero(numero);
+                parcela.setTotalParcelas(quantidade);
+                parcela.setVencimento(item.primeiroVencimento().plusMonths(numero - 1L));
+                parcela.setValor(moeda(item.valor()));
+                parcela.setValorPago(BigDecimal.ZERO);
+                parcela.setStatus("pendente");
+                parcela.setRegrasInadimplenciaJson(inadJson);
+                parcelas.save(parcela);
+            }
+        }
+        pagamentos.flush();
+        parcelas.flush();
+    }
+
+    private boolean mesmaComposicao(
+            Long empresaId, Long vendaId, List<VendaRequest.PagamentoRequest> nova
+    ) {
+        List<PagamentoItem> atual =
+                pagamentos.findAllByEmpresaIdAndVendaIdOrderByIdAsc(empresaId, vendaId);
+        if (atual.size() != nova.size()) return false;
+        for (int i = 0; i < atual.size(); i++) {
+            PagamentoItem a = atual.get(i);
+            VendaRequest.PagamentoRequest n = nova.get(i);
+            if (!a.getTipo().equals(n.tipo())
+                    || a.getValor().compareTo(moeda(n.valor())) != 0
+                    || !Objects.equals(a.getParcelas(), n.parcelas())
+                    || !Objects.equals(a.getPrimeiroVencimento(), n.primeiroVencimento())
+                    || !Objects.equals(texto(a.getDescricao()), texto(n.descricao()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void validarComposicao(VendaRequest body) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (var item : body.composicao()) {
+            int qtd = parcelado(item.tipo()) ? Math.max(1, item.parcelas()) : 1;
+            total = total.add(item.valor().multiply(BigDecimal.valueOf(qtd)));
+        }
+        if (moeda(total).compareTo(moeda(body.valorTotal())) != 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "A composição do pagamento não fecha com o valor negociado"
+            );
+        }
+    }
+
+    private boolean parcelado(String tipo) {
+        return "parcelas".equalsIgnoreCase(tipo) || "sinal_parcelado".equalsIgnoreCase(tipo);
+    }
+
+    private JsonNode regrasEfetivas(Empreendimento emp, Unidade unidade) {
+        if (texto(unidade.getRegrasJson()) != null) return ler(unidade.getRegrasJson());
+        if (unidade.getQuadraId() != null) {
+            Quadra q = quadras.findByIdAndEmpresaId(unidade.getQuadraId(), emp.getEmpresaId()).orElse(null);
+            if (q != null && texto(q.getRegrasJson()) != null) return ler(q.getRegrasJson());
+        }
+
+        ObjectNode node = json.createObjectNode();
+        node.put("aliquotaTributaria", emp.getAliquotaTributaria());
+        node.put("socioPct", emp.getSocioPct());
+        node.put("empresaPct", emp.getEmpresaPct());
+        node.put("corretorPct", emp.getCorretorPct());
+        node.put("repasseComissaoPct", emp.getRepasseComissaoPct());
+        node.put("comissaoSobreAcrescimos", emp.isComissaoSobreAcrescimos());
+        if (texto(emp.getInadimplenciaJson()) != null) {
+            node.set("inadimplencia", ler(emp.getInadimplenciaJson()));
+        }
+        return node;
+    }
+
+    private BigDecimal valorCorrigido(Parcela parcela, LocalDate data) {
+        BigDecimal base = parcela.getValor();
+        if (data == null || !data.isAfter(parcela.getVencimento())) return base;
+
+        JsonNode r = lerOuVazio(parcela.getRegrasInadimplenciaJson());
+        long diasAtraso = Math.max(0, ChronoUnit.DAYS.between(parcela.getVencimento(), data));
+        boolean toleranciaAtiva = bool(r, "toleranciaAtiva", false);
+        long tolerancia = toleranciaAtiva ? inteiro(r, "diasTolerancia", 0) : 0;
+        long diasEfetivos;
+        if (diasAtraso <= tolerancia) {
+            diasEfetivos = 0;
+        } else if ("vencimento".equals(textoJson(r, "inicioJuros", "vencimento"))) {
+            diasEfetivos = diasAtraso;
+        } else {
+            diasEfetivos = diasAtraso - tolerancia;
+        }
+
+        BigDecimal meses = BigDecimal.valueOf(diasEfetivos)
+                .divide(TRINTA, 8, RoundingMode.HALF_UP);
+        BigDecimal correcao = bool(r, "correcaoAtiva", false)
+                ? porcentagem(base, decimal(r, "correcaoPctMes", BigDecimal.ZERO)).multiply(meses)
+                : BigDecimal.ZERO;
+
+        BigDecimal juros = BigDecimal.ZERO;
+        if (bool(r, "jurosAtivo", false)) {
+            if ("diario".equals(textoJson(r, "jurosTipo", "mensal"))) {
+                juros = porcentagem(base, decimal(r, "jurosPctDia", BigDecimal.ZERO))
+                        .multiply(BigDecimal.valueOf(diasEfetivos));
+            } else {
+                juros = porcentagem(base, decimal(r, "jurosPctMes", BigDecimal.ZERO))
+                        .multiply(meses);
+            }
+        }
+
+        BigDecimal mora = bool(r, "moraAtiva", false) && diasEfetivos > 0
+                ? porcentagem(base, decimal(r, "moraPct", BigDecimal.ZERO))
+                : BigDecimal.ZERO;
+
+        return moeda(base.add(correcao).add(juros).add(mora));
+    }
+
+    private VendaResponse toVendaResponse(Long empresaId, Venda v) {
+        Cliente cliente = cliente(empresaId, v.getClienteId());
+        List<VendaResponse.PagamentoResponse> composicao =
+                pagamentos.findAllByEmpresaIdAndVendaIdOrderByIdAsc(empresaId, v.getId())
+                        .stream()
+                        .map(p -> new VendaResponse.PagamentoResponse(
+                                p.getId(), p.getTipo(), p.getDescricao(), p.getValor(),
+                                p.getParcelas(), p.getPrimeiroVencimento(), p.getStatus()
+                        ))
+                        .toList();
+
+        return new VendaResponse(
+                v.getId(), v.getEmpresaId(), v.getEmpreendimentoId(), v.getUnidadeId(),
+                v.getClienteId(), cliente.getNome(), v.getValorTotal(), v.getDataContrato(),
+                v.getCorretorNome(), v.getCorretorPct(), v.getRepasseComissaoPct(),
+                v.isComissaoSobreAcrescimos(), v.getObservacoes(), v.getStatus(),
+                ler(v.getRegrasJson()), v.getVersao(), composicao
+        );
+    }
+
+    private ParcelaResponse toParcelaResponse(Long empresaId, Parcela p) {
+        Cliente cliente = cliente(empresaId, p.getClienteId());
+        return new ParcelaResponse(
+                p.getId(), p.getVendaId(), p.getEmpreendimentoId(), p.getUnidadeId(),
+                p.getClienteId(), cliente.getNome(), p.getOrigemTipo(), p.getOrigemDescricao(),
+                p.getNumero(), p.getTotalParcelas(), p.getVencimento(), p.getValor(),
+                p.getValorPago(), p.getDataPagamento(), p.getStatus(),
+                lerOuVazio(p.getRegrasInadimplenciaJson()), p.getVersao()
+        );
+    }
+
+    private MovimentoResponse toMovimentoResponse(Long empresaId, Movimento m) {
+        Cliente cliente = cliente(empresaId, m.getClienteId());
+        String usuario = usuarios.findById(m.getUsuarioId())
+                .map(u -> u.getNome())
+                .orElse("Usuário");
+        return new MovimentoResponse(
+                m.getId(), m.getParcelaId(), m.getVendaId(), m.getEmpreendimentoId(),
+                m.getUnidadeId(), m.getClienteId(), cliente.getNome(), m.getCorretorNome(),
+                m.getOrigem(), m.getOrigemDescricao(), m.getDataMovimento(), usuario,
+                m.getValorRecebido(), m.getImpostoReservado(), m.getComissaoPaga(),
+                m.getEmpresaValor(), m.getSocioValor(), m.getAliquotaTributariaAplicada(),
+                m.getEmpresaPctAplicada(), m.getSocioPctAplicada(), m.getComissaoBaseCalculo(),
+                m.getComissaoRepassePctAplicado(), m.getComissaoSobreAcrescimosAplicada(),
+                m.getAcrescimosRecebidos(), m.getComissaoTeorica(), m.getSaldoComissaoApos()
+        );
+    }
+
+    private Venda venda(Long empresaId, Long id) {
+        return vendas.findByIdAndEmpresaId(id, empresaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Venda não encontrada"));
+    }
+
+    private Parcela parcela(Long empresaId, Long id) {
+        return parcelas.findByIdAndEmpresaId(id, empresaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Parcela não encontrada"));
+    }
+
+    private Empreendimento empreendimento(Long empresaId, Long id) {
+        return empreendimentos.findByIdAndEmpresaId(id, empresaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empreendimento não encontrado"));
+    }
+
+    private Unidade unidade(Long empresaId, Long id) {
+        return unidades.findByIdAndEmpresaId(id, empresaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unidade não encontrada"));
+    }
+
+    private Cliente cliente(Long empresaId, Long id) {
+        return clientes.findByIdAndEmpresaId(id, empresaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente não encontrado"));
+    }
+
+    private void exigirVersao(Long recebida, Long atual) {
+        if (recebida == null || !Objects.equals(recebida, atual)) {
+            throw new ResponseStatusException(
+                    recebida == null ? HttpStatus.BAD_REQUEST : HttpStatus.CONFLICT,
+                    recebida == null
+                            ? "Informe a versão atual da venda"
+                            : "A venda foi alterada por outro usuário. Atualize a tela."
+            );
+        }
+    }
+
+    private BigDecimal percentual(BigDecimal valor) {
+        if (valor == null || valor.signum() < 0 || valor.compareTo(CEM) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Percentual inválido");
+        }
+        return valor;
+    }
+
+    private BigDecimal porcentagem(BigDecimal base, BigDecimal pct) {
+        return moeda(base.multiply(pct).divide(CEM, 8, RoundingMode.HALF_UP));
+    }
+
+    private BigDecimal moeda(BigDecimal valor) {
+        return valor.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal maxZero(BigDecimal valor) {
+        return valor.signum() < 0 ? BigDecimal.ZERO.setScale(2) : moeda(valor);
+    }
+
+    private String texto(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.trim();
+    }
+
+    private JsonNode ler(String valor) {
+        try {
+            return json.readTree(valor);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Regra financeira inválida", e);
+        }
+    }
+
+    private JsonNode lerOuVazio(String valor) {
+        return texto(valor) == null ? json.createObjectNode() : ler(valor);
+    }
+
+    private String escrever(JsonNode valor) {
+        try {
+            return json.writeValueAsString(valor);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Falha ao registrar regra financeira", e);
+        }
+    }
+
+    private BigDecimal decimal(JsonNode node, String campo, BigDecimal padrao) {
+        JsonNode n = node.path(campo);
+        return n.isMissingNode() || n.isNull() ? padrao : n.decimalValue();
+    }
+
+    private boolean bool(JsonNode node, String campo, boolean padrao) {
+        JsonNode n = node.path(campo);
+        return n.isMissingNode() || n.isNull() ? padrao : n.asBoolean();
+    }
+
+    private long inteiro(JsonNode node, String campo, long padrao) {
+        JsonNode n = node.path(campo);
+        return n.isMissingNode() || n.isNull() ? padrao : n.asLong();
+    }
+
+    private String textoJson(JsonNode node, String campo, String padrao) {
+        JsonNode n = node.path(campo);
+        return n.isMissingNode() || n.isNull() ? padrao : n.asText();
+    }
+
+    private void registrar(
+            TenantContextService.Contexto ctx, String entidade, Long entidadeId, String acao
+    ) {
+        auditoria.save(new AuditoriaOperacional(
+                ctx.empresaId(), ctx.usuarioId(), entidade, entidadeId, acao
+        ));
+    }
+}
