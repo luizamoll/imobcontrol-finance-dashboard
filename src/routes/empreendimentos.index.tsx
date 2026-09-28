@@ -3,6 +3,7 @@ import { Building2, Plus, Upload } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { CurrencyInput } from "@/components/currency-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { EmpStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { criarEmpreendimentoRemoto } from "@/lib/catalogo-api";
-import { brl0, formatCNPJ, num, pct } from "@/lib/format";
+import { brl, formatCNPJ, num, pct } from "@/lib/format";
 import {
   DEFAULT_REGRAS_INADIMPLENCIA,
   empTotais,
@@ -192,10 +193,10 @@ function EmpreendimentosList() {
                           cadastradas / previstas
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{brl0(e.valorTotal)}</TableCell>
-                      <TableCell className="text-right">{brl0(t.vendido)}</TableCell>
-                      <TableCell className="text-right text-success">{brl0(t.recebido)}</TableCell>
-                      <TableCell className="text-right">{brl0(t.saldo)}</TableCell>
+                      <TableCell className="text-right font-medium">{brl(e.valorTotal)}</TableCell>
+                      <TableCell className="text-right">{brl(t.vendido)}</TableCell>
+                      <TableCell className="text-right text-success">{brl(t.recebido)}</TableCell>
+                      <TableCell className="text-right">{brl(t.saldo)}</TableCell>
                       <TableCell className="w-40">
                         <div className="flex items-center gap-2">
                           <Progress value={vendidoPct} className="h-1.5" />
@@ -245,7 +246,7 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
   const [areaTotal, setAreaTotal] = useState("");
   const [tipo, setTipo] = useState<EmpreendimentoTipo>("loteamento");
   const [matriculasCount, setMatriculasCount] = useState("");
-  const [valorTotal, setValorTotal] = useState("");
+  const [valorTotal, setValorTotal] = useState(0);
   const [socioPct, setSocioPct] = useState("");
   const [empresaPct, setEmpresaPct] = useState("");
   const [corretorPct, setCorretorPct] = useState("");
@@ -303,7 +304,7 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
       areaTotal: Number(areaTotal) || 0,
       tipo,
       matriculasCount: Number(matriculasCount) || 0,
-      valorTotal: Number(valorTotal) || 0,
+      valorTotal,
       socioPct: socio,
       empresaPct: empresa,
       corretorPct: Number(corretorPct) || 0,
@@ -393,11 +394,10 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
         </div>
         <div className="sm:col-span-2">
           <Label>VGV / valor total estimado (R$)</Label>
-          <Input
-            type="number"
-            min="0"
+          <CurrencyInput
             value={valorTotal}
-            onChange={(e) => setValorTotal(e.target.value)}
+            onValueChange={setValorTotal}
+            placeholder="Ex.: 2.000.000,00"
           />
         </div>
 
