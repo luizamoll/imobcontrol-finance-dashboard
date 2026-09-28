@@ -105,6 +105,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "icon", href: "/imobcontrol-mark.svg", type: "image/svg+xml" },
     ],
   }),
   shellComponent: RootShell,
