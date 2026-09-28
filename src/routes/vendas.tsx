@@ -7,6 +7,7 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { apiJson } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/currency-input";
+import { RegrasInadimplenciaForm } from "@/components/regras-inadimplencia-form";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -43,6 +44,7 @@ import {
   vendaTotais,
   type PagamentoItem,
   type PagamentoTipo,
+  type RegrasInadimplencia,
 } from "@/lib/store";
 import { addMonths, brl, formatDate, todayISO, uid } from "@/lib/format";
 import { useTenant } from "@/lib/tenant";
@@ -208,6 +210,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [corretorPct, setCorretorPct] = useState("0");
   const [repasseComissaoPct, setRepasseComissaoPct] = useState("50");
   const [comissaoSobreAcrescimos, setComissaoSobreAcrescimos] = useState("nao");
+  const [regrasInadimplencia, setRegrasInadimplencia] =
+    useState<RegrasInadimplencia | null>(null);
   const [obs, setObs] = useState("");
   const [items, setItems] = useState<PagamentoItem[]>([]);
 
@@ -374,6 +378,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         corretorPct: pctCorretor,
         repasseComissaoPct: pctRepasse,
         comissaoSobreAcrescimos: comissaoSobreAcrescimos === "sim",
+        regrasInadimplencia:
+          regrasInadimplencia ?? regraSelecionada?.regras.inadimplencia,
         observacoes: obs,
         composicao: items,
       });
@@ -408,6 +414,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
               setCorretorPct("0");
               setRepasseComissaoPct("50");
               setComissaoSobreAcrescimos("nao");
+              setRegrasInadimplencia(null);
               setItems([]);
             }}
           >
@@ -444,6 +451,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                 setComissaoSobreAcrescimos(
                   efetiva.regras.comissaoSobreAcrescimos ? "sim" : "nao",
                 );
+                setRegrasInadimplencia({ ...efetiva.regras.inadimplencia });
               }
             }}
             disabled={!empId || matriculas.length === 0}
@@ -581,6 +589,36 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
           </p>
         </div>
       </div>
+
+      {regrasInadimplencia && (
+        <div className="rounded-lg border border-border/70 bg-muted/10 p-4">
+          <div className="mb-4 flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+            <div>
+              <h3 className="text-sm font-semibold">Juros, correção e multa desta venda</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                A venda começa com a regra do empreendimento/unidade, mas você pode alterar somente este
+                contrato. Essas condições continuam editáveis depois e recalculam as parcelas ainda abertas.
+              </p>
+            </div>
+            {regraSelecionada && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setRegrasInadimplencia({ ...regraSelecionada.regras.inadimplencia })
+                }
+              >
+                Restaurar padrão
+              </Button>
+            )}
+          </div>
+          <RegrasInadimplenciaForm
+            value={regrasInadimplencia}
+            onChange={setRegrasInadimplencia}
+          />
+        </div>
+      )}
 
       <Separator className="my-2" />
 
