@@ -8,6 +8,8 @@ import {
 } from "react";
 import { addMonths, todayISO, uid } from "./format";
 import { useAuth } from "./auth";
+import { useTenant } from "./tenant";
+import { carregarCatalogo } from "./catalogo-api";
 
 // ---------- Types ----------
 export type EmpStatus = "planejamento" | "lancamento" | "em_vendas" | "concluido";
@@ -123,6 +125,8 @@ export interface Empreendimento {
   inadimplencia?: RegrasInadimplencia;
   observacoes?: string;
   status: EmpStatus;
+  /** Versão do registro persistido no servidor, quando já sincronizado. */
+  versao?: number;
 }
 
 export interface Quadra {
@@ -132,6 +136,7 @@ export interface Quadra {
   descricao?: string;
   /** Quando ausente, herda as regras do empreendimento. */
   regras?: RegrasOperacao;
+  versao?: number;
 }
 
 export interface Matricula {
@@ -149,6 +154,7 @@ export interface Matricula {
   regras?: RegrasOperacao;
   compradorNome?: string;
   vendaId?: string;
+  versao?: number;
 }
 
 export interface Venda {
@@ -253,7 +259,14 @@ export interface State {
   trimestres: TrimestreItem[];
 }
 
-const DATA_KEY = "imobcontrol.v2";
+const LEGACY_DATA_KEY = "imobcontrol.v2";
+
+function dataKey(empresaId: number | null) {
+  return empresaId == null ? null : `imobcontrol.v2.empresa.${empresaId}`;
+}
+
+// O dado antigo permanece intacto para uma migração assistida posterior.
+void LEGACY_DATA_KEY;
 
 const DEFAULT_CONFIG: Config = {
   corretorPctPadrao: 0,
@@ -297,17 +310,19 @@ function pareceSeedAntigo(state: State) {
   return state.empreendimentos.some((e) => nomesDemo.has(e.nome));
 }
 
-function loadState(): State {
+function loadState(empresaId: number | null): State {
   if (typeof window === "undefined") return makeEmptyState();
+  const key = dataKey(empresaId);
+  if (!key) return makeEmptyState();
 
   try {
-    const raw = window.localStorage.getItem(DATA_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return makeEmptyState();
 
     const parsed = JSON.parse(raw) as State;
     if (pareceSeedAntigo(parsed)) {
       const empty = makeEmptyState();
-      window.localStorage.setItem(DATA_KEY, JSON.stringify(empty));
+      window.localStorage.setItem(key, JSON.stringify(empty));
       return empty;
     }
 
@@ -518,23 +533,50 @@ function vendaQuitadaAposPagamento(parcelas: Parcela[], vendaId: string, parcela
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { usuario } = useAuth();
+  const { empresaAtualId } = useTenant();
   const usuarioNome = usuario?.nome?.trim() || "Usuário autenticado";
   const [state, setStateRaw] = useState<State>(() => makeEmptyState());
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setStateRaw(loadState());
+    setHydrated(false);
+    setStateRaw(loadState(empresaAtualId));
     setHydrated(true);
-  }, []);
+  }, [empresaAtualId]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || empresaAtualId == null) return;
+    const key = dataKey(empresaAtualId);
+    if (!key) return;
     try {
-      window.localStorage.setItem(DATA_KEY, JSON.stringify(state));
+      window.localStorage.setItem(key, JSON.stringify(state));
     } catch {
-      // Falha de persistência local não deve derrubar a interface.
+      // O cache local não é a fonte de verdade e não deve derrubar a interface.
     }
-  }, [state, hydrated]);
+  }, [state, hydrated, empresaAtualId]);
+
+  useEffect(() => {
+    if (empresaAtualId == null) return;
+    let cancelado = false;
+
+    void carregarCatalogo(empresaAtualId)
+      .then((catalogo) => {
+        if (cancelado) return;
+        setStateRaw((atual) => ({
+          ...atual,
+          empreendimentos: catalogo.empreendimentos,
+          quadras: catalogo.quadras,
+          matriculas: catalogo.matriculas,
+        }));
+      })
+      .catch(() => {
+        // Enquanto a API não estiver disponível, mantém apenas o cache isolado da empresa.
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId]);
 
   const api = useMemo<Ctx>(() => {
     const setState = (updater: (s: State) => State) => setStateRaw(updater);
