@@ -1,0 +1,2 @@
+ALTER TABLE usuarios
+    ADD COLUMN versao BIGINT NOT NULL DEFAULT 0;
