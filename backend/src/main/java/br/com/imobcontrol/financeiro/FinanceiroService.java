@@ -253,14 +253,21 @@ public class FinanceiroService {
         BigDecimal socioPct = decimal(regras, "socioPct", BigDecimal.ZERO);
 
         BigDecimal imposto = porcentagem(recebido, aliquota);
+        BigDecimal comissaoTotal = porcentagem(venda.getValorTotal(), venda.getCorretorPct());
+        BigDecimal comissaoJaPaga = movimentos
+                .findAllByEmpresaIdAndVendaIdAndEstornadoFalseOrderByDataMovimentoAscIdAsc(
+                        ctx.empresaId(), venda.getId()
+                )
+                .stream()
+                .map(Movimento::getComissaoPaga)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal saldoComissaoAntes = maxZero(comissaoTotal.subtract(comissaoJaPaga));
         BigDecimal acrescimos = maxZero(recebido.subtract(parcela.getValor()));
-
-        // A comissão é calculada sobre cada valor efetivamente recebido.
-        // Ex.: pagamento de R$ 1.000 com repasse de 50% => R$ 500 de comissão.
-        // Não existe mais teto baseado em percentual do valor total da venda.
-        BigDecimal baseComissao = recebido;
+        BigDecimal baseComissao = venda.isComissaoSobreAcrescimos()
+                ? recebido
+                : recebido.min(parcela.getValor());
         BigDecimal comissaoTeorica = porcentagem(baseComissao, venda.getRepasseComissaoPct());
-        BigDecimal comissao = comissaoTeorica;
+        BigDecimal comissao = comissaoTeorica.min(saldoComissaoAntes);
         BigDecimal limiteDepoisImposto = maxZero(recebido.subtract(imposto));
         if (comissao.compareTo(limiteDepoisImposto) > 0) comissao = limiteDepoisImposto;
 
@@ -298,8 +305,7 @@ public class FinanceiroService {
         mov.setComissaoSobreAcrescimosAplicada(venda.isComissaoSobreAcrescimos());
         mov.setAcrescimosRecebidos(acrescimos);
         mov.setComissaoTeorica(comissaoTeorica);
-        // Campo legado mantido por compatibilidade; a comissão agora é por recebimento e não possui saldo/teto.
-        mov.setSaldoComissaoApos(BigDecimal.ZERO);
+        mov.setSaldoComissaoApos(maxZero(saldoComissaoAntes.subtract(comissao)));
         Movimento salvo = movimentos.saveAndFlush(mov);
 
         parcela.setValorPago(recebido);
