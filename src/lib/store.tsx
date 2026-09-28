@@ -92,6 +92,10 @@ export interface RegrasContrato {
   empresaPct: number;
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
+  /** Percentual de cada recebimento usado para quitar a comissão contratada. */
+  repasseComissaoPct: number;
+  /** Quando true, multa/juros/correção também entram na base do repasse. */
+  comissaoSobreAcrescimos: boolean;
   inadimplencia: RegrasInadimplencia;
 }
 
@@ -114,6 +118,8 @@ export interface Empreendimento {
   aliquotaTributaria: number;
   entradaPctCorretor?: number;
   parcelasPctCorretor?: number;
+  repasseComissaoPct?: number;
+  comissaoSobreAcrescimos?: boolean;
   inadimplencia?: RegrasInadimplencia;
   observacoes?: string;
   status: EmpStatus;
@@ -154,6 +160,8 @@ export interface Venda {
   dataContrato: string;
   corretorNome: string;
   corretorPct: number;
+  repasseComissaoPct?: number;
+  comissaoSobreAcrescimos?: boolean;
   observacoes?: string;
   status: VendaStatus;
   composicao: PagamentoItem[];
@@ -199,11 +207,19 @@ export interface Movimento {
   aliquotaTributariaAplicada?: number;
   empresaPctAplicada?: number;
   socioPctAplicada?: number;
+  comissaoBaseCalculo?: number;
+  comissaoRepassePctAplicado?: number;
+  comissaoSobreAcrescimosAplicada?: boolean;
+  acrescimosRecebidos?: number;
+  comissaoTeorica?: number;
+  saldoComissaoApos?: number;
 }
 
 /** Compatibilidade com dados locais antigos e cadastros auxiliares. */
 export interface Config extends RegrasInadimplencia {
   corretorPctPadrao: number;
+  repasseComissaoPctPadrao: number;
+  comissaoSobreAcrescimosPadrao: boolean;
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
   aliquotaPadrao: number;
@@ -241,6 +257,8 @@ const DATA_KEY = "imobcontrol.v2";
 
 const DEFAULT_CONFIG: Config = {
   corretorPctPadrao: 0,
+  repasseComissaoPctPadrao: 50,
+  comissaoSobreAcrescimosPadrao: false,
   entradaPctCorretor: 0,
   parcelasPctCorretor: 0,
   aliquotaPadrao: 0,
@@ -326,6 +344,8 @@ function snapshotRegrasContrato(regra: RegrasOperacao): RegrasContrato {
     empresaPct: regra.empresaPct,
     entradaPctCorretor: regra.corretorPct,
     parcelasPctCorretor: regra.corretorPct,
+    repasseComissaoPct: regra.repasseComissaoPct ?? 50,
+    comissaoSobreAcrescimos: regra.comissaoSobreAcrescimos ?? false,
     inadimplencia: snapshotInadimplencia(regra.inadimplencia),
   };
 }
@@ -341,6 +361,9 @@ export function regrasEfetivasEmpreendimento(
     corretorPct: emp.corretorPct,
     entradaPctCorretor: emp.corretorPct,
     parcelasPctCorretor: emp.corretorPct,
+    repasseComissaoPct: emp.repasseComissaoPct ?? cfg.repasseComissaoPctPadrao ?? 50,
+    comissaoSobreAcrescimos:
+      emp.comissaoSobreAcrescimos ?? cfg.comissaoSobreAcrescimosPadrao ?? false,
     inadimplencia: snapshotInadimplencia(emp.inadimplencia ?? cfg),
   };
 }
@@ -367,7 +390,25 @@ export function regrasEfetivasUnidade(
 }
 
 function regrasContrato(venda: Venda, emp: Empreendimento, cfg: Config): RegrasContrato {
-  return venda.regras ?? snapshotRegrasContrato(regrasEfetivasEmpreendimento(emp, cfg));
+  const base = venda.regras ?? snapshotRegrasContrato(regrasEfetivasEmpreendimento(emp, cfg));
+  return {
+    ...base,
+    repasseComissaoPct:
+      venda.repasseComissaoPct ?? base.repasseComissaoPct ?? cfg.repasseComissaoPctPadrao ?? 50,
+    comissaoSobreAcrescimos:
+      venda.comissaoSobreAcrescimos ??
+      base.comissaoSobreAcrescimos ??
+      cfg.comissaoSobreAcrescimosPadrao ??
+      false,
+  };
+}
+
+function repasseComissaoPct(venda: Venda, regra?: RegrasContrato) {
+  return Math.max(0, venda.repasseComissaoPct ?? regra?.repasseComissaoPct ?? 50);
+}
+
+function incluiAcrescimosNaComissao(venda: Venda, regra?: RegrasContrato) {
+  return venda.comissaoSobreAcrescimos ?? regra?.comissaoSobreAcrescimos ?? false;
 }
 
 // ---------- Context ----------
@@ -382,6 +423,12 @@ interface Ctx {
   addMatricula: (m: Omit<Matricula, "id">) => Matricula;
   updateMatricula: (id: string, patch: Partial<Matricula>) => void;
   addVenda: (v: Omit<Venda, "id" | "status" | "regras"> & { status?: VendaStatus }) => Venda;
+  updateVenda: (
+    id: string,
+    patch: Partial<Pick<Venda,
+      "compradorNome" | "dataContrato" | "corretorNome" | "corretorPct" |
+      "repasseComissaoPct" | "comissaoSobreAcrescimos" | "observacoes">>
+  ) => void;
   receberParcela: (id: string, valorRecebido?: number, data?: string) => void;
   reverterParcela: (id: string) => void;
   marcarParcelaPaga: (id: string, dataPagamento?: string) => void;
@@ -411,10 +458,16 @@ function computeReceber(
     .filter((m) => m.vendaId === venda.id)
     .reduce((a, m) => a + m.comissaoPaga, 0);
   const restanteComissao = Math.max(0, comissaoTotal - jaPago);
-  const pctCor = Math.max(0, venda.corretorPct || 0);
 
-  let comissaoUsada = valorRecebido * (pctCor / 100);
-  if (comissaoUsada > restanteComissao) comissaoUsada = restanteComissao;
+  const repassePct = repasseComissaoPct(venda, regra);
+  const sobreAcrescimos = incluiAcrescimosNaComissao(venda, regra);
+  const acrescimosRecebidos = Math.max(0, valorRecebido - parcela.valor);
+  const baseComissao = sobreAcrescimos
+    ? valorRecebido
+    : Math.min(valorRecebido, parcela.valor);
+  const comissaoTeorica = baseComissao * (repassePct / 100);
+
+  let comissaoUsada = Math.min(comissaoTeorica, restanteComissao);
   if (comissaoUsada + imposto > valorRecebido) {
     comissaoUsada = Math.max(0, valorRecebido - imposto);
   }
@@ -444,6 +497,12 @@ function computeReceber(
     aliquotaTributariaAplicada: regra.aliquotaTributaria,
     empresaPctAplicada: regra.empresaPct,
     socioPctAplicada: regra.socioPct,
+    comissaoBaseCalculo: baseComissao,
+    comissaoRepassePctAplicado: repassePct,
+    comissaoSobreAcrescimosAplicada: sobreAcrescimos,
+    acrescimosRecebidos,
+    comissaoTeorica,
+    saldoComissaoApos: Math.max(0, restanteComissao - comissaoUsada),
   };
 
   return mov;
@@ -573,6 +632,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }));
         return newVenda;
       },
+      updateVenda: (id, patch) =>
+        setStateRaw((s) => {
+          const atual = s.vendas.find((v) => v.id === id);
+          if (!atual) return s;
+
+          const proxima: Venda = { ...atual, ...patch };
+          return {
+            ...s,
+            vendas: s.vendas.map((v) => (v.id === id ? proxima : v)),
+            parcelas: s.parcelas.map((p) =>
+              p.vendaId === id && patch.compradorNome
+                ? { ...p, compradorNome: patch.compradorNome }
+                : p,
+            ),
+            matriculas: s.matriculas.map((m) =>
+              m.id === atual.matriculaId && patch.compradorNome
+                ? { ...m, compradorNome: patch.compradorNome }
+                : m,
+            ),
+          };
+        }),
       receberParcela: (id, valorRecebido, dataParam) => {
         setStateRaw((s) => {
           const p = s.parcelas.find((x) => x.id === id);
@@ -738,8 +818,12 @@ export function comissaoDaVenda(
   }[] = [];
   for (const p of ps) {
     if (restante <= 0) break;
-    const pct = Math.max(0, v.corretorPct || 0);
-    let repasse = p.valorPago * (pct / 100);
+    const regra = v.regras;
+    const pct = repasseComissaoPct(v, regra);
+    const baseRepasse = incluiAcrescimosNaComissao(v, regra)
+      ? p.valorPago
+      : Math.min(p.valorPago, p.valor);
+    let repasse = baseRepasse * (pct / 100);
     if (repasse > restante) repasse = restante;
     restante -= repasse;
     repasses.push({
@@ -773,7 +857,7 @@ export function previsaoQuitacaoComissao(
     };
   }
 
-  const percentual = Math.max(0, v.corretorPct || 0);
+  const percentual = repasseComissaoPct(v, v.regras);
   if (percentual <= 0) {
     return {
       quitada: false,
@@ -803,7 +887,10 @@ export function previsaoQuitacaoComissao(
   let parcelaQuitacao: Parcela | undefined;
 
   for (const p of pendentes) {
-    const repassePrevisto = Math.max(0, p.valor) * (percentual / 100);
+    const valorBase = incluiAcrescimosNaComissao(v, v.regras)
+      ? inadimplenciaCalc(p, cfg, new Date()).atualizado
+      : Math.max(0, p.valor);
+    const repassePrevisto = valorBase * (percentual / 100);
     if (repassePrevisto <= 0) continue;
 
     recebimentosRestantes += 1;
