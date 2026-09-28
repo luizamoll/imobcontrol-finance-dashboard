@@ -593,6 +593,12 @@ public class FinanceiroService {
     }
 
     private JsonNode regrasInadimplenciaAtuais(Parcela parcela) {
+        if (("paga".equalsIgnoreCase(parcela.getStatus())
+                || "cancelada".equalsIgnoreCase(parcela.getStatus()))
+                && texto(parcela.getRegrasInadimplenciaJson()) != null) {
+            return ler(parcela.getRegrasInadimplenciaJson());
+        }
+
         Venda venda = venda(parcela.getEmpresaId(), parcela.getVendaId());
         JsonNode inadimplencia = ler(venda.getRegrasJson()).path("inadimplencia");
         if (inadimplencia.isMissingNode() || inadimplencia.isNull()) {
