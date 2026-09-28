@@ -3,6 +3,7 @@ import { ArrowLeft, Building2, Layers3, Pencil, Plus, Trash2 } from "lucide-reac
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { CurrencyInput } from "@/components/currency-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { RegrasOperacaoForm } from "@/components/regras-operacao-form";
 import { EmpStatusBadge, MatriculaStatusBadge } from "@/components/status-badges";
@@ -44,7 +45,7 @@ import {
   criarQuadraRemota,
   criarUnidadeRemota,
 } from "@/lib/catalogo-api";
-import { brl0, formatCNPJ, num, pct } from "@/lib/format";
+import { brl, formatCNPJ, num, pct } from "@/lib/format";
 import {
   empTotais,
   regrasEfetivasEmpreendimento,
@@ -209,10 +210,10 @@ function EmpreendimentoDetail() {
       </Dialog>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatBox label="VGV" value={brl0(emp.valorTotal)} />
-        <StatBox label="Vendido" value={brl0(t.vendido)} sub={pct(vendidoPct)} />
-        <StatBox label="Recebido" value={brl0(t.recebido)} />
-        <StatBox label="Saldo a receber" value={brl0(t.saldo)} />
+        <StatBox label="VGV" value={brl(emp.valorTotal)} />
+        <StatBox label="Vendido" value={brl(t.vendido)} sub={pct(vendidoPct)} />
+        <StatBox label="Recebido" value={brl(t.recebido)} />
+        <StatBox label="Saldo a receber" value={brl(t.saldo)} />
       </div>
 
       <Card className="border-border/70">
@@ -440,7 +441,7 @@ function EmpreendimentoDetail() {
                     <TableCell className="text-sm text-muted-foreground">
                       {quadra?.nome || "Sem quadra"}
                     </TableCell>
-                    <TableCell className="text-right">{brl0(m.valorVenda)}</TableCell>
+                    <TableCell className="text-right">{brl(m.valorVenda)}</TableCell>
                     <TableCell className="text-sm">{origemRegra(efetiva.origem, quadra, emp)}</TableCell>
                     <TableCell>
                       <MatriculaStatusBadge status={m.status} />
@@ -627,7 +628,7 @@ function NewUnidadeDialog({
   const [numero, setNumero] = useState("");
   const [unidade, setUnidade] = useState("");
   const [area, setArea] = useState("");
-  const [valor, setValor] = useState("");
+  const [valor, setValor] = useState(0);
   const [status, setStatus] = useState<MatriculaStatus>("disponivel");
   const [quadraId, setQuadraId] = useState("sem_quadra");
   const [regraPropria, setRegraPropria] = useState(false);
@@ -650,7 +651,7 @@ function NewUnidadeDialog({
       numero: numero.trim(),
       unidade: unidade.trim(),
       area: Number(area) || 0,
-      valorVenda: Number(valor) || 0,
+      valorVenda: valor,
       status,
       quadraId: quadraId === "sem_quadra" ? undefined : quadraId,
       regras: regraPropria ? regras : undefined,
@@ -709,7 +710,7 @@ function NewUnidadeDialog({
         </div>
         <div>
           <Label>Valor de venda (R$)</Label>
-          <Input type="number" min="0" value={valor} onChange={(e) => setValor(e.target.value)} />
+          <CurrencyInput value={valor} onValueChange={setValor} placeholder="Ex.: 100.000,00" />
         </div>
       </div>
       <div className="rounded-lg border border-border/70 p-4">
@@ -856,7 +857,7 @@ function EditEmpreendimentoDialog({
   const [areaTotal, setAreaTotal] = useState(String(emp.areaTotal || ""));
   const [tipo, setTipo] = useState<EmpreendimentoTipo>(emp.tipo);
   const [matriculasCount, setMatriculasCount] = useState(String(emp.matriculasCount || ""));
-  const [valorTotal, setValorTotal] = useState(String(emp.valorTotal || ""));
+  const [valorTotal, setValorTotal] = useState(emp.valorTotal || 0);
   const [observacoes, setObservacoes] = useState(emp.observacoes || "");
   const [status, setStatus] = useState<EmpStatus>(emp.status);
   const [regras, setRegras] = useState<RegrasOperacao>(cloneRegras(regrasAtuais));
@@ -877,7 +878,7 @@ function EditEmpreendimentoDialog({
       areaTotal: Number(areaTotal) || 0,
       tipo,
       matriculasCount: Number(matriculasCount) || 0,
-      valorTotal: Number(valorTotal) || 0,
+      valorTotal,
       socioPct: regras.socioPct,
       empresaPct: regras.empresaPct,
       corretorPct: regras.corretorPct,
@@ -948,7 +949,7 @@ function EditEmpreendimentoDialog({
         </div>
         <div className="sm:col-span-2">
           <Label>VGV / valor total estimado (R$)</Label>
-          <Input type="number" min="0" value={valorTotal} onChange={(e) => setValorTotal(e.target.value)} />
+          <CurrencyInput value={valorTotal} onValueChange={setValorTotal} placeholder="Ex.: 2.000.000,00" />
         </div>
       </div>
       <RegrasOperacaoForm
