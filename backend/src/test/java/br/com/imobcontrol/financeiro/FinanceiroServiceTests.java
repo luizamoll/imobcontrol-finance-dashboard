@@ -39,7 +39,7 @@ class FinanceiroServiceTests {
     @Autowired ClienteRepository clientes;
 
     @Test
-    void corretorRecebeMetadeDeCadaValorEfetivamentePagoSemTetoDeCincoPorCento() {
+    void corretorRecebeMetadeDosPagamentosAteAtingirTetoDeCincoPorCento() {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
         Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
@@ -97,9 +97,9 @@ class FinanceiroServiceTests {
         );
 
         assertDinheiro("2.00", primeiro.comissaoPaga());
-        assertDinheiro("12.00", segundo.comissaoPaga());
-        assertDinheiro("12.00", terceiro.comissaoPaga());
-        assertDinheiro("0.00", primeiro.saldoComissaoApos());
+        assertDinheiro("3.00", segundo.comissaoPaga());
+        assertDinheiro("0.00", terceiro.comissaoPaga());
+        assertDinheiro("3.00", primeiro.saldoComissaoApos());
         assertDinheiro("0.00", segundo.saldoComissaoApos());
         assertDinheiro("0.00", terceiro.saldoComissaoApos());
         assertDinheiro("50.00", primeiro.comissaoRepassePctAplicado());
@@ -241,7 +241,7 @@ class FinanceiroServiceTests {
         );
 
         assertDinheiro("106.00", movimento.valorRecebido());
-        assertDinheiro("53.00", movimento.comissaoPaga());
+        assertDinheiro("5.00", movimento.comissaoPaga());
     }
 
     @Test
