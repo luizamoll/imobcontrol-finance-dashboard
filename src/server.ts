@@ -18,6 +18,48 @@ async function getServerEntry(): Promise<ServerEntry> {
   return serverEntryPromise;
 }
 
+function isBackendPath(url: URL) {
+  return url.pathname.startsWith("/api/") || url.pathname === "/actuator/health";
+}
+
+async function proxyBackendRequest(request: Request): Promise<Response | null> {
+  const requestUrl = new URL(request.url);
+  if (!isBackendPath(requestUrl)) return null;
+
+  const upstream = process.env.API_UPSTREAM?.trim();
+  if (!upstream) {
+    return new Response(
+      JSON.stringify({ erro: "API de produção não configurada" }),
+      {
+        status: 503,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      },
+    );
+  }
+
+  const target = new URL(
+    requestUrl.pathname + requestUrl.search,
+    upstream.endsWith("/") ? upstream : upstream + "/",
+  );
+
+  const headers = new Headers(request.headers);
+  headers.delete("host");
+  headers.delete("content-length");
+
+  const method = request.method.toUpperCase();
+  const init: RequestInit = {
+    method,
+    headers,
+    redirect: "manual",
+  };
+
+  if (method !== "GET" && method !== "HEAD") {
+    init.body = await request.arrayBuffer();
+  }
+
+  return fetch(target, init);
+}
+
 // h3 swallows in-handler throws into a normal 500 Response with body
 // {"unhandled":true,"message":"HTTPError"} — try/catch alone never fires for those.
 async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
@@ -47,6 +89,9 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const backendResponse = await proxyBackendRequest(request);
+      if (backendResponse) return backendResponse;
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
