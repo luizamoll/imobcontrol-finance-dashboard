@@ -37,6 +37,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  atualizarEmpreendimentoRemoto,
+  atualizarQuadraRemota,
+  atualizarUnidadeRemota,
+  criarQuadraRemota,
+  criarUnidadeRemota,
+} from "@/lib/catalogo-api";
 import { brl0, formatCNPJ, num, pct } from "@/lib/format";
 import {
   empTotais,
@@ -51,6 +58,7 @@ import {
   type Quadra,
   type RegrasOperacao,
 } from "@/lib/store";
+import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/empreendimentos/$id")({
   component: EmpreendimentoDetail,
@@ -65,15 +73,8 @@ export const Route = createFileRoute("/empreendimentos/$id")({
 function EmpreendimentoDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const {
-    state,
-    setState,
-    addQuadra,
-    updateQuadra,
-    addMatricula,
-    updateMatricula,
-    updateEmpreendimento,
-  } = useStore();
+  const { state, setState } = useStore();
+  const { empresaAtualId } = useTenant();
   const emp = state.empreendimentos.find((e) => e.id === id);
 
   const [unitOpen, setUnitOpen] = useState(false);
@@ -105,15 +106,11 @@ function EmpreendimentoDetail() {
       return;
     }
 
-    setState((s) => ({
-      ...s,
-      empreendimentos: s.empreendimentos.filter((e) => e.id !== emp.id),
-      quadras: s.quadras.filter((q) => q.empreendimentoId !== emp.id),
-      matriculas: s.matriculas.filter((m) => m.empreendimentoId !== emp.id),
-    }));
-    toast.success(`Empreendimento "${emp.nome}" excluído`);
+    toast.info("Exclusão temporariamente bloqueada nesta atualização", {
+      description:
+        "Agora o catálogo usa o banco compartilhado. A exclusão será liberada com a regra de auditoria financeira para evitar apagar dados do cliente por engano.",
+    });
     setDeleteOpen(false);
-    navigate({ to: "/empreendimentos" });
   };
 
   return (
@@ -147,10 +144,29 @@ function EmpreendimentoDetail() {
         <EditEmpreendimentoDialog
           emp={emp}
           regrasAtuais={regrasEmp}
-          onSave={(patch) => {
-            updateEmpreendimento(emp.id, patch);
-            toast.success("Empreendimento atualizado");
-            setEditOpen(false);
+          onSave={async (patch) => {
+            if (!empresaAtualId) return;
+            try {
+              const salvo = await atualizarEmpreendimentoRemoto(
+                empresaAtualId,
+                emp,
+                patch,
+              );
+              setState((s) => ({
+                ...s,
+                empreendimentos: s.empreendimentos.map((item) =>
+                  item.id === emp.id ? salvo : item,
+                ),
+              }));
+              toast.success("Empreendimento atualizado");
+              setEditOpen(false);
+            } catch (error) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Não foi possível atualizar o empreendimento",
+              );
+            }
           }}
         />
       </Dialog>
@@ -254,10 +270,21 @@ function EmpreendimentoDetail() {
             <QuadraDialog
               empreendimento={emp}
               regrasBase={regrasEmp}
-              onSave={(q) => {
-                addQuadra({ ...q, empreendimentoId: emp.id });
-                toast.success("Quadra cadastrada");
-                setQuadraOpen(false);
+              onSave={async (q) => {
+                if (!empresaAtualId) return;
+                try {
+                  const criada = await criarQuadraRemota(empresaAtualId, {
+                    ...q,
+                    empreendimentoId: emp.id,
+                  });
+                  setState((s) => ({ ...s, quadras: [...s.quadras, criada] }));
+                  toast.success("Quadra cadastrada");
+                  setQuadraOpen(false);
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error ? error.message : "Não foi possível cadastrar a quadra",
+                  );
+                }
               }}
             />
           </Dialog>
@@ -311,10 +338,27 @@ function EmpreendimentoDetail() {
             empreendimento={emp}
             regrasBase={regrasEmp}
             quadra={editQuadra}
-            onSave={(patch) => {
-              updateQuadra(editQuadra.id, patch);
-              toast.success("Quadra atualizada");
-              setEditQuadra(null);
+            onSave={async (patch) => {
+              if (!empresaAtualId) return;
+              try {
+                const salva = await atualizarQuadraRemota(
+                  empresaAtualId,
+                  editQuadra,
+                  patch,
+                );
+                setState((s) => ({
+                  ...s,
+                  quadras: s.quadras.map((q) =>
+                    q.id === editQuadra.id ? salva : q,
+                  ),
+                }));
+                toast.success("Quadra atualizada");
+                setEditQuadra(null);
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : "Não foi possível atualizar a quadra",
+                );
+              }
             }}
           />
         )}
@@ -340,10 +384,24 @@ function EmpreendimentoDetail() {
               empreendimento={emp}
               quadras={quadras}
               regrasEmpreendimento={regrasEmp}
-              onSave={(m) => {
-                addMatricula({ ...m, empreendimentoId: emp.id });
-                toast.success("Unidade cadastrada");
-                setUnitOpen(false);
+              onSave={async (m) => {
+                if (!empresaAtualId) return;
+                try {
+                  const criada = await criarUnidadeRemota(empresaAtualId, {
+                    ...m,
+                    empreendimentoId: emp.id,
+                  });
+                  setState((s) => ({
+                    ...s,
+                    matriculas: [...s.matriculas, criada],
+                  }));
+                  toast.success("Unidade cadastrada");
+                  setUnitOpen(false);
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error ? error.message : "Não foi possível cadastrar a unidade",
+                  );
+                }
               }}
             />
           </Dialog>
@@ -407,10 +465,27 @@ function EmpreendimentoDetail() {
             unidade={editUnidade}
             quadras={quadras}
             regrasEmpreendimento={regrasEmp}
-            onSave={(patch) => {
-              updateMatricula(editUnidade.id, patch);
-              toast.success("Unidade atualizada");
-              setEditUnidade(null);
+            onSave={async (patch) => {
+              if (!empresaAtualId) return;
+              try {
+                const salva = await atualizarUnidadeRemota(
+                  empresaAtualId,
+                  editUnidade,
+                  patch,
+                );
+                setState((s) => ({
+                  ...s,
+                  matriculas: s.matriculas.map((m) =>
+                    m.id === editUnidade.id ? salva : m,
+                  ),
+                }));
+                toast.success("Unidade atualizada");
+                setEditUnidade(null);
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : "Não foi possível atualizar a unidade",
+                );
+              }
             }}
           />
         )}
