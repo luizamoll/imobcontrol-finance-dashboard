@@ -8,13 +8,13 @@ import {
   Users,
   FileBarChart,
   Settings,
-  CircleDollarSign,
   ContactRound,
   Inbox,
   AlertOctagon
 } from "lucide-react";
 
 import { useTenant } from "@/lib/tenant";
+import { ImobControlMark } from "@/components/imobcontrol-brand";
 
 import {
   Sidebar,
@@ -63,7 +63,7 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <CircleDollarSign className="h-5 w-5" />
+            <ImobControlMark className="h-6 w-6" inverse />
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
