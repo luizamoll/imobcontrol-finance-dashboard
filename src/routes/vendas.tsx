@@ -190,6 +190,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [dataContrato, setDataContrato] = useState(todayISO());
   const [corretor, setCorretor] = useState("");
   const [corretorPct, setCorretorPct] = useState("0");
+  const [repasseComissaoPct, setRepasseComissaoPct] = useState("50");
+  const [comissaoSobreAcrescimos, setComissaoSobreAcrescimos] = useState("nao");
   const [obs, setObs] = useState("");
   const [items, setItems] = useState<PagamentoItem[]>([]);
 
@@ -259,6 +261,11 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       return;
     }
     const pctCorretor = Number(corretorPct) || 0;
+    const pctRepasse = Number(repasseComissaoPct) || 0;
+    if (pctCorretor < 0 || pctCorretor > 100 || pctRepasse < 0 || pctRepasse > 100) {
+      toast.error("Os percentuais da comissão devem ficar entre 0% e 100%");
+      return;
+    }
     if (pctCorretor > 0 && !corretor) {
       toast.error("Selecione o corretor responsável ou informe comissão de 0%");
       return;
@@ -272,6 +279,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       dataContrato,
       corretorNome: corretor,
       corretorPct: pctCorretor,
+      repasseComissaoPct: pctRepasse,
+      comissaoSobreAcrescimos: comissaoSobreAcrescimos === "sim",
       observacoes: obs,
       composicao: items,
     });
@@ -299,6 +308,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
               setMatId("");
               setValorNegociado("");
               setCorretorPct("0");
+              setRepasseComissaoPct("50");
+              setComissaoSobreAcrescimos("nao");
               setItems([]);
             }}
           >
@@ -331,6 +342,10 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                   state.config,
                 );
                 setCorretorPct(String(efetiva.regras.corretorPct));
+                setRepasseComissaoPct(String(efetiva.regras.repasseComissaoPct ?? 50));
+                setComissaoSobreAcrescimos(
+                  efetiva.regras.comissaoSobreAcrescimos ? "sim" : "nao",
+                );
               }
             }}
             disabled={!empId || matriculas.length === 0}
@@ -408,17 +423,46 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <div>
-          <Label>% Comissão do corretor</Label>
+          <Label>% Comissão total sobre a venda</Label>
           <Input
             type="number"
             min="0"
+            max="100"
             step="0.01"
             value={corretorPct}
             onChange={(e) => setCorretorPct(e.target.value)}
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            Carregada da regra efetiva da unidade. Altere somente se este contrato tiver uma exceção
-            específica de comissão.
+            É o teto total devido ao corretor sobre o valor do contrato. Ex.: 5% da venda.
+          </p>
+        </div>
+
+        <div>
+          <Label>% de cada recebimento para quitar a comissão</Label>
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            value={repasseComissaoPct}
+            onChange={(e) => setRepasseComissaoPct(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Ex.: 50% da entrada e de cada parcela, até atingir o teto da comissão total.
+          </p>
+        </div>
+
+        <div>
+          <Label>Aplicar o repasse também sobre multa/juros/correção?</Label>
+          <Select value={comissaoSobreAcrescimos} onValueChange={setComissaoSobreAcrescimos}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nao">Não — somente sobre o principal</SelectItem>
+              <SelectItem value="sim">Sim — sobre o valor total recebido</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Esta escolha fica registrada no contrato e controla a base de cálculo dos repasses.
           </p>
         </div>
       </div>
