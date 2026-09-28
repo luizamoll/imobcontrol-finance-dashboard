@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -40,8 +39,7 @@ public class Unidade {
     @Column(name = "unidade_tipo", length = 30)
     private String unidadeTipo;
 
-    @Lob
-    @Column
+    @Column(columnDefinition = "TEXT")
     private String descricao;
 
     @Column(nullable = false, precision = 19, scale = 4)
@@ -53,8 +51,7 @@ public class Unidade {
     @Column(nullable = false, length = 30)
     private String status;
 
-    @Lob
-    @Column(name = "regras_json")
+    @Column(name = "regras_json", columnDefinition = "TEXT")
     private String regrasJson;
 
     @Version
