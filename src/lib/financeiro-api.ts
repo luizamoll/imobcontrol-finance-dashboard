@@ -265,7 +265,7 @@ function vendaBody(
       primeiroVencimento: item.primeiroVencimento,
       status: item.status ?? "pendente",
     })),
-    regrasInadimplencia: regrasInadimplencia ?? v.regras?.inadimplencia ?? null,
+    regrasInadimplencia: regrasInadimplencia ?? null,
     versao: "versao" in v ? v.versao ?? null : null,
   };
 }
@@ -293,7 +293,12 @@ export async function atualizarVendaRemota(
   const salva = await apiJson<VendaApi>(`/api/vendas/${atual.id}`, {
     method: "PUT",
     empresaId,
-    body: JSON.stringify(vendaBody(proxima, regrasInadimplencia)),
+    body: JSON.stringify(
+      vendaBody(
+        proxima,
+        regrasInadimplencia ?? atual.regras?.inadimplencia,
+      ),
+    ),
   });
   return vendaFromApi(salva);
 }
