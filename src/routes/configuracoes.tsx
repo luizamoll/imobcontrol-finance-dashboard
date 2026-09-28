@@ -83,7 +83,7 @@ function ConfigPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-6 text-muted-foreground">
-              Conta, empresa, usuários e permissões pertencem à administração do sistema. Esses dados não devem interferir silenciosamente nas regras financeiras dos empreendimentos.
+              Gerencie conta, empresa, usuários e permissões na administração do sistema, mantendo as regras financeiras vinculadas ao contexto correto da operação.
             </p>
           </CardContent>
         </Card>
