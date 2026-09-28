@@ -120,7 +120,10 @@ public class FinanceiroService {
 
         validarComposicao(body);
 
-        JsonNode regras = regrasEfetivas(emp, unidade);
+        JsonNode regras = aplicarInadimplencia(
+                regrasEfetivas(emp, unidade),
+                body.regrasInadimplencia()
+        );
         Venda venda = new Venda();
         venda.setEmpresaId(ctx.empresaId());
         venda.setEmpreendimentoId(emp.getId());
@@ -168,6 +171,10 @@ public class FinanceiroService {
         cliente(ctx.empresaId(), body.clienteId());
         boolean possuiRecebimentos =
                 movimentos.existsByEmpresaIdAndVendaIdAndEstornadoFalse(ctx.empresaId(), atual.getId());
+        JsonNode regrasAtualizadas = aplicarInadimplencia(
+                ler(atual.getRegrasJson()),
+                body.regrasInadimplencia()
+        );
 
         if (possuiRecebimentos) {
             if (!Objects.equals(atual.getClienteId(), body.clienteId())
@@ -188,7 +195,7 @@ public class FinanceiroService {
                     ctx.empresaId(),
                     atual,
                     body.composicao(),
-                    ler(atual.getRegrasJson())
+                    regrasAtualizadas
             );
         }
 
@@ -198,9 +205,11 @@ public class FinanceiroService {
         atual.setRepasseComissaoPct(percentual(body.repasseComissaoPct()));
         atual.setComissaoSobreAcrescimos(body.comissaoSobreAcrescimos());
         atual.setObservacoes(texto(body.observacoes()));
+        atual.setRegrasJson(escrever(regrasAtualizadas));
         atual.setAtualizadoPorUsuarioId(ctx.usuarioId());
 
         Venda salva = vendas.saveAndFlush(atual);
+        atualizarRegrasParcelasAbertas(ctx.empresaId(), salva.getId(), regrasAtualizadas);
         registrar(ctx, "VENDA", salva.getId(), "ATUALIZACAO");
         return toVendaResponse(ctx.empresaId(), salva);
     }
@@ -584,14 +593,82 @@ public class FinanceiroService {
     }
 
     private JsonNode regrasInadimplenciaAtuais(Parcela parcela) {
-        Empreendimento emp = empreendimento(parcela.getEmpresaId(), parcela.getEmpreendimentoId());
-        Unidade unidade = unidade(parcela.getEmpresaId(), parcela.getUnidadeId());
-        JsonNode regras = regrasEfetivas(emp, unidade);
-        JsonNode inadimplencia = regras.path("inadimplencia");
+        Venda venda = venda(parcela.getEmpresaId(), parcela.getVendaId());
+        JsonNode inadimplencia = ler(venda.getRegrasJson()).path("inadimplencia");
         if (inadimplencia.isMissingNode() || inadimplencia.isNull()) {
             return json.createObjectNode();
         }
         return inadimplencia;
+    }
+
+    private JsonNode aplicarInadimplencia(JsonNode regrasBase, JsonNode regrasInadimplencia) {
+        ObjectNode regras = regrasBase != null && regrasBase.isObject()
+                ? (ObjectNode) regrasBase.deepCopy()
+                : json.createObjectNode();
+
+        if (regrasInadimplencia == null || regrasInadimplencia.isNull()) {
+            return regras;
+        }
+        validarInadimplencia(regrasInadimplencia);
+        regras.set("inadimplencia", regrasInadimplencia.deepCopy());
+        return regras;
+    }
+
+    private void validarInadimplencia(JsonNode regras) {
+        if (!regras.isObject()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "A regra de juros e correção da venda é inválida"
+            );
+        }
+
+        validarPercentualNaoNegativo(regras, "correcaoPctMes");
+        validarPercentualNaoNegativo(regras, "jurosPctMes");
+        validarPercentualNaoNegativo(regras, "jurosPctDia");
+        validarPercentualNaoNegativo(regras, "moraPct");
+
+        if (regras.has("diasTolerancia") && regras.path("diasTolerancia").asLong() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dias de tolerância inválidos");
+        }
+
+        String jurosTipo = textoJson(regras, "jurosTipo", "mensal");
+        if (!"mensal".equals(jurosTipo) && !"diario".equals(jurosTipo)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Periodicidade de juros inválida");
+        }
+
+        String inicioJuros = textoJson(regras, "inicioJuros", "apos_tolerancia");
+        if (!"vencimento".equals(inicioJuros) && !"apos_tolerancia".equals(inicioJuros)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Início dos juros inválido");
+        }
+    }
+
+    private void validarPercentualNaoNegativo(JsonNode regras, String campo) {
+        JsonNode valor = regras.path(campo);
+        if (!valor.isMissingNode() && !valor.isNull() && valor.decimalValue().signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Percentual de atraso inválido");
+        }
+    }
+
+    private void atualizarRegrasParcelasAbertas(Long empresaId, Long vendaId, JsonNode regras) {
+        JsonNode inadimplencia = regras.path("inadimplencia");
+        String inadJson = inadimplencia.isMissingNode() || inadimplencia.isNull()
+                ? null
+                : escrever(inadimplencia);
+
+        List<Parcela> abertas = parcelas.findAllByEmpresaIdAndVendaIdOrderByVencimentoAscIdAsc(
+                        empresaId,
+                        vendaId
+                )
+                .stream()
+                .filter(p -> !"paga".equalsIgnoreCase(p.getStatus())
+                        && !"cancelada".equalsIgnoreCase(p.getStatus()))
+                .toList();
+
+        for (Parcela parcela : abertas) {
+            parcela.setRegrasInadimplenciaJson(inadJson);
+        }
+        parcelas.saveAll(abertas);
+        parcelas.flush();
     }
 
     private MovimentoResponse toMovimentoResponse(Long empresaId, Movimento m) {
