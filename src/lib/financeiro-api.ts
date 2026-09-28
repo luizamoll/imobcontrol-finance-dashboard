@@ -10,6 +10,15 @@ import type {
 
 type Pagina<T> = { content: T[]; totalElements: number };
 
+export type VendaInput = Omit<Venda, "id" | "status" | "regras" | "versao"> & {
+  status?: Venda["status"];
+  regrasInadimplencia?: RegrasInadimplencia;
+};
+
+export type VendaUpdatePatch = Partial<Venda> & {
+  regrasInadimplencia?: RegrasInadimplencia;
+};
+
 type VendaApi = {
   id: number;
   empresaId: number;
@@ -232,7 +241,10 @@ export async function carregarFinanceiro(empresaId: number) {
   };
 }
 
-function vendaBody(v: Omit<Venda, "id" | "status" | "regras"> & { status?: Venda["status"] }) {
+function vendaBody(
+  v: Omit<Venda, "id" | "status" | "regras"> & { status?: Venda["status"] },
+  regrasInadimplencia?: RegrasInadimplencia,
+) {
   if (!v.clienteId) throw new Error("Selecione um cliente cadastrado");
   return {
     empreendimentoId: Number(v.empreendimentoId),
@@ -253,18 +265,20 @@ function vendaBody(v: Omit<Venda, "id" | "status" | "regras"> & { status?: Venda
       primeiroVencimento: item.primeiroVencimento,
       status: item.status ?? "pendente",
     })),
+    regrasInadimplencia: regrasInadimplencia ?? v.regras?.inadimplencia ?? null,
     versao: "versao" in v ? v.versao ?? null : null,
   };
 }
 
 export async function criarVendaRemota(
   empresaId: number,
-  venda: Omit<Venda, "id" | "status" | "regras"> & { status?: Venda["status"] },
+  venda: VendaInput,
 ) {
+  const { regrasInadimplencia, ...dados } = venda;
   const criada = await apiJson<VendaApi>("/api/vendas", {
     method: "POST",
     empresaId,
-    body: JSON.stringify(vendaBody(venda)),
+    body: JSON.stringify(vendaBody(dados, regrasInadimplencia)),
   });
   return vendaFromApi(criada);
 }
@@ -272,13 +286,14 @@ export async function criarVendaRemota(
 export async function atualizarVendaRemota(
   empresaId: number,
   atual: Venda,
-  patch: Partial<Venda>,
+  patch: VendaUpdatePatch,
 ) {
-  const proxima = { ...atual, ...patch };
+  const { regrasInadimplencia, ...alteracoes } = patch;
+  const proxima = { ...atual, ...alteracoes };
   const salva = await apiJson<VendaApi>(`/api/vendas/${atual.id}`, {
     method: "PUT",
     empresaId,
-    body: JSON.stringify(vendaBody(proxima)),
+    body: JSON.stringify(vendaBody(proxima, regrasInadimplencia)),
   });
   return vendaFromApi(salva);
 }
