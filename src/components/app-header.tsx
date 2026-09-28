@@ -266,6 +266,16 @@ export function AppHeader() {
 
       <div className="ml-auto flex items-center gap-2">
         {usuario?.perfil === "SUPER_ADMIN" && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:flex"
+            onClick={() => void navigate({ to: "/admin" })}
+          >
+            Administração
+          </Button>
+        )}
+        {usuario?.perfil === "SUPER_ADMIN" && (
           <div className="hidden min-w-48 lg:block">
             <Select
               value={empresaAtualId != null ? String(empresaAtualId) : ""}
