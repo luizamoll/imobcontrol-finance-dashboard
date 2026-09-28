@@ -2,6 +2,7 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Building2,
+  Pencil,
   CheckCircle2,
   CircleDollarSign,
   Landmark,
@@ -11,6 +12,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
@@ -18,6 +20,24 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import {
   Table,
@@ -27,7 +47,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { brl0, formatDate, pct } from "@/lib/format";
+import { addMonths, brl0, formatDate, pct, uid } from "@/lib/format";
+import { useLiveNow } from "@/lib/use-live-now";
 import {
   comissaoDaVenda,
   distribuicaoPrevista,
@@ -35,8 +56,10 @@ import {
   regrasEfetivasEmpreendimento,
   useStore,
   vendaTotais,
+  type PagamentoItem,
   type PagamentoTipo,
   type ParcelaStatus,
+  type Venda,
 } from "@/lib/store";
 
 export const Route = createFileRoute("/vendas/$id")({
@@ -51,7 +74,8 @@ export const Route = createFileRoute("/vendas/$id")({
 
 function VendaDetail() {
   const { id } = Route.useParams();
-  const { state, receberParcela, reverterParcela } = useStore();
+  const { state, receberParcela, reverterParcela, updateVenda } = useStore();
+  const [editarAberta, setEditarAberta] = useState(false);
   const v = state.vendas.find((x) => x.id === id);
   if (!v) throw notFound();
 
@@ -59,7 +83,7 @@ function VendaDetail() {
   const mat = state.matriculas.find((m) => m.id === v.matriculaId)!;
   const regras = v.regras ?? regrasEfetivasEmpreendimento(emp, state.config);
   const totais = vendaTotais(v, state.parcelas);
-  const hoje = new Date();
+  const hoje = useLiveNow();
   const parcelas = state.parcelas
     .filter((p) => p.vendaId === v.id)
     .map((p) => {
@@ -110,8 +134,32 @@ function VendaDetail() {
         eyebrow={`Contrato · ${mat.numero}`}
         title={v.compradorNome}
         description={`${emp.nome} · ${mat.unidade} · assinada em ${formatDate(v.dataContrato)}`}
-        actions={<VendaStatusBadge status={v.status} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <VendaStatusBadge status={v.status} />
+            <Button size="sm" variant="outline" onClick={() => setEditarAberta(true)}>
+              <Pencil className="mr-1 h-3.5 w-3.5" /> Editar venda
+            </Button>
+          </div>
+        }
       />
+
+      <Dialog open={editarAberta} onOpenChange={setEditarAberta}>
+        <EditarVendaDialog
+          venda={v}
+          possuiRecebimentos={movs.length > 0}
+          onSalvar={(patch) => {
+            try {
+              updateVenda(v.id, patch);
+              toast.success("Venda atualizada");
+              setEditarAberta(false);
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a venda");
+            }
+          }}
+          onClose={() => setEditarAberta(false)}
+        />
+      </Dialog>
 
       <Card className="border-border/70">
         <CardContent className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-5">
@@ -193,9 +241,12 @@ function VendaDetail() {
             </div>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            Regra deste contrato: {v.corretorPct}% de cada recebimento financeiro é destinado à comissão
-            até atingir o total de {brl0(c.total)}. Depois da quitação, os próximos recebimentos geram
-            comissão de R$ 0.
+            Regra deste contrato: a comissão total é {v.corretorPct}% da venda ({brl0(c.total)}).
+            A cada entrada ou parcela, {(v.repasseComissaoPct ?? regras.repasseComissaoPct ?? 50)}% do valor-base
+            é destinado ao corretor até atingir esse teto. Depois da quitação, os próximos recebimentos
+            geram comissão de R$ 0. Acréscimos por atraso: {(v.comissaoSobreAcrescimos ?? regras.comissaoSobreAcrescimos)
+              ? "entram na base do repasse"
+              : "não entram na base do repasse"}.
           </p>
         </CardContent>
       </Card>
@@ -372,7 +423,10 @@ function VendaDetail() {
                 <TableHead>Origem</TableHead>
                 <TableHead className="text-right">Recebido</TableHead>
                 <TableHead className="text-right">Imposto</TableHead>
+                <TableHead className="text-right">Base comissão</TableHead>
+                <TableHead className="text-right">% repasse</TableHead>
                 <TableHead className="text-right">Comissão</TableHead>
+                <TableHead className="text-right">Saldo comissão</TableHead>
                 <TableHead className="text-right">Empresa</TableHead>
                 <TableHead className="text-right">Sócio</TableHead>
               </TableRow>
@@ -380,7 +434,7 @@ function VendaDetail() {
             <TableBody>
               {movs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
                     Nenhum recebimento registrado ainda.
                   </TableCell>
                 </TableRow>
@@ -397,7 +451,16 @@ function VendaDetail() {
                     {brl0(m.impostoReservado)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {brl0(m.comissaoBaseCalculo ?? m.valorRecebido)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {(m.comissaoRepassePctAplicado ?? v.repasseComissaoPct ?? regras.repasseComissaoPct ?? 50)}%
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
                     {brl0(m.comissaoPaga)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {m.saldoComissaoApos == null ? "—" : brl0(m.saldoComissaoApos)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{brl0(m.empresaValor)}</TableCell>
                   <TableCell className="text-right tabular-nums">{brl0(m.socioValor)}</TableCell>
@@ -409,6 +472,294 @@ function VendaDetail() {
       </Card>
     </PageShell>
   );
+}
+
+
+function EditarVendaDialog({
+  venda,
+  possuiRecebimentos,
+  onSalvar,
+  onClose,
+}: {
+  venda: Venda;
+  possuiRecebimentos: boolean;
+  onSalvar: (patch: Partial<Venda>) => void;
+  onClose: () => void;
+}) {
+  const [compradorNome, setCompradorNome] = useState(venda.compradorNome);
+  const [valorTotal, setValorTotal] = useState(String(venda.valorTotal));
+  const [dataContrato, setDataContrato] = useState(venda.dataContrato);
+  const [corretorNome, setCorretorNome] = useState(venda.corretorNome);
+  const [corretorPct, setCorretorPct] = useState(String(venda.corretorPct));
+  const [repassePct, setRepassePct] = useState(String(venda.repasseComissaoPct ?? 50));
+  const [sobreAcrescimos, setSobreAcrescimos] = useState(
+    venda.comissaoSobreAcrescimos ? "sim" : "nao",
+  );
+  const [observacoes, setObservacoes] = useState(venda.observacoes ?? "");
+  const [composicao, setComposicao] = useState<PagamentoItem[]>(() =>
+    venda.composicao.map((item) => ({ ...item })),
+  );
+
+  const totalComposicao = composicao.reduce(
+    (total, item) =>
+      total + item.valor * (itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1),
+    0,
+  );
+  const totalVenda = Number(valorTotal) || 0;
+  const composicaoConfere = Math.abs(totalComposicao - totalVenda) <= 0.01;
+
+  const adicionar = (tipo: PagamentoTipo) => {
+    setComposicao((itens) => [
+      ...itens,
+      {
+        id: uid(),
+        tipo,
+        descricao: "",
+        valor: 0,
+        parcelas: 1,
+        primeiroVencimento:
+          tipo === "parcelas" || tipo === "sinal_parcelado"
+            ? addMonths(dataContrato, 1)
+            : dataContrato,
+        status: "pendente",
+      },
+    ]);
+  };
+
+  const salvar = () => {
+    const comissao = Number(corretorPct) || 0;
+    const repasse = Number(repassePct) || 0;
+    if (!compradorNome.trim()) {
+      toast.error("Informe o comprador");
+      return;
+    }
+    if (comissao < 0 || comissao > 100 || repasse < 0 || repasse > 100) {
+      toast.error("Os percentuais devem ficar entre 0% e 100%");
+      return;
+    }
+    if (!possuiRecebimentos && (totalVenda <= 0 || !composicaoConfere)) {
+      toast.error("O valor da venda e a composição do pagamento precisam fechar");
+      return;
+    }
+
+    onSalvar({
+      compradorNome: compradorNome.trim(),
+      ...(!possuiRecebimentos
+        ? { valorTotal: totalVenda, composicao }
+        : {}),
+      dataContrato,
+      corretorNome: corretorNome.trim(),
+      corretorPct: comissao,
+      repasseComissaoPct: repasse,
+      comissaoSobreAcrescimos: sobreAcrescimos === "sim",
+      observacoes,
+    });
+  };
+
+  return (
+    <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>Editar venda</DialogTitle>
+        <DialogDescription>
+          Dados cadastrais e regras de comissão podem ser corrigidos. Valor e parcelas só podem ser
+          alterados antes do primeiro recebimento, para preservar o histórico financeiro.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <Label>Comprador</Label>
+          <Input value={compradorNome} onChange={(e) => setCompradorNome(e.target.value)} />
+        </div>
+        <div>
+          <Label>Valor total da venda</Label>
+          <Input
+            type="number"
+            min="0"
+            value={valorTotal}
+            disabled={possuiRecebimentos}
+            onChange={(e) => setValorTotal(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>Data do contrato</Label>
+          <Input type="date" value={dataContrato} onChange={(e) => setDataContrato(e.target.value)} />
+        </div>
+        <div>
+          <Label>Corretor</Label>
+          <Input value={corretorNome} onChange={(e) => setCorretorNome(e.target.value)} />
+        </div>
+        <div>
+          <Label>% comissão total sobre a venda</Label>
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            value={corretorPct}
+            onChange={(e) => setCorretorPct(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>% de cada recebimento para quitar a comissão</Label>
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            value={repassePct}
+            onChange={(e) => setRepassePct(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>Repasse incide sobre multa/juros/correção?</Label>
+          <Select value={sobreAcrescimos} onValueChange={setSobreAcrescimos}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nao">Não — somente principal</SelectItem>
+              <SelectItem value="sim">Sim — total recebido</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Observações</Label>
+          <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="border-t border-border/70 pt-4">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">Composição do pagamento</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {possuiRecebimentos
+                ? "Bloqueada porque já existem recebimentos registrados."
+                : `Total da composição: ${brl0(totalComposicao)}`}
+            </p>
+          </div>
+          {!possuiRecebimentos && (
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => adicionar("sinal")}>+ Entrada</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => adicionar("parcelas")}>+ Parcelas</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => adicionar("outro")}>+ Outro</Button>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {composicao.map((item, idx) => {
+            const parcelado = itemParcelado(item.tipo);
+            return (
+              <div key={item.id} className="grid grid-cols-1 gap-3 rounded-lg border border-border/70 p-3 sm:grid-cols-6">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Tipo</Label>
+                  <Select
+                    value={item.tipo}
+                    disabled={possuiRecebimentos}
+                    onValueChange={(value) =>
+                      setComposicao((atuais) =>
+                        atuais.map((x, i) =>
+                          i === idx ? { ...x, tipo: value as PagamentoTipo } : x,
+                        ),
+                      )
+                    }
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="avista">À vista</SelectItem>
+                      <SelectItem value="sinal">Entrada</SelectItem>
+                      <SelectItem value="sinal_parcelado">Entrada parcelada</SelectItem>
+                      <SelectItem value="parcelas">Parcelas</SelectItem>
+                      <SelectItem value="bem">Bem material</SelectItem>
+                      <SelectItem value="outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Descrição</Label>
+                  <Input
+                    value={item.descricao}
+                    disabled={possuiRecebimentos}
+                    onChange={(e) =>
+                      setComposicao((atuais) =>
+                        atuais.map((x, i) => (i === idx ? { ...x, descricao: e.target.value } : x)),
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">{parcelado ? "Valor/parcela" : "Valor"}</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={item.valor}
+                    disabled={possuiRecebimentos}
+                    onChange={(e) =>
+                      setComposicao((atuais) =>
+                        atuais.map((x, i) => (i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x)),
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Quantidade</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={parcelado ? item.parcelas : 1}
+                    disabled={possuiRecebimentos || !parcelado}
+                    onChange={(e) =>
+                      setComposicao((atuais) =>
+                        atuais.map((x, i) =>
+                          i === idx ? { ...x, parcelas: Math.max(1, Number(e.target.value) || 1) } : x,
+                        ),
+                      )
+                    }
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">1º vencimento</Label>
+                  <Input
+                    type="date"
+                    value={item.primeiroVencimento}
+                    disabled={possuiRecebimentos || item.tipo === "bem"}
+                    onChange={(e) =>
+                      setComposicao((atuais) =>
+                        atuais.map((x, i) =>
+                          i === idx ? { ...x, primeiroVencimento: e.target.value } : x,
+                        ),
+                      )
+                    }
+                  />
+                </div>
+                {!possuiRecebimentos && (
+                  <div className="flex items-end sm:col-span-4">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setComposicao((atuais) => atuais.filter((_, i) => i !== idx))}
+                    >
+                      Remover item
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+        <Button onClick={salvar}>Salvar alterações</Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+function itemParcelado(tipo: PagamentoTipo) {
+  return tipo === "parcelas" || tipo === "sinal_parcelado";
 }
 
 function pagamentoLegivel(tipo: PagamentoTipo) {
