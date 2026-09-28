@@ -156,13 +156,19 @@ function RecebimentosPage() {
     setData(todayISO());
   };
 
-  const confirmar = () => {
+  const confirmar = async () => {
     if (!selecionada) return;
-    receberParcela(selecionada.id, Number(valor), data);
-    toast.success("Recebimento registrado", {
-      description: "Distribuição financeira executada automaticamente.",
-    });
-    setSelecionada(null);
+    try {
+      await receberParcela(selecionada.id, Number(valor), data);
+      toast.success("Recebimento registrado", {
+        description: "Distribuição financeira executada automaticamente.",
+      });
+      setSelecionada(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível registrar o recebimento",
+      );
+    }
   };
 
   const calcSelecionada = selecionada
@@ -409,7 +415,7 @@ function RecebimentosPage() {
           )}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSelecionada(null)}>Cancelar</Button>
-            <Button onClick={confirmar}>Confirmar recebimento</Button>
+            <Button onClick={() => void confirmar()}>Confirmar recebimento</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
