@@ -9,6 +9,7 @@ RUN mvn -q clean package -DskipTests
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
+ENV SPRING_PROFILES_ACTIVE=prod
 
 COPY --from=build /app/target/imobcontrol-api-0.0.1-SNAPSHOT.jar app.jar
 
