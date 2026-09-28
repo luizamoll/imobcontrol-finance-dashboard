@@ -32,6 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { brl0, formatDate, todayISO } from "@/lib/format";
+import { useLiveNow } from "@/lib/use-live-now";
 import {
   inadimplenciaCalc,
   useStore,
@@ -54,7 +55,7 @@ function RecebimentosPage() {
   const [data, setData] = useState(todayISO());
   const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(() => new Set());
 
-  const hoje = useMemo(() => new Date(), []);
+  const hoje = useLiveNow();
 
   const parcelas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
