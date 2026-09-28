@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { brl0, formatDate } from "@/lib/format";
+import { useLiveNow } from "@/lib/use-live-now";
 import { inadimplenciaCalc, useStore, type ParcelaStatus } from "@/lib/store";
 
 export const Route = createFileRoute("/parcelas")({
@@ -39,7 +40,7 @@ function ParcelasPage() {
   const [busca, setBusca] = useState("");
   const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(() => new Set());
 
-  const hoje = useMemo(() => new Date(), []);
+  const hoje = useLiveNow();
 
   const parcelasView = useMemo(() => {
     const termo = busca.trim().toLowerCase();
