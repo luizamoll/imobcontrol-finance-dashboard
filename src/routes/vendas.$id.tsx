@@ -148,13 +148,15 @@ function VendaDetail() {
         <EditarVendaDialog
           venda={v}
           possuiRecebimentos={movs.length > 0}
-          onSalvar={(patch) => {
+          onSalvar={async (patch) => {
             try {
-              updateVenda(v.id, patch);
+              await updateVenda(v.id, patch);
               toast.success("Venda atualizada");
               setEditarAberta(false);
             } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a venda");
+              toast.error(
+                error instanceof Error ? error.message : "Não foi possível atualizar a venda",
+              );
             }
           }}
           onClose={() => setEditarAberta(false)}
@@ -367,9 +369,17 @@ function VendaDetail() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => {
-                          reverterParcela(p.id);
-                          toast("Recebimento revertido");
+                        onClick={async () => {
+                          try {
+                            await reverterParcela(p.id);
+                            toast("Recebimento revertido");
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : "Não foi possível reverter o recebimento",
+                            );
+                          }
                         }}
                       >
                         <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reverter
@@ -380,13 +390,21 @@ function VendaDetail() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          receberParcela(p.id, p.valorCobrado);
-                          toast.success(
-                            p.status === "vencida"
-                              ? "Parcela recebida com os acréscimos contratuais"
-                              : "Recebimento registrado",
-                          );
+                        onClick={async () => {
+                          try {
+                            await receberParcela(p.id, p.valorCobrado);
+                            toast.success(
+                              p.status === "vencida"
+                                ? "Parcela recebida com os acréscimos contratuais"
+                                : "Recebimento registrado",
+                            );
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : "Não foi possível registrar o recebimento",
+                            );
+                          }
                         }}
                       >
                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
