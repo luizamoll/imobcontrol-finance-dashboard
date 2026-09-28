@@ -253,21 +253,14 @@ public class FinanceiroService {
         BigDecimal socioPct = decimal(regras, "socioPct", BigDecimal.ZERO);
 
         BigDecimal imposto = porcentagem(recebido, aliquota);
-        BigDecimal comissaoTotal = porcentagem(venda.getValorTotal(), venda.getCorretorPct());
-        BigDecimal comissaoJaPaga = movimentos
-                .findAllByEmpresaIdAndVendaIdAndEstornadoFalseOrderByDataMovimentoAscIdAsc(
-                        ctx.empresaId(), venda.getId()
-                )
-                .stream()
-                .map(Movimento::getComissaoPaga)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal saldoComissaoAntes = maxZero(comissaoTotal.subtract(comissaoJaPaga));
         BigDecimal acrescimos = maxZero(recebido.subtract(parcela.getValor()));
-        BigDecimal baseComissao = venda.isComissaoSobreAcrescimos()
-                ? recebido
-                : recebido.min(parcela.getValor());
+
+        // A comissão é calculada sobre cada valor efetivamente recebido.
+        // Ex.: pagamento de R$ 1.000 com repasse de 50% => R$ 500 de comissão.
+        // Não existe mais teto baseado em percentual do valor total da venda.
+        BigDecimal baseComissao = recebido;
         BigDecimal comissaoTeorica = porcentagem(baseComissao, venda.getRepasseComissaoPct());
-        BigDecimal comissao = comissaoTeorica.min(saldoComissaoAntes);
+        BigDecimal comissao = comissaoTeorica;
         BigDecimal limiteDepoisImposto = maxZero(recebido.subtract(imposto));
         if (comissao.compareTo(limiteDepoisImposto) > 0) comissao = limiteDepoisImposto;
 
@@ -305,7 +298,8 @@ public class FinanceiroService {
         mov.setComissaoSobreAcrescimosAplicada(venda.isComissaoSobreAcrescimos());
         mov.setAcrescimosRecebidos(acrescimos);
         mov.setComissaoTeorica(comissaoTeorica);
-        mov.setSaldoComissaoApos(maxZero(saldoComissaoAntes.subtract(comissao)));
+        // Campo legado mantido por compatibilidade; a comissão agora é por recebimento e não possui saldo/teto.
+        mov.setSaldoComissaoApos(BigDecimal.ZERO);
         Movimento salvo = movimentos.saveAndFlush(mov);
 
         parcela.setValorPago(recebido);
@@ -515,7 +509,7 @@ public class FinanceiroService {
         BigDecimal base = parcela.getValor();
         if (data == null || !data.isAfter(parcela.getVencimento())) return base;
 
-        JsonNode r = lerOuVazio(parcela.getRegrasInadimplenciaJson());
+        JsonNode r = regrasInadimplenciaAtuais(parcela);
         long diasAtraso = Math.max(0, ChronoUnit.DAYS.between(parcela.getVencimento(), data));
         boolean toleranciaAtiva = bool(r, "toleranciaAtiva", false);
         long tolerancia = toleranciaAtiva ? inteiro(r, "diasTolerancia", 0) : 0;
@@ -579,8 +573,19 @@ public class FinanceiroService {
                 p.getClienteId(), cliente.getNome(), p.getOrigemTipo(), p.getOrigemDescricao(),
                 p.getNumero(), p.getTotalParcelas(), p.getVencimento(), p.getValor(),
                 p.getValorPago(), p.getDataPagamento(), p.getStatus(),
-                lerOuVazio(p.getRegrasInadimplenciaJson()), p.getVersao()
+                regrasInadimplenciaAtuais(p), p.getVersao()
         );
+    }
+
+    private JsonNode regrasInadimplenciaAtuais(Parcela parcela) {
+        Empreendimento emp = empreendimento(parcela.getEmpresaId(), parcela.getEmpreendimentoId());
+        Unidade unidade = unidade(parcela.getEmpresaId(), parcela.getUnidadeId());
+        JsonNode regras = regrasEfetivas(emp, unidade);
+        JsonNode inadimplencia = regras.path("inadimplencia");
+        if (inadimplencia.isMissingNode() || inadimplencia.isNull()) {
+            return json.createObjectNode();
+        }
+        return inadimplencia;
     }
 
     private MovimentoResponse toMovimentoResponse(Long empresaId, Movimento m) {
