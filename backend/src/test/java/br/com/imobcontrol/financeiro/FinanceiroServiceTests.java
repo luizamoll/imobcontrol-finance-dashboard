@@ -18,6 +18,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -37,6 +38,7 @@ class FinanceiroServiceTests {
     @Autowired EmpreendimentoRepository empreendimentos;
     @Autowired UnidadeRepository unidades;
     @Autowired ClienteRepository clientes;
+    @Autowired JsonMapper json;
 
     @Test
     void corretorRecebeMetadeDosPagamentosAteAtingirTetoDeCincoPorCento() {
@@ -180,7 +182,7 @@ class FinanceiroServiceTests {
     }
 
     @Test
-    void parcelasEmAbertoUsamCorrecaoAtualizadaDaOperacao() {
+    void vendaPodeAlterarSuaRegraDeJurosECorrecaoSemAfetarHistoricoPago() throws Exception {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
         Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
@@ -193,6 +195,13 @@ class FinanceiroServiceTests {
         Cliente cliente = criarCliente(empresa, usuario);
 
         LocalDate contrato = LocalDate.of(2026, 9, 1);
+        List<VendaRequest.PagamentoRequest> composicao = List.of(
+                new VendaRequest.PagamentoRequest(
+                        "parcelas", "Parcela única", new BigDecimal("100.00"),
+                        1, contrato.plusMonths(1), "pendente"
+                )
+        );
+
         VendaResponse venda = service.criarVenda(
                 autenticacao(usuario),
                 null,
@@ -207,24 +216,53 @@ class FinanceiroServiceTests {
                         new BigDecimal("50"),
                         true,
                         null,
-                        List.of(
-                                new VendaRequest.PagamentoRequest(
-                                        "parcelas", "Parcela única", new BigDecimal("100.00"),
-                                        1, contrato.plusMonths(1), "pendente"
-                                )
-                        ),
+                        composicao,
                         null
                 )
         );
 
+        // Alterar o padrão do empreendimento não reescreve automaticamente a venda existente.
         empreendimento.setInadimplenciaJson(
-                "{\"correcaoAtiva\":true,\"correcaoPctMes\":6,\"jurosAtivo\":false,\"moraAtiva\":false,\"toleranciaAtiva\":false,\"inicioJuros\":\"vencimento\"}"
+                "{\"correcaoAtiva\":true,\"correcaoPctMes\":9,\"jurosAtivo\":false,\"moraAtiva\":false,\"toleranciaAtiva\":false,\"inicioJuros\":\"vencimento\"}"
         );
         empreendimentos.saveAndFlush(empreendimento);
 
-        ParcelaResponse parcela = service.listarParcelas(autenticacao(usuario), null)
+        ParcelaResponse antes = service.listarParcelas(autenticacao(usuario), null)
                 .stream()
                 .filter(p -> p.vendaId().equals(venda.id()))
+                .findFirst()
+                .orElseThrow();
+        assertDinheiro(
+                "3.00",
+                antes.regrasInadimplencia().path("correcaoPctMes").decimalValue()
+        );
+
+        VendaResponse editada = service.atualizarVenda(
+                autenticacao(usuario),
+                null,
+                venda.id(),
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        "Corretor teste",
+                        new BigDecimal("5"),
+                        new BigDecimal("50"),
+                        true,
+                        null,
+                        composicao,
+                        json.readTree(
+                                "{\"correcaoAtiva\":true,\"correcaoPctMes\":6,\"correcaoIndice\":\"Regra da venda\",\"jurosAtivo\":false,\"jurosPctMes\":0,\"jurosPctDia\":0,\"jurosTipo\":\"mensal\",\"moraAtiva\":false,\"moraPct\":0,\"toleranciaAtiva\":false,\"diasTolerancia\":0,\"inicioJuros\":\"vencimento\"}"
+                        ),
+                        venda.versao()
+                )
+        );
+
+        ParcelaResponse parcela = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(editada.id()))
                 .findFirst()
                 .orElseThrow();
 
