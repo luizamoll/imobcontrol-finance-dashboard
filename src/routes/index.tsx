@@ -20,6 +20,7 @@ import { UpcomingReceivables } from "@/components/dashboard/upcoming-receivables
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { brl0 } from "@/lib/format";
+import { useLiveNow } from "@/lib/use-live-now";
 import { inadimplenciaCalc, useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
@@ -39,9 +40,9 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const { state } = useStore();
   const hasData = state.empreendimentos.length > 0;
+  const hoje = useLiveNow();
 
   const stats = useMemo(() => {
-    const hoje = new Date();
     const monthKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
     const ativos = state.empreendimentos.filter((e) => e.status !== "concluido").length;
     const recebidoMes = state.parcelas
@@ -63,7 +64,7 @@ function Dashboard() {
       vencidasCount: vencidas.length,
       vencidasTotal,
     };
-  }, [state]);
+  }, [state, hoje]);
 
   const recursoEmBreve = (recurso: string) =>
     toast.info(`${recurso} ainda não disponível`, {
