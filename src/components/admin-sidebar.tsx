@@ -2,9 +2,11 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Building2,
   LayoutDashboard,
-  ShieldCheck,
+  ScrollText,
   Users,
 } from "lucide-react";
+
+import { ImobControlMark } from "@/components/imobcontrol-brand";
 
 import {
   Sidebar,
@@ -22,7 +24,9 @@ import {
 
 const itens = [
   { title: "Visão geral", url: "/admin", icon: LayoutDashboard },
-  { title: "Controle de usuários", url: "/admin/usuarios", icon: Users },
+  { title: "Empresas", url: "/admin/empresas", icon: Building2 },
+  { title: "Usuários e acessos", url: "/admin/usuarios", icon: Users },
+  { title: "Auditoria", url: "/admin/auditoria", icon: ScrollText },
 ] as const;
 
 export function AdminSidebar() {
@@ -38,7 +42,7 @@ export function AdminSidebar() {
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <ShieldCheck className="h-5 w-5" />
+            <ImobControlMark className="h-6 w-6" inverse />
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
