@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useStore, inadimplenciaCalc } from "@/lib/store";
 import { brl0, formatDate } from "@/lib/format";
+import { useLiveNow } from "@/lib/use-live-now";
 
 export const Route = createFileRoute("/inadimplencia")({
   component: InadimplenciaPage,
@@ -36,7 +37,7 @@ function InadimplenciaPage() {
   const { state, receberParcela } = useStore();
   const [empFilter, setEmpFilter] = useState("todos");
   const [busca, setBusca] = useState("");
-  const hoje = new Date();
+  const hoje = useLiveNow();
 
   const rows = useMemo(() => {
     return state.parcelas
@@ -48,7 +49,7 @@ function InadimplenciaPage() {
         busca ? p.compradorNome.toLowerCase().includes(busca.toLowerCase()) : true,
       )
       .sort((a, b) => b.calc.diasAtraso - a.calc.diasAtraso);
-  }, [state, empFilter, busca]);
+  }, [state, empFilter, busca, hoje]);
 
   const totOriginal = rows.reduce((a, r) => a + r.p.valor, 0);
   const totAtualizado = rows.reduce((a, r) => a + r.calc.atualizado, 0);
