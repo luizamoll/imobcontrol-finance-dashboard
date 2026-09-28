@@ -39,7 +39,7 @@ class FinanceiroServiceTests {
     @Autowired ClienteRepository clientes;
 
     @Test
-    void corretorRecebeMetadeDeCadaRecebimentoAteAtingirCincoPorCentoDaVenda() {
+    void corretorRecebeMetadeDeCadaValorEfetivamentePagoSemTetoDeCincoPorCento() {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
         Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
@@ -97,12 +97,151 @@ class FinanceiroServiceTests {
         );
 
         assertDinheiro("2.00", primeiro.comissaoPaga());
-        assertDinheiro("3.00", primeiro.saldoComissaoApos());
-        assertDinheiro("3.00", segundo.comissaoPaga());
+        assertDinheiro("12.00", segundo.comissaoPaga());
+        assertDinheiro("12.00", terceiro.comissaoPaga());
+        assertDinheiro("0.00", primeiro.saldoComissaoApos());
         assertDinheiro("0.00", segundo.saldoComissaoApos());
-        assertDinheiro("0.00", terceiro.comissaoPaga());
         assertDinheiro("0.00", terceiro.saldoComissaoApos());
         assertDinheiro("50.00", primeiro.comissaoRepassePctAplicado());
+    }
+
+    @Test
+    void editaVendaJaCadastradaAntesDeRecebimentos() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+        Cliente novoCliente = criarCliente(empresa, usuario);
+
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        "Corretor inicial",
+                        new BigDecimal("5"),
+                        new BigDecimal("50"),
+                        false,
+                        "Venda inicial",
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcelas", new BigDecimal("50.00"),
+                                        2, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        VendaResponse atualizada = service.atualizarVenda(
+                autenticacao(usuario),
+                null,
+                venda.id(),
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        novoCliente.getId(),
+                        new BigDecimal("120.00"),
+                        contrato.plusDays(2),
+                        "Corretor atualizado",
+                        new BigDecimal("50"),
+                        new BigDecimal("50"),
+                        true,
+                        "Venda revisada",
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcelas revisadas", new BigDecimal("60.00"),
+                                        2, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        venda.versao()
+                )
+        );
+
+        assertEquals(novoCliente.getId(), atualizada.clienteId());
+        assertDinheiro("120.00", atualizada.valorTotal());
+        assertEquals("Corretor atualizado", atualizada.corretorNome());
+        assertEquals("Venda revisada", atualizada.observacoes());
+
+        List<ParcelaResponse> geradas = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .toList();
+
+        assertEquals(2, geradas.size());
+        assertDinheiro("60.00", geradas.get(0).valor());
+        assertDinheiro("60.00", geradas.get(1).valor());
+    }
+
+    @Test
+    void parcelasEmAbertoUsamCorrecaoAtualizadaDaOperacao() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        empreendimento.setInadimplenciaJson(
+                "{\"correcaoAtiva\":true,\"correcaoPctMes\":3,\"jurosAtivo\":false,\"moraAtiva\":false,\"toleranciaAtiva\":false,\"inicioJuros\":\"vencimento\"}"
+        );
+        empreendimentos.saveAndFlush(empreendimento);
+
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        "Corretor teste",
+                        new BigDecimal("5"),
+                        new BigDecimal("50"),
+                        true,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcela única", new BigDecimal("100.00"),
+                                        1, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        empreendimento.setInadimplenciaJson(
+                "{\"correcaoAtiva\":true,\"correcaoPctMes\":6,\"jurosAtivo\":false,\"moraAtiva\":false,\"toleranciaAtiva\":false,\"inicioJuros\":\"vencimento\"}"
+        );
+        empreendimentos.saveAndFlush(empreendimento);
+
+        ParcelaResponse parcela = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .findFirst()
+                .orElseThrow();
+
+        assertDinheiro(
+                "6.00",
+                parcela.regrasInadimplencia().path("correcaoPctMes").decimalValue()
+        );
+
+        MovimentoResponse movimento = service.receber(
+                autenticacao(usuario),
+                null,
+                parcela.id(),
+                new RecebimentoRequest(null, parcela.vencimento().plusDays(30))
+        );
+
+        assertDinheiro("106.00", movimento.valorRecebido());
+        assertDinheiro("53.00", movimento.comissaoPaga());
     }
 
     @Test
