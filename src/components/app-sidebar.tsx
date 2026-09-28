@@ -6,6 +6,7 @@ import {
   CalendarClock,
   Landmark,
   Users,
+  UserCog,
   FileBarChart,
   Settings,
   ContactRound,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { useTenant } from "@/lib/tenant";
+import { useAuth } from "@/lib/auth";
 import { ImobControlMark } from "@/components/imobcontrol-brand";
 
 import {
@@ -50,6 +52,7 @@ const gestao = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const { empresaAtual } = useTenant();
+  const { usuario } = useAuth();
   const collapsed = state === "collapsed";
   const currentPath = useRouterState({
     select: (r) => r.location.pathname,
@@ -119,6 +122,20 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {usuario?.perfil === "ADMIN" && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/equipe")}
+                    tooltip="Equipe e acessos"
+                  >
+                    <Link to="/equipe">
+                      <UserCog className="h-4 w-4" />
+                      <span>Equipe e acessos</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
