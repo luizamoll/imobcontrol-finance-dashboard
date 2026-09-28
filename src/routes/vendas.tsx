@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { Calculator, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -43,7 +43,7 @@ import {
   type PagamentoItem,
   type PagamentoTipo,
 } from "@/lib/store";
-import { addMonths, brl0, formatDate, todayISO, uid } from "@/lib/format";
+import { addMonths, brl, brl0, formatDate, todayISO, uid } from "@/lib/format";
 import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/vendas")({
@@ -264,14 +264,28 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
     [state.matriculas, empId],
   );
 
-  const totalComposicao = items.reduce(
+  const valorContrato = Number(valorNegociado) || 0;
+  const valorContratoCentavos = Math.round(valorContrato * 100);
+  const totalComposicaoCentavos = items.reduce((total, item) => {
+    const quantidade = itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1;
+    return total + Math.round(item.valor * 100) * quantidade;
+  }, 0);
+  const totalComposicao = totalComposicaoCentavos / 100;
+  const diferencaCentavos = valorContratoCentavos - totalComposicaoCentavos;
+  const diferenca = diferencaCentavos / 100;
+  const parcelasAjustaveis = items.reduce(
     (total, item) =>
-      total + item.valor * (itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1),
+      total + (itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 0),
     0,
   );
-  const valorContrato = Number(valorNegociado) || 0;
-  const diferenca = valorContrato - totalComposicao;
-  const composicaoConfere = valorContrato > 0 && Math.abs(diferenca) <= 0.01;
+  const limiteArredondamentoCentavos = Math.max(1, Math.ceil(parcelasAjustaveis / 2));
+  const ajusteAutomatico =
+    valorContrato > 0 &&
+    parcelasAjustaveis > 0 &&
+    diferencaCentavos !== 0 &&
+    Math.abs(diferencaCentavos) <= limiteArredondamentoCentavos;
+  const composicaoConfere =
+    valorContrato > 0 && (diferencaCentavos === 0 || ajusteAutomatico);
 
   const adicionar = (tipo: PagamentoTipo) => {
     setItems((atuais) => [...atuais, emptyItem(tipo, dataContrato)]);
@@ -288,6 +302,31 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
               parcelas: itemParcelado(tipo) ? Math.max(1, item.parcelas || 1) : 1,
             }
           : item,
+      ),
+    );
+  };
+
+  const dividirSaldoAutomaticamente = (idx: number) => {
+    const item = items[idx];
+    if (!item || !itemParcelado(item.tipo) || valorContratoCentavos <= 0) return;
+
+    const quantidade = Math.max(1, item.parcelas);
+    const outrosCentavos = items.reduce((total, atual, i) => {
+      if (i === idx) return total;
+      const qtd = itemParcelado(atual.tipo) ? Math.max(1, atual.parcelas) : 1;
+      return total + Math.round(atual.valor * 100) * qtd;
+    }, 0);
+    const saldoCentavos = valorContratoCentavos - outrosCentavos;
+
+    if (saldoCentavos <= 0) {
+      toast.error("Não há saldo positivo para dividir nesta linha.");
+      return;
+    }
+
+    const valorBaseCentavos = Math.round(saldoCentavos / quantidade);
+    setItems((atuais) =>
+      atuais.map((atual, i) =>
+        i === idx ? { ...atual, valor: valorBaseCentavos / 100 } : atual,
       ),
     );
   };
@@ -697,13 +736,23 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="mt-2 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                     {parcelado ? (
-                      <span className="text-muted-foreground">
-                        Agenda: {item.parcelas} {item.parcelas === 1 ? "parcela" : "parcelas"} mensais ·{" "}
-                        {formatDate(item.primeiroVencimento)}
-                        {item.parcelas > 1
-                          ? ` até ${formatDate(addMonths(item.primeiroVencimento, item.parcelas - 1))}`
-                          : ""}
-                      </span>
+                      <div className="flex flex-col items-start gap-1.5">
+                        <span className="text-muted-foreground">
+                          Agenda: {item.parcelas} {item.parcelas === 1 ? "parcela" : "parcelas"} mensais ·{" "}
+                          {formatDate(item.primeiroVencimento)}
+                          {item.parcelas > 1
+                            ? ` até ${formatDate(addMonths(item.primeiroVencimento, item.parcelas - 1))}`
+                            : ""}
+                        </span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
+                          onClick={() => dividirSaldoAutomaticamente(idx)}
+                        >
+                          <Calculator className="h-3.5 w-3.5" />
+                          Dividir saldo automaticamente
+                        </button>
+                      </div>
                     ) : (
                       <span />
                     )}
@@ -723,14 +772,30 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
           <ResumoValor label="Composição informada" value={totalComposicao} />
           <div className="sm:text-right">
             <div className="text-xs text-muted-foreground">Diferença</div>
-            <div className={`font-semibold ${valorContrato > 0 && !composicaoConfere ? "text-destructive" : "text-success"}`}>
-              {brl0(Math.abs(diferenca))}
+            <div
+              className={`font-semibold ${
+                valorContrato > 0 && !composicaoConfere
+                  ? "text-destructive"
+                  : ajusteAutomatico
+                    ? "text-amber-600"
+                    : "text-success"
+              }`}
+            >
+              {brl(Math.abs(diferenca))}
             </div>
           </div>
         </div>
+        {valorContrato > 0 && ajusteAutomatico && (
+          <p className="mt-2 text-xs leading-5 text-amber-700">
+            Essa diferença é compatível com arredondamento de centavos. Ao registrar a venda, o
+            ImobControl distribuirá {brl(Math.abs(diferenca))} entre as últimas parcelas para que a
+            soma final fique exatamente em {brl(valorContrato)}.
+          </p>
+        )}
         {valorContrato > 0 && !composicaoConfere && (
           <p className="mt-2 text-xs text-destructive">
-            A composição precisa totalizar exatamente o valor negociado antes de registrar a venda.
+            A diferença é maior do que um arredondamento normal de parcelamento. Revise os valores
+            antes de registrar a venda.
           </p>
         )}
       </div>
