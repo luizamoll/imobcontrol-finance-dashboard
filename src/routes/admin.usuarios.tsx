@@ -46,7 +46,7 @@ import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/admin/usuarios")({
   component: AdminUsuariosPage,
-  head: () => ({ meta: [{ title: "Usuários · Administração · ImobControl" }] }),
+  head: () => ({ meta: [{ title: "Usuários e acessos · Administração · ImobControl" }] }),
 });
 
 type Perfil = "SUPER_ADMIN" | "ADMIN" | "USUARIO";
@@ -279,8 +279,8 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
     <PageShell>
       <PageHeader
         eyebrow="Administração geral"
-        title="Controle de usuários"
-        description="Gerencie a hierarquia de acesso de todas as empresas do ImobControl."
+        title="Usuários e acessos"
+        description="Crie contas, vincule usuários às empresas, defina papéis, status e redefina senhas."
         actions={
           <Button size="sm" onClick={abrirNovo} disabled={empresas.length === 0}>
             <Plus className="mr-2 h-4 w-4" /> Novo usuário
