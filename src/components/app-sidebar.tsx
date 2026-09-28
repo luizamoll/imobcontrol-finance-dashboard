@@ -12,7 +12,10 @@ import {
   ContactRound,
   Inbox,
   AlertOctagon,
+  ShieldCheck,
 } from "lucide-react";
+
+import { useAuth } from "@/lib/auth";
 
 import {
   Sidebar,
@@ -47,6 +50,7 @@ const gestao = [
 
 export function AppSidebar() {
   const { state } = useSidebar();
+  const { usuario } = useAuth();
   const collapsed = state === "collapsed";
   const currentPath = useRouterState({
     select: (r) => r.location.pathname,
@@ -119,6 +123,29 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {usuario?.perfil === "SUPER_ADMIN" && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Administração</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/admin/usuarios")}
+                    tooltip="Controle de usuários"
+                  >
+                    <Link to="/admin/usuarios">
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>Controle de usuários</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
