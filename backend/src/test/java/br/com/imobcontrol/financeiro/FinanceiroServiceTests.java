@@ -105,6 +105,56 @@ class FinanceiroServiceTests {
         assertDinheiro("50.00", primeiro.comissaoRepassePctAplicado());
     }
 
+    @Test
+    void ajustaUltimaParcelaQuandoDivisaoGeraDizimaPeriodica() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        null,
+                        BigDecimal.ZERO,
+                        new BigDecimal("50"),
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcelas", new BigDecimal("33.33"),
+                                        3, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        List<ParcelaResponse> geradas = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .toList();
+
+        assertEquals(3, geradas.size());
+        assertDinheiro("33.33", geradas.get(0).valor());
+        assertDinheiro("33.33", geradas.get(1).valor());
+        assertDinheiro("33.34", geradas.get(2).valor());
+        assertDinheiro(
+                "100.00",
+                geradas.stream()
+                        .map(ParcelaResponse::valor)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+        );
+    }
+
     private Empresa criarEmpresa() {
         Empresa e = new Empresa();
         e.setNome("Empresa teste");
