@@ -62,10 +62,16 @@ function LoginPage() {
         return;
       }
 
-      const usuario = (await response.json()) as { nome: string };
+      const usuario = (await response.json()) as {
+        nome: string;
+        perfil: "SUPER_ADMIN" | "ADMIN" | "USUARIO";
+      };
       await recarregar();
       toast.success(`Bem-vinda, ${usuario.nome}.`);
-      await navigate({ to: "/", replace: true });
+      await navigate({
+        to: usuario.perfil === "SUPER_ADMIN" ? "/admin" : "/",
+        replace: true,
+      });
     } catch {
       toast.error("Não foi possível conectar ao servidor do ImobControl.");
     } finally {
