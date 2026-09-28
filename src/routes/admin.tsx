@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   Building2,
+  Pencil,
   ShieldCheck,
   UserCog,
   UserRound,
@@ -12,8 +13,19 @@ import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { apiJson } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/admin")({
   component: AdminDashboard,
@@ -35,10 +47,15 @@ type Resumo = {
 };
 
 function AdminDashboard() {
+  const navigate = useNavigate();
   const { usuario } = useAuth();
+  const { selecionarEmpresa } = useTenant();
   const [empresas, setEmpresas] = useState<EmpresaResumo[]>([]);
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [empresaEditando, setEmpresaEditando] = useState<EmpresaResumo | null>(null);
+  const [nomeEmpresa, setNomeEmpresa] = useState("");
+  const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
 
   useEffect(() => {
     if (usuario?.perfil !== "SUPER_ADMIN") {
@@ -144,7 +161,7 @@ function AdminDashboard() {
               empresas.map((empresa) => (
                 <div
                   key={empresa.id}
-                  className="flex items-center justify-between rounded-lg border border-border/70 px-4 py-3"
+                  className="flex flex-col gap-3 rounded-lg border border-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -154,6 +171,27 @@ function AdminDashboard() {
                       <div className="text-sm font-medium">{empresa.nome}</div>
                       <div className="text-xs text-muted-foreground">{empresa.slug}</div>
                     </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEmpresaEditando(empresa);
+                        setNomeEmpresa(empresa.nome);
+                      }}
+                    >
+                      <Pencil className="mr-1 h-3.5 w-3.5" /> Renomear
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        selecionarEmpresa(empresa.id);
+                        void navigate({ to: "/" });
+                      }}
+                    >
+                      Abrir ambiente
+                    </Button>
                   </div>
                 </div>
               ))
@@ -184,6 +222,68 @@ function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+      <Dialog
+        open={Boolean(empresaEditando)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEmpresaEditando(null);
+            setNomeEmpresa("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Renomear empresa</DialogTitle>
+            <DialogDescription>
+              Este é o nome exibido no ambiente operacional do cliente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div>
+            <Label>Nome da empresa</Label>
+            <Input
+              value={nomeEmpresa}
+              onChange={(event) => setNomeEmpresa(event.target.value)}
+              placeholder="Ex.: Empresa Líder"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEmpresaEditando(null)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={salvandoEmpresa || !nomeEmpresa.trim()}
+              onClick={async () => {
+                if (!empresaEditando) return;
+                setSalvandoEmpresa(true);
+                try {
+                  await apiJson<EmpresaResumo>(
+                    `/api/super-admin/empresas/${empresaEditando.id}`,
+                    {
+                      method: "PUT",
+                      body: JSON.stringify({ nome: nomeEmpresa.trim() }),
+                    },
+                  );
+                  toast.success("Nome da empresa atualizado");
+                  window.location.reload();
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : "Não foi possível atualizar a empresa",
+                  );
+                } finally {
+                  setSalvandoEmpresa(false);
+                }
+              }}
+            >
+              {salvandoEmpresa ? "Salvando..." : "Salvar nome"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </PageShell>
   );
 }
