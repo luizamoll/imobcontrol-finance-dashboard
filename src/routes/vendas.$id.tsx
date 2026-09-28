@@ -17,8 +17,10 @@ import { toast } from "sonner";
 
 import { CurrencyInput } from "@/components/currency-input";
 import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
+import { RegrasInadimplenciaForm } from "@/components/regras-inadimplencia-form";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { apiJson } from "@/lib/api";
+import type { VendaUpdatePatch } from "@/lib/financeiro-api";
 import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +56,7 @@ import { useLiveNow } from "@/lib/use-live-now";
 import { useTenant } from "@/lib/tenant";
 import {
   comissaoDaVenda,
+  DEFAULT_REGRAS_INADIMPLENCIA,
   distribuicaoPrevista,
   inadimplenciaCalc,
   regrasEfetivasEmpreendimento,
@@ -62,6 +65,7 @@ import {
   type PagamentoItem,
   type PagamentoTipo,
   type ParcelaStatus,
+  type RegrasInadimplencia,
   type Venda,
 } from "@/lib/store";
 
@@ -223,10 +227,11 @@ function VendaDetail() {
 
       <Card className="border-primary/20 bg-primary/5">
         <CardContent className="p-4 text-sm">
-          <div className="font-semibold text-foreground">Regras contratuais congeladas</div>
+          <div className="font-semibold text-foreground">Regras financeiras desta venda</div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Este contrato preserva as regras registradas no momento da venda. Alterações posteriores em
-            {" "}{emp.nome} não modificam cálculos históricos nem parcelas deste contrato.
+            Tributação e participações ficam vinculadas ao contrato. Juros, correção, multa e tolerância
+            podem ser ajustados nesta venda e recalculam as parcelas ainda abertas. Recebimentos já
+            realizados permanecem no histórico com os valores efetivamente registrados.
           </p>
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
             <MiniRegra label="Tributação" value={`${regras.aliquotaTributaria}%`} />
@@ -541,7 +546,7 @@ function EditarVendaDialog({
   venda: Venda;
   clientes: ClienteEdicao[];
   possuiRecebimentos: boolean;
-  onSalvar: (patch: Partial<Venda>) => void;
+  onSalvar: (patch: VendaUpdatePatch) => void;
   onClose: () => void;
 }) {
   const [clienteId, setClienteId] = useState(venda.clienteId ?? "");
@@ -554,6 +559,11 @@ function EditarVendaDialog({
   const [sobreAcrescimos, setSobreAcrescimos] = useState(
     venda.comissaoSobreAcrescimos ? "sim" : "nao",
   );
+  const [regrasInadimplencia, setRegrasInadimplencia] =
+    useState<RegrasInadimplencia>({
+      ...DEFAULT_REGRAS_INADIMPLENCIA,
+      ...(venda.regras?.inadimplencia ?? {}),
+    });
   const [observacoes, setObservacoes] = useState(venda.observacoes ?? "");
   const [composicao, setComposicao] = useState<PagamentoItem[]>(() =>
     venda.composicao.map((item) => ({ ...item })),
@@ -623,6 +633,7 @@ function EditarVendaDialog({
       corretorPct: comissao,
       repasseComissaoPct: repasse,
       comissaoSobreAcrescimos: sobreAcrescimos === "sim",
+      regrasInadimplencia,
       observacoes,
     });
   };
@@ -632,8 +643,9 @@ function EditarVendaDialog({
       <DialogHeader>
         <DialogTitle>Editar venda</DialogTitle>
         <DialogDescription>
-          Dados cadastrais e regras de comissão podem ser corrigidos. Valor e parcelas só podem ser
-          alterados antes do primeiro recebimento, para preservar o histórico financeiro.
+          Dados cadastrais, comissão e regras de atraso podem ser corrigidos. Valor e composição das
+          parcelas ficam bloqueados após o primeiro recebimento, mas juros, correção, multa e tolerância
+          continuam editáveis para as parcelas ainda abertas.
         </DialogDescription>
       </DialogHeader>
 
@@ -716,6 +728,20 @@ function EditarVendaDialog({
           <Label>Observações</Label>
           <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
         </div>
+      </div>
+
+      <div className="border-t border-border/70 pt-4">
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold">Juros, correção e multa desta venda</h3>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Você pode alterar estas condições a qualquer momento. O novo cálculo passa a valer para
+            parcelas ainda abertas e vencidas. Recebimentos já quitados não são reescritos.
+          </p>
+        </div>
+        <RegrasInadimplenciaForm
+          value={regrasInadimplencia}
+          onChange={setRegrasInadimplencia}
+        />
       </div>
 
       <div className="border-t border-border/70 pt-4">
