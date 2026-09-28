@@ -90,7 +90,7 @@ function AdminDashboard() {
       <PageHeader
         eyebrow="Administração da plataforma"
         title="Visão geral"
-        description="Seu console para acompanhar empresas, acessos, segurança e atividade do ImobControl."
+        description="Acompanhe empresas, acessos, atividade e saúde da plataforma em um único painel."
       />
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
@@ -106,7 +106,7 @@ function AdminDashboard() {
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
               <CardTitle className="text-base">Empresas</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">Acesso rápido aos ambientes dos clientes.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Visualize as empresas cadastradas e entre rapidamente no ambiente que precisa administrar.</p>
             </div>
             <Button asChild variant="outline" size="sm">
               <Link to="/admin/empresas">Gerenciar empresas</Link>
@@ -139,7 +139,7 @@ function AdminDashboard() {
 
         <Card className="border-border/70">
           <CardHeader>
-            <CardTitle className="text-base">Ações administrativas</CardTitle>
+            <CardTitle className="text-base">Atalhos de gestão</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <QuickAction icon={Building2} title="Empresas" description="Criar, renomear, ativar e acessar ambientes." to="/admin/empresas" />
