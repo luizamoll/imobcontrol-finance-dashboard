@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { criarEmpreendimentoRemoto } from "@/lib/catalogo-api";
+import { useAuth } from "@/lib/auth";
 import { brl, formatCNPJ, num, pct } from "@/lib/format";
 import {
   DEFAULT_REGRAS_INADIMPLENCIA,
@@ -56,7 +57,14 @@ export const Route = createFileRoute("/empreendimentos/")({
 
 function EmpreendimentosList() {
   const { state, setState } = useStore();
-  const { empresaAtualId } = useTenant();
+  const { usuario } = useAuth();
+  const {
+    empresas,
+    empresaAtual,
+    empresaAtualId,
+    carregando: carregandoEmpresas,
+    selecionarEmpresa,
+  } = useTenant();
   const [open, setOpen] = useState(false);
   const hasEmpreendimentos = state.empreendimentos.length > 0;
 
@@ -89,9 +97,18 @@ function EmpreendimentosList() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <NewEmpreendimentoDialog
+          superAdmin={usuario?.perfil === "SUPER_ADMIN"}
+          empresas={empresas}
+          empresaAtualId={empresaAtualId}
+          empresaAtualNome={empresaAtual?.nome ?? null}
+          carregandoEmpresas={carregandoEmpresas}
+          onSelecionarEmpresa={selecionarEmpresa}
           onSave={async (e) => {
             if (!empresaAtualId) {
-              toast.error("Selecione uma empresa antes de cadastrar o empreendimento");
+              toast.error("Escolha a empresa cliente antes de cadastrar o empreendimento", {
+                description:
+                  "Este campo define em qual ambiente do ImobControl o empreendimento será salvo.",
+              });
               return;
             }
             try {
@@ -239,7 +256,23 @@ type NovoEmpreendimento = {
   status: EmpStatus;
 };
 
-function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) => void }) {
+function NewEmpreendimentoDialog({
+  onSave,
+  superAdmin,
+  empresas,
+  empresaAtualId,
+  empresaAtualNome,
+  carregandoEmpresas,
+  onSelecionarEmpresa,
+}: {
+  onSave: (e: NovoEmpreendimento) => void;
+  superAdmin: boolean;
+  empresas: Array<{ id: number; nome: string }>;
+  empresaAtualId: number | null;
+  empresaAtualNome: string | null;
+  carregandoEmpresas: boolean;
+  onSelecionarEmpresa: (id: number) => void;
+}) {
   const [nome, setNome] = useState("");
   const [spe, setSpe] = useState("");
   const [cnpj, setCnpj] = useState("");
@@ -326,6 +359,53 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
           aplicado silenciosamente aos demais projetos.
         </DialogDescription>
       </DialogHeader>
+
+      <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
+        <p className="text-sm font-semibold">Empresa cliente</p>
+        {superAdmin ? (
+          <>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Escolha em qual ambiente do ImobControl este empreendimento deve ser salvo. Isso é diferente
+              da SPE responsável informada abaixo.
+            </p>
+            <div className="mt-3">
+              <Select
+                value={empresaAtualId != null ? String(empresaAtualId) : ""}
+                onValueChange={(value) => onSelecionarEmpresa(Number(value))}
+                disabled={carregandoEmpresas || empresas.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      carregandoEmpresas
+                        ? "Carregando empresas..."
+                        : empresas.length === 0
+                          ? "Nenhuma empresa cliente cadastrada"
+                          : "Selecione a empresa cliente"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {empresas.map((empresa) => (
+                    <SelectItem key={empresa.id} value={String(empresa.id)}>
+                      {empresa.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {empresas.length === 0 && !carregandoEmpresas && (
+              <p className="mt-2 text-xs text-destructive">
+                Primeiro crie a empresa cliente em Administração → Empresas.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Este empreendimento será salvo em <strong className="text-foreground">{empresaAtualNome ?? "sua empresa"}</strong>.
+          </p>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -590,7 +670,14 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
       </div>
 
       <DialogFooter>
-        <Button onClick={salvar} disabled={!nome.trim() || !spe.trim()}>
+        <Button
+          onClick={salvar}
+          disabled={
+            !nome.trim() ||
+            !spe.trim() ||
+            (superAdmin && (carregandoEmpresas || empresaAtualId == null))
+          }
+        >
           Cadastrar empreendimento
         </Button>
       </DialogFooter>
