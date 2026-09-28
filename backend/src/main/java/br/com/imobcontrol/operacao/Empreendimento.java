@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -64,12 +63,10 @@ public class Empreendimento {
     @Column(name = "comissao_sobre_acrescimos", nullable = false)
     private boolean comissaoSobreAcrescimos;
 
-    @Lob
-    @Column(name = "inadimplencia_json")
+    @Column(name = "inadimplencia_json", columnDefinition = "TEXT")
     private String inadimplenciaJson;
 
-    @Lob
-    @Column
+    @Column(columnDefinition = "TEXT")
     private String observacoes;
 
     @Column(nullable = false, length = 30)
