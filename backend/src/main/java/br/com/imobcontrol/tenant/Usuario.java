@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import java.time.LocalDateTime;
 
@@ -43,6 +44,10 @@ public class Usuario {
 
     @Column(nullable = false)
     private boolean ativo = true;
+
+    @Version
+    @Column(nullable = false)
+    private Long versao;
 
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
@@ -114,6 +119,10 @@ public class Usuario {
 
     public void setAtivo(boolean ativo) {
         this.ativo = ativo;
+    }
+
+    public Long getVersao() {
+        return versao;
     }
 
     public LocalDateTime getCriadoEm() {
