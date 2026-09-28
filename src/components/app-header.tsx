@@ -276,6 +276,62 @@ export function AppHeader() {
           </Button>
         )}
         {usuario?.perfil === "SUPER_ADMIN" && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 lg:hidden"
+                title={empresaAtual ? `Empresa: ${empresaAtual.nome}` : "Selecionar empresa cliente"}
+                aria-label={empresaAtual ? `Empresa: ${empresaAtual.nome}` : "Selecionar empresa cliente"}
+              >
+                <Building2 className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[300px] max-w-[calc(100vw-1.5rem)] space-y-3">
+              <div>
+                <p className="text-sm font-semibold">Empresa cliente</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Escolha em qual ambiente você está operando. Cadastros de clientes, empreendimentos,
+                  vendas e recebimentos ficam vinculados a esta empresa.
+                </p>
+              </div>
+              <Select
+                value={empresaAtualId != null ? String(empresaAtualId) : ""}
+                onValueChange={(value) => selecionarEmpresa(Number(value))}
+                disabled={carregandoEmpresas || empresas.length === 0}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder={
+                      carregandoEmpresas
+                        ? "Carregando empresas..."
+                        : empresas.length === 0
+                          ? "Nenhuma empresa cadastrada"
+                          : "Selecionar empresa"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {empresas.map((empresa) => (
+                    <SelectItem key={empresa.id} value={String(empresa.id)}>
+                      {empresa.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => void navigate({ to: "/admin/empresas" })}
+              >
+                Gerenciar empresas
+              </Button>
+            </PopoverContent>
+          </Popover>
+        )}
+        {usuario?.perfil === "SUPER_ADMIN" && (
           <div className="hidden min-w-48 lg:block">
             <Select
               value={empresaAtualId != null ? String(empresaAtualId) : ""}
