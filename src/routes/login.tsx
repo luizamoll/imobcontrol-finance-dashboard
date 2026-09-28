@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, CircleDollarSign } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 
@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
+import { ImobControlBrand, ImobControlMark } from "@/components/imobcontrol-brand";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -85,15 +86,7 @@ function LoginPage() {
         <div className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-sidebar-primary/10 blur-3xl" />
         <div className="absolute -bottom-20 right-0 h-80 w-80 rounded-full bg-sidebar-accent/10 blur-3xl" />
 
-        <div className="relative flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
-            <CircleDollarSign className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-base font-semibold">ImobControl</p>
-            <p className="text-sm text-sidebar-foreground/60">Gestão imobiliária</p>
-          </div>
-        </div>
+        <ImobControlBrand className="relative" inverse />
 
         <div className="relative max-w-xl">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/40 px-3 py-1.5 text-xs font-medium">
@@ -115,14 +108,8 @@ function LoginPage() {
 
       <main className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8 lg:px-12">
         <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <CircleDollarSign className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">ImobControl</p>
-              <p className="text-xs text-muted-foreground">Gestão imobiliária</p>
-            </div>
+          <div className="mb-8 lg:hidden">
+            <ImobControlBrand />
           </div>
 
           <div className="mb-7">
