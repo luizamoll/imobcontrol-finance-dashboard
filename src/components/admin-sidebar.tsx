@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   ScrollText,
   Users,
+  UserRound,
 } from "lucide-react";
 
 import { ImobControlMark } from "@/components/imobcontrol-brand";
@@ -27,6 +28,7 @@ const itens = [
   { title: "Empresas", url: "/admin/empresas", icon: Building2 },
   { title: "Usuários e acessos", url: "/admin/usuarios", icon: Users },
   { title: "Auditoria", url: "/admin/auditoria", icon: ScrollText },
+  { title: "Minha conta", url: "/admin/conta", icon: UserRound },
 ] as const;
 
 export function AdminSidebar() {
