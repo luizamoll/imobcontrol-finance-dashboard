@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { inadimplenciaCalc, useStore } from "@/lib/store";
 import { brl0 } from "@/lib/format";
+import { useLiveNow } from "@/lib/use-live-now";
 
 export const Route = createFileRoute("/financeiro")({
   component: FinanceiroPage,
@@ -22,9 +23,9 @@ export const Route = createFileRoute("/financeiro")({
 
 function FinanceiroPage() {
   const { state } = useStore();
+  const hoje = useLiveNow();
 
   const consolidado = useMemo(() => {
-    const hoje = new Date();
     const previsto = state.vendas
       .filter((v) => v.status !== "cancelada")
       .reduce((a, v) => a + v.valorTotal, 0);
@@ -49,7 +50,7 @@ function FinanceiroPage() {
       distribuido,
       emAtraso,
     };
-  }, [state]);
+  }, [state, hoje]);
 
   return (
     <PageShell>
