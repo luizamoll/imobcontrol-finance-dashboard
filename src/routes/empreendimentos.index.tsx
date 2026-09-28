@@ -35,6 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { criarEmpreendimentoRemoto } from "@/lib/catalogo-api";
 import { brl0, formatCNPJ, num, pct } from "@/lib/format";
 import {
   DEFAULT_REGRAS_INADIMPLENCIA,
@@ -46,13 +47,15 @@ import {
   type JurosTipo,
   type RegrasInadimplencia,
 } from "@/lib/store";
+import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/empreendimentos/")({
   component: EmpreendimentosList,
 });
 
 function EmpreendimentosList() {
-  const { state, addEmpreendimento } = useStore();
+  const { state, setState } = useStore();
+  const { empresaAtualId } = useTenant();
   const [open, setOpen] = useState(false);
   const hasEmpreendimentos = state.empreendimentos.length > 0;
 
@@ -85,10 +88,26 @@ function EmpreendimentosList() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <NewEmpreendimentoDialog
-          onSave={(e) => {
-            addEmpreendimento(e);
-            toast.success(`Empreendimento "${e.nome}" cadastrado`);
-            setOpen(false);
+          onSave={async (e) => {
+            if (!empresaAtualId) {
+              toast.error("Selecione uma empresa antes de cadastrar o empreendimento");
+              return;
+            }
+            try {
+              const criado = await criarEmpreendimentoRemoto(empresaAtualId, e);
+              setState((s) => ({
+                ...s,
+                empreendimentos: [...s.empreendimentos, criado],
+              }));
+              toast.success(`Empreendimento "${e.nome}" cadastrado`);
+              setOpen(false);
+            } catch (error) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Não foi possível cadastrar o empreendimento",
+              );
+            }
           }}
         />
       </Dialog>
