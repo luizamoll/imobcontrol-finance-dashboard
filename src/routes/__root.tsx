@@ -15,6 +15,8 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
+import { AdminSidebar } from "@/components/admin-sidebar";
+import { AdminHeader } from "@/components/admin-header";
 import { StoreProvider } from "@/lib/store";
 import { AuthGate, AuthProvider } from "@/lib/auth";
 import { TenantProvider } from "@/lib/tenant";
@@ -131,6 +133,7 @@ function RootComponent() {
     select: (routerState) => routerState.location.pathname,
   });
   const isLoginPage = currentPath === "/login";
+  const isAdminPage = currentPath === "/admin" || currentPath.startsWith("/admin/");
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -143,20 +146,35 @@ function RootComponent() {
         ) : (
           <AuthGate>
             <TenantProvider>
-              <StoreProvider>
-              <SidebarProvider>
-                <div className="flex min-h-screen w-full bg-background">
-                  <AppSidebar />
-                  <SidebarInset className="flex flex-1 flex-col">
-                    <AppHeader />
-                    <main className="flex-1">
-                      <Outlet />
-                    </main>
-                  </SidebarInset>
-                </div>
-                <Toaster position="top-right" />
-              </SidebarProvider>
-              </StoreProvider>
+              {isAdminPage ? (
+                <SidebarProvider>
+                  <div className="flex min-h-screen w-full bg-background">
+                    <AdminSidebar />
+                    <SidebarInset className="flex flex-1 flex-col">
+                      <AdminHeader />
+                      <main className="flex-1">
+                        <Outlet />
+                      </main>
+                    </SidebarInset>
+                  </div>
+                  <Toaster position="top-right" />
+                </SidebarProvider>
+              ) : (
+                <StoreProvider>
+                  <SidebarProvider>
+                    <div className="flex min-h-screen w-full bg-background">
+                      <AppSidebar />
+                      <SidebarInset className="flex flex-1 flex-col">
+                        <AppHeader />
+                        <main className="flex-1">
+                          <Outlet />
+                        </main>
+                      </SidebarInset>
+                    </div>
+                    <Toaster position="top-right" />
+                  </SidebarProvider>
+                </StoreProvider>
+              )}
             </TenantProvider>
           </AuthGate>
         )}
