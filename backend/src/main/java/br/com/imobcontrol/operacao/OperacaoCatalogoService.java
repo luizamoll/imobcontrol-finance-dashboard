@@ -3,9 +3,8 @@ package br.com.imobcontrol.operacao;
 import br.com.imobcontrol.cliente.AuditoriaOperacional;
 import br.com.imobcontrol.cliente.AuditoriaOperacionalRepository;
 import br.com.imobcontrol.tenant.TenantContextService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
@@ -30,7 +29,7 @@ public class OperacaoCatalogoService {
     private final UnidadeRepository unidades;
     private final AuditoriaOperacionalRepository auditoria;
     private final TenantContextService tenants;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     public OperacaoCatalogoService(
             EmpreendimentoRepository empreendimentos,
@@ -38,7 +37,7 @@ public class OperacaoCatalogoService {
             UnidadeRepository unidades,
             AuditoriaOperacionalRepository auditoria,
             TenantContextService tenants,
-            ObjectMapper objectMapper
+            JsonMapper objectMapper
     ) {
         this.empreendimentos = empreendimentos;
         this.quadras = quadras;
@@ -366,20 +365,12 @@ public class OperacaoCatalogoService {
 
     private String json(JsonNode node) {
         if (node == null || node.isNull()) return null;
-        try {
-            return objectMapper.writeValueAsString(node);
-        } catch (JsonProcessingException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "JSON de regras inválido", ex);
-        }
+        return objectMapper.writeValueAsString(node);
     }
 
     private JsonNode json(String value) {
         if (value == null || value.isBlank()) return null;
-        try {
-            return objectMapper.readTree(value);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("JSON persistido inválido", ex);
-        }
+        return objectMapper.readTree(value);
     }
 
     private EmpreendimentoResponse toResponse(Empreendimento e) {
