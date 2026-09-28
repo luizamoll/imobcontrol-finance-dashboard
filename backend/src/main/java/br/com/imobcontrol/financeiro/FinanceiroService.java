@@ -374,6 +374,11 @@ public class FinanceiroService {
                 ? null
                 : escrever(inadimplencia);
 
+        long ajusteRestanteCentavos = centavos(
+                moeda(venda.getValorTotal()).subtract(totalComposicao(itens))
+        );
+        int parcelasAjustaveisRestantes = quantidadeParcelasAjustaveis(itens);
+
         for (var item : itens) {
             PagamentoItem p = new PagamentoItem();
             p.setEmpresaId(empresaId);
@@ -387,8 +392,22 @@ public class FinanceiroService {
             pagamentos.save(p);
 
             if ("bem".equalsIgnoreCase(item.tipo())) continue;
-            int quantidade = parcelado(item.tipo()) ? Math.max(1, item.parcelas()) : 1;
+            boolean itemParcelado = parcelado(item.tipo());
+            int quantidade = itemParcelado ? Math.max(1, item.parcelas()) : 1;
+
             for (int numero = 1; numero <= quantidade; numero++) {
+                BigDecimal valorParcela = moeda(item.valor());
+
+                if (itemParcelado) {
+                    long moduloAjuste = Math.abs(ajusteRestanteCentavos);
+                    if (moduloAjuste > 0 && moduloAjuste >= parcelasAjustaveisRestantes) {
+                        long passo = ajusteRestanteCentavos > 0 ? 1L : -1L;
+                        valorParcela = moeda(valorParcela.add(BigDecimal.valueOf(passo, 2)));
+                        ajusteRestanteCentavos -= passo;
+                    }
+                    parcelasAjustaveisRestantes--;
+                }
+
                 Parcela parcela = new Parcela();
                 parcela.setEmpresaId(empresaId);
                 parcela.setVendaId(venda.getId());
@@ -400,7 +419,7 @@ public class FinanceiroService {
                 parcela.setNumero(numero);
                 parcela.setTotalParcelas(quantidade);
                 parcela.setVencimento(item.primeiroVencimento().plusMonths(numero - 1L));
-                parcela.setValor(moeda(item.valor()));
+                parcela.setValor(valorParcela);
                 parcela.setValorPago(BigDecimal.ZERO);
                 parcela.setStatus("pendente");
                 parcela.setRegrasInadimplenciaJson(inadJson);
@@ -432,17 +451,40 @@ public class FinanceiroService {
     }
 
     private void validarComposicao(VendaRequest body) {
-        BigDecimal total = BigDecimal.ZERO;
-        for (var item : body.composicao()) {
-            int qtd = parcelado(item.tipo()) ? Math.max(1, item.parcelas()) : 1;
-            total = total.add(item.valor().multiply(BigDecimal.valueOf(qtd)));
-        }
-        if (moeda(total).compareTo(moeda(body.valorTotal())) != 0) {
+        BigDecimal diferenca = moeda(body.valorTotal()).subtract(totalComposicao(body.composicao()));
+        long diferencaCentavos = Math.abs(centavos(diferenca));
+
+        if (diferencaCentavos == 0) return;
+
+        int parcelasAjustaveis = quantidadeParcelasAjustaveis(body.composicao());
+        long limiteArredondamento = Math.max(1L, (parcelasAjustaveis + 1L) / 2L);
+
+        if (parcelasAjustaveis == 0 || diferencaCentavos > limiteArredondamento) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "A composição do pagamento não fecha com o valor negociado"
             );
         }
+    }
+
+    private BigDecimal totalComposicao(List<VendaRequest.PagamentoRequest> itens) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (var item : itens) {
+            int qtd = parcelado(item.tipo()) ? Math.max(1, item.parcelas()) : 1;
+            total = total.add(moeda(item.valor()).multiply(BigDecimal.valueOf(qtd)));
+        }
+        return moeda(total);
+    }
+
+    private int quantidadeParcelasAjustaveis(List<VendaRequest.PagamentoRequest> itens) {
+        return itens.stream()
+                .filter(item -> parcelado(item.tipo()))
+                .mapToInt(item -> Math.max(1, item.parcelas()))
+                .sum();
+    }
+
+    private long centavos(BigDecimal valor) {
+        return moeda(valor).movePointRight(2).longValueExact();
     }
 
     private boolean parcelado(String tipo) {
