@@ -57,4 +57,12 @@ public class AuditoriaOperacional {
     void prePersist() {
         criadoEm = LocalDateTime.now();
     }
+
+    public Long getId() { return id; }
+    public Long getEmpresaId() { return empresaId; }
+    public Long getUsuarioId() { return usuarioId; }
+    public String getEntidade() { return entidade; }
+    public Long getEntidadeId() { return entidadeId; }
+    public String getAcao() { return acao; }
+    public LocalDateTime getCriadoEm() { return criadoEm; }
 }
