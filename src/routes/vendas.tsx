@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, ShoppingCart, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { apiJson } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -43,6 +44,7 @@ import {
   type PagamentoTipo,
 } from "@/lib/store";
 import { addMonths, brl0, formatDate, todayISO, uid } from "@/lib/format";
+import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/vendas")({
   component: VendasPage,
@@ -181,11 +183,24 @@ function descricaoPlaceholder(tipo: PagamentoTipo) {
   }
 }
 
+type ClienteVenda = {
+  id: number;
+  nome: string;
+  cpf: string | null;
+};
+
+type PaginaClientes = {
+  content: ClienteVenda[];
+};
+
 function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const { state, addVenda } = useStore();
+  const { empresaAtualId } = useTenant();
   const [empId, setEmpId] = useState("");
   const [matId, setMatId] = useState("");
-  const [comprador, setComprador] = useState("");
+  const [clienteId, setClienteId] = useState("");
+  const [clientes, setClientes] = useState<ClienteVenda[]>([]);
+  const [carregandoClientes, setCarregandoClientes] = useState(false);
   const [valorNegociado, setValorNegociado] = useState("");
   const [dataContrato, setDataContrato] = useState(todayISO());
   const [corretor, setCorretor] = useState("");
@@ -194,6 +209,42 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [comissaoSobreAcrescimos, setComissaoSobreAcrescimos] = useState("nao");
   const [obs, setObs] = useState("");
   const [items, setItems] = useState<PagamentoItem[]>([]);
+
+  useEffect(() => {
+    if (!empresaAtualId) {
+      setClientes([]);
+      return;
+    }
+
+    let cancelado = false;
+    setCarregandoClientes(true);
+    void apiJson<PaginaClientes>("/api/clientes?pagina=0&tamanho=100", {
+      empresaId: empresaAtualId,
+    })
+      .then((pagina) => {
+        if (!cancelado) setClientes(pagina.content);
+      })
+      .catch((error) => {
+        if (!cancelado) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível carregar os clientes",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setCarregandoClientes(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId]);
+
+  const clienteSelecionado = clientes.find(
+    (cliente) => String(cliente.id) === clienteId,
+  );
 
   const empreendimento = state.empreendimentos.find((e) => e.id === empId);
   const matricula = state.matriculas.find((m) => m.id === matId);
@@ -241,9 +292,9 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
     );
   };
 
-  const submit = () => {
-    if (!empId || !matId || !comprador.trim()) {
-      toast.error("Preencha empreendimento, unidade e comprador");
+  const submit = async () => {
+    if (!empId || !matId || !clienteId || !clienteSelecionado) {
+      toast.error("Preencha empreendimento, unidade e cliente");
       return;
     }
     if (valorContrato <= 0) {
@@ -271,21 +322,28 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       return;
     }
 
-    addVenda({
-      empreendimentoId: empId,
-      matriculaId: matId,
-      compradorNome: comprador.trim(),
-      valorTotal: valorContrato,
-      dataContrato,
-      corretorNome: corretor,
-      corretorPct: pctCorretor,
-      repasseComissaoPct: pctRepasse,
-      comissaoSobreAcrescimos: comissaoSobreAcrescimos === "sim",
-      observacoes: obs,
-      composicao: items,
-    });
-    toast.success("Venda registrada");
-    onClose();
+    try {
+      await addVenda({
+        empreendimentoId: empId,
+        matriculaId: matId,
+        clienteId,
+        compradorNome: clienteSelecionado.nome,
+        valorTotal: valorContrato,
+        dataContrato,
+        corretorNome: corretor,
+        corretorPct: pctCorretor,
+        repasseComissaoPct: pctRepasse,
+        comissaoSobreAcrescimos: comissaoSobreAcrescimos === "sim",
+        observacoes: obs,
+        composicao: items,
+      });
+      toast.success("Venda registrada");
+      onClose();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível registrar a venda",
+      );
+    }
   };
 
   return (
@@ -380,12 +438,31 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="sm:col-span-2">
-          <Label>Comprador</Label>
-          <Input
-            value={comprador}
-            onChange={(e) => setComprador(e.target.value)}
-            placeholder="Nome do comprador"
-          />
+          <Label>Cliente / Comprador</Label>
+          <Select value={clienteId} onValueChange={setClienteId}>
+            <SelectTrigger>
+              <SelectValue
+                placeholder={
+                  carregandoClientes
+                    ? "Carregando clientes..."
+                    : clientes.length === 0
+                      ? "Cadastre um cliente antes de registrar a venda"
+                      : "Selecione o cliente"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {clientes.map((cliente) => (
+                <SelectItem key={cliente.id} value={String(cliente.id)}>
+                  {cliente.nome}
+                  {cliente.cpf ? ` · CPF ${cliente.cpf}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O comprador é vinculado ao cadastro de Clientes, evitando duplicidade de CPF e endereço.
+          </p>
         </div>
 
         <div>
