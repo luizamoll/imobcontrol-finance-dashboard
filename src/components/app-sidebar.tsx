@@ -13,6 +13,7 @@ import {
   Inbox,
   AlertOctagon,
   ShieldCheck,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
@@ -129,6 +130,18 @@ export function AppSidebar() {
             <SidebarGroupLabel>Administração</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={currentPath === "/admin"}
+                    tooltip="Painel administrativo"
+                  >
+                    <Link to="/admin">
+                      <SlidersHorizontal className="h-4 w-4" />
+                      <span>Painel administrativo</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
