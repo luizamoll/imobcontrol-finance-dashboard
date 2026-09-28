@@ -49,8 +49,13 @@ export function AppHeader() {
   const navigate = useNavigate();
   const { usuario, sair } = useAuth();
   const { state } = useStore();
-  const { empresas, empresaAtualId, carregando: carregandoEmpresas, selecionarEmpresa } =
-    useTenant();
+  const {
+    empresas,
+    empresaAtual,
+    empresaAtualId,
+    carregando: carregandoEmpresas,
+    selecionarEmpresa,
+  } = useTenant();
   const [busca, setBusca] = useState("");
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [notificacoesLidas, setNotificacoesLidas] = useState<Set<string>>(() => new Set());
@@ -63,6 +68,12 @@ export function AppHeader() {
 
   const nome = usuario?.nome ?? "Usuário";
   const perfil = usuario?.perfil ? perfilLegivel(usuario.perfil) : "";
+  const contextoAcesso =
+    usuario?.perfil === "SUPER_ADMIN"
+      ? empresaAtual
+        ? `Operando: ${empresaAtual.nome}`
+        : "Administração geral"
+      : usuario?.empresa?.nome ?? "";
   const termo = busca.trim().toLowerCase();
 
   const resultados = useMemo(() => {
@@ -411,6 +422,11 @@ export function AppHeader() {
           <div className="hidden text-left leading-tight sm:block">
             <div className="max-w-40 truncate text-sm font-medium">{nome}</div>
             <div className="text-xs text-muted-foreground">{perfil}</div>
+            {contextoAcesso && (
+              <div className="max-w-44 truncate text-[11px] text-muted-foreground/80">
+                {contextoAcesso}
+              </div>
+            )}
           </div>
           <Button
             variant="ghost"
