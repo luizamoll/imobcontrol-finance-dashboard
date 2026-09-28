@@ -16,6 +16,8 @@ import {
   criarVendaRemota,
   receberParcelaRemota,
   reverterParcelaRemota,
+  type VendaInput,
+  type VendaUpdatePatch,
 } from "./financeiro-api";
 
 // ---------- Types ----------
@@ -179,7 +181,7 @@ export interface Venda {
   observacoes?: string;
   status: VendaStatus;
   composicao: PagamentoItem[];
-  /** Regras congeladas no momento do contrato. */
+  /** Regras próprias da venda; podem ser ajustadas sem reescrever recebimentos já realizados. */
   regras?: RegrasContrato;
   versao?: number;
 }
@@ -449,15 +451,8 @@ interface Ctx {
   updateQuadra: (id: string, patch: Partial<Quadra>) => void;
   addMatricula: (m: Omit<Matricula, "id">) => Matricula;
   updateMatricula: (id: string, patch: Partial<Matricula>) => void;
-  addVenda: (
-    v: Omit<Venda, "id" | "status" | "regras" | "versao"> & { status?: VendaStatus }
-  ) => Promise<Venda>;
-  updateVenda: (
-    id: string,
-    patch: Partial<Pick<Venda,
-      "compradorNome" | "valorTotal" | "dataContrato" | "corretorNome" | "corretorPct" |
-      "repasseComissaoPct" | "comissaoSobreAcrescimos" | "observacoes" | "composicao">>
-  ) => Promise<void>;
+  addVenda: (v: VendaInput) => Promise<Venda>;
+  updateVenda: (id: string, patch: VendaUpdatePatch) => Promise<void>;
   receberParcela: (id: string, valorRecebido?: number, data?: string) => Promise<void>;
   reverterParcela: (id: string) => Promise<void>;
   marcarParcelaPaga: (id: string, dataPagamento?: string) => Promise<void>;
