@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -30,12 +29,10 @@ public class Quadra {
     @Column(nullable = false, length = 120)
     private String nome;
 
-    @Lob
-    @Column
+    @Column(columnDefinition = "TEXT")
     private String descricao;
 
-    @Lob
-    @Column(name = "regras_json")
+    @Column(name = "regras_json", columnDefinition = "TEXT")
     private String regrasJson;
 
     @Version
