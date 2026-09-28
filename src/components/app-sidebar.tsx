@@ -62,8 +62,8 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <ImobControlMark className="h-6 w-6" inverse />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] shadow-sm shadow-black/10">
+            <ImobControlMark className="h-7 w-7" inverse />
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
