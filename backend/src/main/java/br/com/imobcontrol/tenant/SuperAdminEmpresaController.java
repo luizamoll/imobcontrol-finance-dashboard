@@ -9,13 +9,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.text.Normalizer;
 import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/api/super-admin/empresas")
@@ -36,11 +40,40 @@ public class SuperAdminEmpresaController {
     }
 
     @GetMapping
-    public List<EmpresaResumo> listar() {
-        return empresas.findAllByAtivaTrueOrderByNomeAsc()
+    public List<EmpresaResumo> listar(
+            @RequestParam(defaultValue = "false") boolean incluirInativas
+    ) {
+        return (incluirInativas
+                ? empresas.findAllByOrderByNomeAsc()
+                : empresas.findAllByAtivaTrueOrderByNomeAsc())
                 .stream()
                 .map(EmpresaResumo::from)
                 .toList();
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public EmpresaResumo criar(
+            Authentication autenticacao,
+            @Valid @RequestBody CriarEmpresa body
+    ) {
+        Usuario ator = usuarios.findByEmailIgnoreCase(autenticacao.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+
+        Empresa empresa = new Empresa();
+        empresa.setNome(body.nome().trim());
+        empresa.setSlug(slugUnico(body.nome()));
+        empresa.setAtiva(true);
+
+        Empresa salva = empresas.saveAndFlush(empresa);
+        auditoria.save(new AuditoriaOperacional(
+                salva.getId(),
+                ator.getId(),
+                "EMPRESA",
+                salva.getId(),
+                "EMPRESA_CRIADA"
+        ));
+        return EmpresaResumo.from(salva);
     }
 
     @PutMapping("/{id}")
@@ -55,6 +88,9 @@ public class SuperAdminEmpresaController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada"));
 
         empresa.setNome(body.nome().trim());
+        if (body.ativa() != null) {
+            empresa.setAtiva(body.ativa());
+        }
         Empresa salva = empresas.saveAndFlush(empresa);
         auditoria.save(new AuditoriaOperacional(
                 salva.getId(),
@@ -66,17 +102,49 @@ public class SuperAdminEmpresaController {
         return EmpresaResumo.from(salva);
     }
 
-    public record AtualizarEmpresa(
+    private String slugUnico(String nome) {
+        String base = Normalizer.normalize(nome, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+        if (base.isBlank()) base = "empresa";
+
+        String candidato = base;
+        int sufixo = 2;
+        while (empresas.findBySlug(candidato).isPresent()) {
+            candidato = base + "-" + sufixo++;
+        }
+        return candidato;
+    }
+
+    public record CriarEmpresa(
             @NotBlank @Size(max = 160) String nome
     ) {
     }
 
-    public record EmpresaResumo(Long id, String nome, String slug) {
+    public record AtualizarEmpresa(
+            @NotBlank @Size(max = 160) String nome,
+            Boolean ativa
+    ) {
+    }
+
+    public record EmpresaResumo(
+            Long id,
+            String nome,
+            String slug,
+            boolean ativa,
+            java.time.LocalDateTime criadoEm,
+            java.time.LocalDateTime atualizadoEm
+    ) {
         static EmpresaResumo from(Empresa empresa) {
             return new EmpresaResumo(
                     empresa.getId(),
                     empresa.getNome(),
-                    empresa.getSlug()
+                    empresa.getSlug(),
+                    empresa.isAtiva(),
+                    empresa.getCriadoEm(),
+                    empresa.getAtualizadoEm()
             );
         }
     }
