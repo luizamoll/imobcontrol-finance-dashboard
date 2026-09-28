@@ -10,6 +10,13 @@ import { addMonths, todayISO, uid } from "./format";
 import { useAuth } from "./auth";
 import { useTenant } from "./tenant";
 import { carregarCatalogo } from "./catalogo-api";
+import {
+  atualizarVendaRemota,
+  carregarFinanceiro,
+  criarVendaRemota,
+  receberParcelaRemota,
+  reverterParcelaRemota,
+} from "./financeiro-api";
 
 // ---------- Types ----------
 export type EmpStatus = "planejamento" | "lancamento" | "em_vendas" | "concluido";
@@ -161,6 +168,7 @@ export interface Venda {
   id: string;
   empreendimentoId: string;
   matriculaId: string;
+  clienteId?: string;
   compradorNome: string;
   valorTotal: number;
   dataContrato: string;
@@ -173,6 +181,7 @@ export interface Venda {
   composicao: PagamentoItem[];
   /** Regras congeladas no momento do contrato. */
   regras?: RegrasContrato;
+  versao?: number;
 }
 
 export interface Parcela {
@@ -180,6 +189,7 @@ export interface Parcela {
   vendaId: string;
   empreendimentoId: string;
   matriculaId: string;
+  clienteId?: string;
   compradorNome: string;
   origemTipo: PagamentoTipo;
   origemDescricao: string;
@@ -191,6 +201,7 @@ export interface Parcela {
   dataPagamento?: string;
   status: ParcelaStatus;
   regrasInadimplencia?: RegrasInadimplencia;
+  versao?: number;
 }
 
 export interface Movimento {
@@ -199,6 +210,7 @@ export interface Movimento {
   vendaId: string;
   empreendimentoId: string;
   matriculaId: string;
+  clienteId?: string;
   compradorNome: string;
   corretorNome: string;
   origem: PagamentoTipo;
@@ -437,17 +449,19 @@ interface Ctx {
   updateQuadra: (id: string, patch: Partial<Quadra>) => void;
   addMatricula: (m: Omit<Matricula, "id">) => Matricula;
   updateMatricula: (id: string, patch: Partial<Matricula>) => void;
-  addVenda: (v: Omit<Venda, "id" | "status" | "regras"> & { status?: VendaStatus }) => Venda;
+  addVenda: (
+    v: Omit<Venda, "id" | "status" | "regras" | "versao"> & { status?: VendaStatus }
+  ) => Promise<Venda>;
   updateVenda: (
     id: string,
     patch: Partial<Pick<Venda,
       "compradorNome" | "valorTotal" | "dataContrato" | "corretorNome" | "corretorPct" |
       "repasseComissaoPct" | "comissaoSobreAcrescimos" | "observacoes" | "composicao">>
-  ) => void;
-  receberParcela: (id: string, valorRecebido?: number, data?: string) => void;
-  reverterParcela: (id: string) => void;
-  marcarParcelaPaga: (id: string, dataPagamento?: string) => void;
-  desmarcarParcela: (id: string) => void;
+  ) => Promise<void>;
+  receberParcela: (id: string, valorRecebido?: number, data?: string) => Promise<void>;
+  reverterParcela: (id: string) => Promise<void>;
+  marcarParcelaPaga: (id: string, dataPagamento?: string) => Promise<void>;
+  desmarcarParcela: (id: string) => Promise<void>;
   updateConfig: (patch: Partial<Config>) => void;
   updateTrimestre: (id: string, patch: Partial<TrimestreItem>) => void;
 }
@@ -559,14 +573,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (empresaAtualId == null) return;
     let cancelado = false;
 
-    void carregarCatalogo(empresaAtualId)
-      .then((catalogo) => {
+    void Promise.all([
+      carregarCatalogo(empresaAtualId),
+      carregarFinanceiro(empresaAtualId),
+    ])
+      .then(([catalogo, financeiro]) => {
         if (cancelado) return;
         setStateRaw((atual) => ({
           ...atual,
           empreendimentos: catalogo.empreendimentos,
           quadras: catalogo.quadras,
           matriculas: catalogo.matriculas,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
         }));
       })
       .catch(() => {
@@ -617,222 +637,84 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...s,
           matriculas: s.matriculas.map((x) => (x.id === id ? { ...x, ...patch } : x)),
         })),
-      addVenda: (v) => {
-        const emp = state.empreendimentos.find((e) => e.id === v.empreendimentoId);
-        const mat = state.matriculas.find((m) => m.id === v.matriculaId);
-        if (!emp || !mat) throw new Error("Empreendimento ou unidade não encontrados para a venda");
-        const quadra = mat.quadraId ? state.quadras.find((q) => q.id === mat.quadraId) : undefined;
-        const efetiva = regrasEfetivasUnidade(emp, mat, quadra, state.config).regras;
-
-        const vId = uid();
-        const newVenda: Venda = {
-          ...v,
-          id: vId,
-          status: v.status ?? "ativa",
-          regras: snapshotRegrasContrato(efetiva),
-        };
-        const newParcelas: Parcela[] = [];
-
-        for (const item of newVenda.composicao) {
-          if (item.tipo === "bem") continue;
-          const parcelado = item.tipo === "parcelas" || item.tipo === "sinal_parcelado";
-          const n = parcelado ? Math.max(1, item.parcelas || 1) : 1;
-          for (let i = 1; i <= n; i++) {
-            newParcelas.push({
-              id: uid(),
-              vendaId: vId,
-              empreendimentoId: newVenda.empreendimentoId,
-              matriculaId: newVenda.matriculaId,
-              compradorNome: newVenda.compradorNome,
-              origemTipo: item.tipo,
-              origemDescricao: item.descricao || item.tipo,
-              numero: i,
-              totalParcelas: n,
-              vencimento: addMonths(item.primeiroVencimento, i - 1),
-              valor: item.valor,
-              valorPago: 0,
-              status: "pendente",
-              regrasInadimplencia: snapshotInadimplencia(efetiva.inadimplencia),
-            });
-          }
-        }
-
+      addVenda: async (v) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const criada = await criarVendaRemota(empresaAtualId, v);
+        const financeiro = await carregarFinanceiro(empresaAtualId);
         setStateRaw((s) => ({
           ...s,
-          vendas: [...s.vendas, newVenda],
-          parcelas: [...s.parcelas, ...newParcelas],
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
           matriculas: s.matriculas.map((m) =>
-            m.id === newVenda.matriculaId
-              ? {
-                  ...m,
-                  status: "vendido",
-                  compradorNome: newVenda.compradorNome,
-                  vendaId: vId,
-                }
-              : m,
+            m.id === criada.matriculaId ? { ...m, status: "vendido" } : m,
           ),
         }));
-        return newVenda;
+        return criada;
       },
-      updateVenda: (id, patch) => {
+      updateVenda: async (id, patch) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
         const atual = state.vendas.find((v) => v.id === id);
         if (!atual) throw new Error("Venda não encontrada");
-
-        const alteracaoFinanceira =
-          patch.valorTotal !== undefined || patch.composicao !== undefined;
-        const possuiRecebimentos = state.movimentos.some((m) => m.vendaId === id);
-        if (alteracaoFinanceira && possuiRecebimentos) {
-          throw new Error(
-            "Esta venda já possui recebimentos. Reverta os recebimentos antes de alterar valor ou parcelas.",
-          );
-        }
-
-        setStateRaw((s) => {
-          const vendaAtual = s.vendas.find((v) => v.id === id);
-          if (!vendaAtual) return s;
-          const proxima: Venda = { ...vendaAtual, ...patch };
-
-          let parcelas = s.parcelas;
-          if (patch.composicao !== undefined) {
-            const regraInadimplencia =
-              vendaAtual.regras?.inadimplencia ??
-              s.empreendimentos.find((e) => e.id === vendaAtual.empreendimentoId)?.inadimplencia ??
-              s.config;
-            const novas: Parcela[] = [];
-
-            for (const item of proxima.composicao) {
-              if (item.tipo === "bem") continue;
-              const parcelado = item.tipo === "parcelas" || item.tipo === "sinal_parcelado";
-              const n = parcelado ? Math.max(1, item.parcelas || 1) : 1;
-              for (let i = 1; i <= n; i++) {
-                novas.push({
-                  id: uid(),
-                  vendaId: proxima.id,
-                  empreendimentoId: proxima.empreendimentoId,
-                  matriculaId: proxima.matriculaId,
-                  compradorNome: proxima.compradorNome,
-                  origemTipo: item.tipo,
-                  origemDescricao: item.descricao || item.tipo,
-                  numero: i,
-                  totalParcelas: n,
-                  vencimento: addMonths(item.primeiroVencimento, i - 1),
-                  valor: item.valor,
-                  valorPago: 0,
-                  status: "pendente",
-                  regrasInadimplencia: snapshotInadimplencia(regraInadimplencia),
-                });
-              }
-            }
-            parcelas = [
-              ...s.parcelas.filter((p) => p.vendaId !== id),
-              ...novas,
-            ];
-          } else if (patch.compradorNome) {
-            parcelas = s.parcelas.map((p) =>
-              p.vendaId === id ? { ...p, compradorNome: patch.compradorNome! } : p,
-            );
-          }
-
-          return {
-            ...s,
-            vendas: s.vendas.map((v) => (v.id === id ? proxima : v)),
-            parcelas,
-            matriculas: s.matriculas.map((m) =>
-              m.id === vendaAtual.matriculaId && patch.compradorNome
-                ? { ...m, compradorNome: patch.compradorNome }
-                : m,
-            ),
-          };
-        });
+        const salva = await atualizarVendaRemota(empresaAtualId, atual, patch);
+        const financeiro = await carregarFinanceiro(empresaAtualId);
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
+        void salva;
       },
-      receberParcela: (id, valorRecebido, dataParam) => {
-        setStateRaw((s) => {
-          const p = s.parcelas.find((x) => x.id === id);
-          if (!p || p.status === "paga" || p.status === "cancelada") return s;
-
-          const data = dataParam ?? todayISO();
-          const dataReferencia = new Date(`${data}T12:00:00`);
-          const devido = inadimplenciaCalc(p, s.config, dataReferencia).atualizado;
-          const valor = valorRecebido ?? devido;
-          if (valor + 0.01 < devido) return s;
-
-          const mov = computeReceber(p, valor, data, s, usuarioNome);
-          if (!mov) return s;
-          const quitada = vendaQuitadaAposPagamento(s.parcelas, p.vendaId, p.id);
-
-          return {
-            ...s,
-            parcelas: s.parcelas.map((x) =>
-              x.id === id
-                ? { ...x, status: "paga", valorPago: valor, dataPagamento: data }
-                : x,
-            ),
-            vendas: s.vendas.map((v) =>
-              v.id === p.vendaId && quitada ? { ...v, status: "quitada" } : v,
-            ),
-            movimentos: [...s.movimentos, mov],
-          };
-        });
+      receberParcela: async (id, valorRecebido, data) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const financeiro = await receberParcelaRemota(
+          empresaAtualId,
+          id,
+          valorRecebido,
+          data,
+        );
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
       },
-      reverterParcela: (id) => {
-        setStateRaw((s) => {
-          const p = s.parcelas.find((x) => x.id === id);
-          if (!p) return s;
-          return {
-            ...s,
-            parcelas: s.parcelas.map((x) =>
-              x.id === id
-                ? { ...x, status: "pendente", valorPago: 0, dataPagamento: undefined }
-                : x,
-            ),
-            vendas: s.vendas.map((v) =>
-              v.id === p.vendaId && v.status === "quitada" ? { ...v, status: "ativa" } : v,
-            ),
-            movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
-          };
-        });
+      reverterParcela: async (id) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const financeiro = await reverterParcelaRemota(empresaAtualId, id);
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
       },
-      marcarParcelaPaga: (id, dataPagamento) => {
-        setStateRaw((s) => {
-          const p = s.parcelas.find((x) => x.id === id);
-          if (!p || p.status === "paga" || p.status === "cancelada") return s;
-          const data = dataPagamento ?? todayISO();
-          const dataReferencia = new Date(`${data}T12:00:00`);
-          const devido = inadimplenciaCalc(p, s.config, dataReferencia).atualizado;
-          const mov = computeReceber(p, devido, data, s, usuarioNome);
-          const quitada = vendaQuitadaAposPagamento(s.parcelas, p.vendaId, p.id);
-
-          return {
-            ...s,
-            parcelas: s.parcelas.map((x) =>
-              x.id === id
-                ? { ...x, status: "paga", valorPago: devido, dataPagamento: data }
-                : x,
-            ),
-            vendas: s.vendas.map((v) =>
-              v.id === p.vendaId && quitada ? { ...v, status: "quitada" } : v,
-            ),
-            movimentos: mov ? [...s.movimentos, mov] : s.movimentos,
-          };
-        });
+      marcarParcelaPaga: async (id, dataPagamento) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const financeiro = await receberParcelaRemota(
+          empresaAtualId,
+          id,
+          undefined,
+          dataPagamento,
+        );
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
       },
-      desmarcarParcela: (id) => {
-        setStateRaw((s) => {
-          const p = s.parcelas.find((x) => x.id === id);
-          if (!p) return s;
-          return {
-            ...s,
-            parcelas: s.parcelas.map((x) =>
-              x.id === id
-                ? { ...x, status: "pendente", valorPago: 0, dataPagamento: undefined }
-                : x,
-            ),
-            vendas: s.vendas.map((v) =>
-              v.id === p.vendaId && v.status === "quitada" ? { ...v, status: "ativa" } : v,
-            ),
-            movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
-          };
-        });
+      desmarcarParcela: async (id) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const financeiro = await reverterParcelaRemota(empresaAtualId, id);
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
       },
       updateConfig: (patch) =>
         setStateRaw((s) => ({ ...s, config: { ...s.config, ...patch } })),
