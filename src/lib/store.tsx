@@ -426,8 +426,8 @@ interface Ctx {
   updateVenda: (
     id: string,
     patch: Partial<Pick<Venda,
-      "compradorNome" | "dataContrato" | "corretorNome" | "corretorPct" |
-      "repasseComissaoPct" | "comissaoSobreAcrescimos" | "observacoes">>
+      "compradorNome" | "valorTotal" | "dataContrato" | "corretorNome" | "corretorPct" |
+      "repasseComissaoPct" | "comissaoSobreAcrescimos" | "observacoes" | "composicao">>
   ) => void;
   receberParcela: (id: string, valorRecebido?: number, data?: string) => void;
   reverterParcela: (id: string) => void;
@@ -632,27 +632,77 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }));
         return newVenda;
       },
-      updateVenda: (id, patch) =>
-        setStateRaw((s) => {
-          const atual = s.vendas.find((v) => v.id === id);
-          if (!atual) return s;
+      updateVenda: (id, patch) => {
+        const atual = state.vendas.find((v) => v.id === id);
+        if (!atual) throw new Error("Venda não encontrada");
 
-          const proxima: Venda = { ...atual, ...patch };
+        const alteracaoFinanceira =
+          patch.valorTotal !== undefined || patch.composicao !== undefined;
+        const possuiRecebimentos = state.movimentos.some((m) => m.vendaId === id);
+        if (alteracaoFinanceira && possuiRecebimentos) {
+          throw new Error(
+            "Esta venda já possui recebimentos. Reverta os recebimentos antes de alterar valor ou parcelas.",
+          );
+        }
+
+        setStateRaw((s) => {
+          const vendaAtual = s.vendas.find((v) => v.id === id);
+          if (!vendaAtual) return s;
+          const proxima: Venda = { ...vendaAtual, ...patch };
+
+          let parcelas = s.parcelas;
+          if (patch.composicao !== undefined) {
+            const regraInadimplencia =
+              vendaAtual.regras?.inadimplencia ??
+              s.empreendimentos.find((e) => e.id === vendaAtual.empreendimentoId)?.inadimplencia ??
+              s.config;
+            const novas: Parcela[] = [];
+
+            for (const item of proxima.composicao) {
+              if (item.tipo === "bem") continue;
+              const parcelado = item.tipo === "parcelas" || item.tipo === "sinal_parcelado";
+              const n = parcelado ? Math.max(1, item.parcelas || 1) : 1;
+              for (let i = 1; i <= n; i++) {
+                novas.push({
+                  id: uid(),
+                  vendaId: proxima.id,
+                  empreendimentoId: proxima.empreendimentoId,
+                  matriculaId: proxima.matriculaId,
+                  compradorNome: proxima.compradorNome,
+                  origemTipo: item.tipo,
+                  origemDescricao: item.descricao || item.tipo,
+                  numero: i,
+                  totalParcelas: n,
+                  vencimento: addMonths(item.primeiroVencimento, i - 1),
+                  valor: item.valor,
+                  valorPago: 0,
+                  status: "pendente",
+                  regrasInadimplencia: snapshotInadimplencia(regraInadimplencia),
+                });
+              }
+            }
+            parcelas = [
+              ...s.parcelas.filter((p) => p.vendaId !== id),
+              ...novas,
+            ];
+          } else if (patch.compradorNome) {
+            parcelas = s.parcelas.map((p) =>
+              p.vendaId === id ? { ...p, compradorNome: patch.compradorNome! } : p,
+            );
+          }
+
           return {
             ...s,
             vendas: s.vendas.map((v) => (v.id === id ? proxima : v)),
-            parcelas: s.parcelas.map((p) =>
-              p.vendaId === id && patch.compradorNome
-                ? { ...p, compradorNome: patch.compradorNome }
-                : p,
-            ),
+            parcelas,
             matriculas: s.matriculas.map((m) =>
-              m.id === atual.matriculaId && patch.compradorNome
+              m.id === vendaAtual.matriculaId && patch.compradorNome
                 ? { ...m, compradorNome: patch.compradorNome }
                 : m,
             ),
           };
-        }),
+        });
+      },
       receberParcela: (id, valorRecebido, dataParam) => {
         setStateRaw((s) => {
           const p = s.parcelas.find((x) => x.id === id);
