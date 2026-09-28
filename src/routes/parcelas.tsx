@@ -333,9 +333,17 @@ function ParcelasPage() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => {
-                                    desmarcarParcela(p.id);
-                                    toast("Recebimento revertido");
+                                  onClick={async () => {
+                                    try {
+                                      await desmarcarParcela(p.id);
+                                      toast("Recebimento revertido");
+                                    } catch (error) {
+                                      toast.error(
+                                        error instanceof Error
+                                          ? error.message
+                                          : "Não foi possível reverter o recebimento",
+                                      );
+                                    }
                                   }}
                                 >
                                   <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reverter
@@ -346,13 +354,21 @@ function ParcelasPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => {
-                                    receberParcela(p.id, p.valorCobrado);
-                                    toast.success(
-                                      p.status === "vencida"
-                                        ? "Parcela recebida com os acréscimos contratuais"
-                                        : "Recebimento registrado",
-                                    );
+                                  onClick={async () => {
+                                    try {
+                                      await receberParcela(p.id, p.valorCobrado);
+                                      toast.success(
+                                        p.status === "vencida"
+                                          ? "Parcela recebida com os acréscimos contratuais"
+                                          : "Recebimento registrado",
+                                      );
+                                    } catch (error) {
+                                      toast.error(
+                                        error instanceof Error
+                                          ? error.message
+                                          : "Não foi possível registrar o recebimento",
+                                      );
+                                    }
                                   }}
                                 >
                                   <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
