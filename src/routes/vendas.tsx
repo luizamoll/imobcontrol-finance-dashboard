@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { apiJson } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/currency-input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -43,7 +44,7 @@ import {
   type PagamentoItem,
   type PagamentoTipo,
 } from "@/lib/store";
-import { addMonths, brl, brl0, formatDate, todayISO, uid } from "@/lib/format";
+import { addMonths, brl, formatDate, todayISO, uid } from "@/lib/format";
 import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/vendas")({
@@ -134,9 +135,9 @@ function VendasPage() {
                     </TableCell>
                     <TableCell className="text-sm">{v.corretorNome || "—"}</TableCell>
                     <TableCell className="text-sm">{formatDate(v.dataContrato)}</TableCell>
-                    <TableCell className="text-right font-medium">{brl0(v.valorTotal)}</TableCell>
-                    <TableCell className="text-right text-success">{brl0(t.recebido)}</TableCell>
-                    <TableCell className="text-right">{brl0(t.saldo)}</TableCell>
+                    <TableCell className="text-right font-medium">{brl(v.valorTotal)}</TableCell>
+                    <TableCell className="text-right text-success">{brl(t.recebido)}</TableCell>
+                    <TableCell className="text-right">{brl(t.saldo)}</TableCell>
                     <TableCell><VendaStatusBadge status={v.status} /></TableCell>
                   </TableRow>
                 );
@@ -201,7 +202,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [clienteId, setClienteId] = useState("");
   const [clientes, setClientes] = useState<ClienteVenda[]>([]);
   const [carregandoClientes, setCarregandoClientes] = useState(false);
-  const [valorNegociado, setValorNegociado] = useState("");
+  const [valorNegociado, setValorNegociado] = useState(0);
   const [dataContrato, setDataContrato] = useState(todayISO());
   const [corretor, setCorretor] = useState("");
   const [corretorPct, setCorretorPct] = useState("0");
@@ -264,7 +265,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
     [state.matriculas, empId],
   );
 
-  const valorContrato = Number(valorNegociado) || 0;
+  const valorContrato = valorNegociado;
   const valorContratoCentavos = Math.round(valorContrato * 100);
   const totalComposicaoCentavos = items.reduce((total, item) => {
     const quantidade = itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1;
@@ -346,7 +347,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
     }
     if (!composicaoConfere) {
       toast.error("A composição do pagamento não fecha com o valor negociado", {
-        description: `Valor negociado: ${brl0(valorContrato)} · composição: ${brl0(totalComposicao)}.`,
+        description: `Valor negociado: ${brl(valorContrato)} · composição: ${brl(totalComposicao)}.`,
       });
       return;
     }
@@ -403,7 +404,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             onValueChange={(value) => {
               setEmpId(value);
               setMatId("");
-              setValorNegociado("");
+              setValorNegociado(0);
               setCorretorPct("0");
               setRepasseComissaoPct("50");
               setComissaoSobreAcrescimos("nao");
@@ -426,7 +427,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             onValueChange={(value) => {
               setMatId(value);
               const selecionada = state.matriculas.find((m) => m.id === value);
-              setValorNegociado(selecionada?.valorVenda ? String(selecionada.valorVenda) : "");
+              setValorNegociado(selecionada?.valorVenda ?? 0);
               setItems([]);
               if (empreendimento && selecionada) {
                 const q = selecionada.quadraId
@@ -506,16 +507,14 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
 
         <div>
           <Label>Valor negociado do contrato (R$)</Label>
-          <Input
-            type="number"
-            min="0"
+          <CurrencyInput
             value={valorNegociado}
-            onChange={(e) => setValorNegociado(e.target.value)}
-            placeholder="Informe o valor efetivamente negociado"
+            onValueChange={setValorNegociado}
+            placeholder="Ex.: 100.000,00"
           />
           {matricula && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Valor cadastrado da unidade: {brl0(matricula.valorVenda)}. Altere apenas se a venda tiver
+              Valor cadastrado da unidade: {brl(matricula.valorVenda)}. Altere apenas se a venda tiver
               negociação diferente.
             </p>
           )}
@@ -649,15 +648,14 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
 
                     <div className={parcelado ? "" : "sm:col-span-2"}>
                       <Label className="text-xs">{parcelado ? "Valor por parcela" : "Valor"}</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={item.valor || ""}
-                        onChange={(e) =>
+                      <CurrencyInput
+                        value={item.valor}
+                        onValueChange={(valor) =>
                           setItems((atuais) =>
-                            atuais.map((x, i) => i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x),
+                            atuais.map((x, i) => i === idx ? { ...x, valor } : x),
                           )
                         }
+                        placeholder="0,00"
                       />
                     </div>
 
@@ -758,7 +756,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                     )}
                     <span>
                       <span className="text-muted-foreground">Subtotal: </span>
-                      <strong>{brl0(subtotal)}</strong>
+                      <strong>{brl(subtotal)}</strong>
                     </span>
                   </div>
                 </div>
@@ -827,7 +825,7 @@ function ResumoValor({ label, value }: { label: string; value: number }) {
   return (
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-semibold">{brl0(value)}</div>
+      <div className="font-semibold">{brl(value)}</div>
     </div>
   );
 }
