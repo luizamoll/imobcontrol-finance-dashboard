@@ -88,13 +88,13 @@ function AdminContaPage() {
       <PageHeader
         eyebrow="Administração da plataforma"
         title="Minha conta"
-        description="Mantenha a credencial da administração da plataforma separada das contas dos clientes."
+        description="Gerencie com segurança as credenciais usadas para administrar o ImobControl."
       />
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
         <Card className="border-border/70">
           <CardHeader>
-            <CardTitle className="text-base">Credenciais da SUPER_ADMIN</CardTitle>
+            <CardTitle className="text-base">Credenciais administrativas</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
@@ -156,20 +156,20 @@ function AdminContaPage() {
 
         <Card className="border-border/70">
           <CardHeader>
-            <CardTitle className="text-base">Separação de acesso</CardTitle>
+            <CardTitle className="text-base">Segurança da conta</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
             <div className="flex gap-3 rounded-lg border border-border/70 p-4">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
               <div>
-                <div className="font-medium text-foreground">Conta da plataforma</div>
+                <div className="font-medium text-foreground">Proteção do acesso</div>
                 <p className="mt-1">
-                  Esta conta é sua e fica acima das contas ADMIN e USUARIO de cada empresa.
+                  Use uma credencial exclusiva para as tarefas administrativas e mantenha a senha atualizada.
                 </p>
               </div>
             </div>
             <p>
-              Use um e-mail e uma senha diferentes das credenciais de clientes para evitar confusão entre os dois ambientes.
+              Evite reutilizar senhas e mantenha este acesso restrito a quem realmente administra a plataforma.
             </p>
           </CardContent>
         </Card>
