@@ -1,6 +1,6 @@
 package br.com.imobcontrol.operacao;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDateTime;
 
