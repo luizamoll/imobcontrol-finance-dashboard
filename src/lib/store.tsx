@@ -9,6 +9,7 @@ import {
 import { addMonths, todayISO, uid } from "./format";
 import { useAuth } from "./auth";
 import { useTenant } from "./tenant";
+import { temAlgumaPermissao } from "./permissoes";
 import { carregarCatalogo } from "./catalogo-api";
 import {
   atualizarVendaRemota,
