@@ -22,6 +22,9 @@ import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/admin/empresas")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    nova: search.nova === "1" || search.nova === 1 || search.nova === true,
+  }),
   component: AdminEmpresasPage,
   head: () => ({ meta: [{ title: "Empresas · Administração · ImobControl" }] }),
 });
@@ -50,6 +53,7 @@ type UsuarioCriado = {
 
 function AdminEmpresasPage() {
   const navigate = useNavigate();
+  const { nova } = Route.useSearch();
   const { usuario } = useAuth();
   const { selecionarEmpresa } = useTenant();
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -79,6 +83,10 @@ function AdminEmpresasPage() {
   }
 
   useEffect(() => { void carregar(); }, []);
+
+  useEffect(() => {
+    if (nova) setNovoAberto(true);
+  }, [nova]);
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
