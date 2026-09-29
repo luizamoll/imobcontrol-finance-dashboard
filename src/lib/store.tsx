@@ -547,6 +547,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const { empresaAtualId } = useTenant();
   const usuarioNome = usuario?.nome?.trim() || "Usuário autenticado";
   const usuarioId = usuario?.id ?? null;
+  const podeCarregarCatalogo = temAlgumaPermissao(usuario, [
+    "EMPREENDIMENTOS_VISUALIZAR",
+    "EMPREENDIMENTOS_GERENCIAR",
+    "VENDAS_VISUALIZAR",
+    "VENDAS_GERENCIAR",
+    "RECEBIMENTOS_VISUALIZAR",
+    "RECEBIMENTOS_REGISTRAR",
+    "RECEBIMENTOS_ESTORNAR",
+    "FINANCEIRO_VISUALIZAR",
+    "RELATORIOS_VISUALIZAR",
+  ]);
+  const podeCarregarFinanceiro = temAlgumaPermissao(usuario, [
+    "VENDAS_VISUALIZAR",
+    "VENDAS_GERENCIAR",
+    "RECEBIMENTOS_VISUALIZAR",
+    "RECEBIMENTOS_REGISTRAR",
+    "RECEBIMENTOS_ESTORNAR",
+    "FINANCEIRO_VISUALIZAR",
+    "RELATORIOS_VISUALIZAR",
+  ]);
   const [state, setStateRaw] = useState<State>(() => makeEmptyState());
   const [hydrated, setHydrated] = useState(false);
 
@@ -572,8 +592,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let cancelado = false;
 
     void Promise.all([
-      carregarCatalogo(empresaAtualId),
-      carregarFinanceiro(empresaAtualId),
+      podeCarregarCatalogo
+        ? carregarCatalogo(empresaAtualId)
+        : Promise.resolve({ empreendimentos: [], quadras: [], matriculas: [] }),
+      podeCarregarFinanceiro
+        ? carregarFinanceiro(empresaAtualId)
+        : Promise.resolve({ vendas: [], parcelas: [], movimentos: [] }),
     ])
       .then(([catalogo, financeiro]) => {
         if (cancelado) return;
@@ -594,7 +618,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelado = true;
     };
-  }, [empresaAtualId]);
+  }, [empresaAtualId, podeCarregarCatalogo, podeCarregarFinanceiro]);
 
   const api = useMemo<Ctx>(() => {
     const setState = (updater: (s: State) => State) => setStateRaw(updater);
