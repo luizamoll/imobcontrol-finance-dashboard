@@ -12,4 +12,7 @@ public record EmpresaUsuarioCreateRequest(
         @NotBlank @Size(min = 8, max = 72) String senha,
         Set<PermissaoUsuario> permissoes
 ) {
+    public EmpresaUsuarioCreateRequest(String nome, String email, String senha) {
+        this(nome, email, null, senha, Set.of());
+    }
 }
