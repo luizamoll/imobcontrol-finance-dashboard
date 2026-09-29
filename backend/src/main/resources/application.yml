@@ -35,6 +35,9 @@ server:
         same-site: lax
 
 management:
+  health:
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:
