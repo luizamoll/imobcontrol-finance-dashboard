@@ -111,7 +111,7 @@ function AdminDashboard() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void navigate({ to: "/admin/empresas" })}
+              onClick={() => window.location.assign("/admin/empresas")}
             >
               Gerenciar empresas
             </Button>
@@ -150,19 +150,19 @@ function AdminDashboard() {
               icon={Building2}
               title="Empresas"
               description="Criar, renomear, ativar e acessar ambientes."
-              onClick={() => void navigate({ to: "/admin/empresas" })}
+              onClick={() => window.location.assign("/admin/empresas")}
             />
             <QuickAction
               icon={Users}
               title="Usuários e acessos"
               description="Gerenciar contas, papéis e senhas."
-              onClick={() => void navigate({ to: "/admin/usuarios" })}
+              onClick={() => window.location.assign("/admin/usuarios")}
             />
             <QuickAction
               icon={ScrollText}
               title="Auditoria"
               description="Ver quem alterou o quê e quando."
-              onClick={() => void navigate({ to: "/admin/auditoria" })}
+              onClick={() => window.location.assign("/admin/auditoria")}
             />
           </CardContent>
         </Card>
