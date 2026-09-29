@@ -7,6 +7,7 @@ import {
   Landmark,
   Users,
   UserCog,
+  UserRound,
   FileBarChart,
   Settings,
   ContactRound,
@@ -16,6 +17,7 @@ import {
 
 import { useTenant } from "@/lib/tenant";
 import { useAuth } from "@/lib/auth";
+import { temPermissao, type PermissaoUsuario } from "@/lib/permissoes";
 import { ImobControlMark } from "@/components/imobcontrol-brand";
 
 import {
@@ -32,22 +34,32 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const principal = [
+const principal: Array<{
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  permissao?: PermissaoUsuario;
+}> = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Empreendimentos", url: "/empreendimentos", icon: Building2 },
-  { title: "Vendas", url: "/vendas", icon: ShoppingCart },
-  { title: "Clientes", url: "/clientes", icon: ContactRound },
-  { title: "Central de Recebimentos", url: "/recebimentos", icon: Inbox },
-  { title: "Parcelas", url: "/parcelas", icon: CalendarClock },
-  { title: "Inadimplência", url: "/inadimplencia", icon: AlertOctagon },
-] as const;
+  { title: "Empreendimentos", url: "/empreendimentos", icon: Building2, permissao: "EMPREENDIMENTOS_VISUALIZAR" },
+  { title: "Vendas", url: "/vendas", icon: ShoppingCart, permissao: "VENDAS_VISUALIZAR" },
+  { title: "Clientes", url: "/clientes", icon: ContactRound, permissao: "CLIENTES_VISUALIZAR" },
+  { title: "Central de Recebimentos", url: "/recebimentos", icon: Inbox, permissao: "RECEBIMENTOS_VISUALIZAR" },
+  { title: "Parcelas", url: "/parcelas", icon: CalendarClock, permissao: "RECEBIMENTOS_VISUALIZAR" },
+  { title: "Inadimplência", url: "/inadimplencia", icon: AlertOctagon, permissao: "FINANCEIRO_VISUALIZAR" },
+];
 
-const gestao = [
-  { title: "Financeiro", url: "/financeiro", icon: Landmark },
-  { title: "Recebedores", url: "/recebedores", icon: Users },
-  { title: "Relatórios", url: "/relatorios", icon: FileBarChart },
-  { title: "Configurações", url: "/configuracoes", icon: Settings },
-] as const;
+const gestao: Array<{
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  permissao: PermissaoUsuario;
+}> = [
+  { title: "Financeiro", url: "/financeiro", icon: Landmark, permissao: "FINANCEIRO_VISUALIZAR" },
+  { title: "Recebedores", url: "/recebedores", icon: Users, permissao: "CONFIGURACOES_GERENCIAR" },
+  { title: "Relatórios", url: "/relatorios", icon: FileBarChart, permissao: "RELATORIOS_VISUALIZAR" },
+  { title: "Configurações", url: "/configuracoes", icon: Settings, permissao: "CONFIGURACOES_GERENCIAR" },
+];
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -86,7 +98,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {principal.map((item) => (
+              {principal.filter((item) => !item.permissao || temPermissao(usuario, item.permissao)).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -108,7 +120,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Gestão</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {gestao.map((item) => (
+              {gestao.filter((item) => temPermissao(usuario, item.permissao)).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -136,6 +148,18 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive("/conta")}
+                  tooltip="Minha conta"
+                >
+                  <Link to="/conta">
+                    <UserRound className="h-4 w-4" />
+                    <span>Minha conta</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
