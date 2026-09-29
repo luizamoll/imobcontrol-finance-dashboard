@@ -248,7 +248,9 @@ public class OperacaoCatalogoService {
 
     private void preencher(Quadra q, QuadraRequest body) {
         q.setNome(body.nome().trim());
+        q.setTipoAgrupamento(tipoAgrupamento(body.tipoAgrupamento()));
         q.setDescricao(texto(body.descricao()));
+        validarRegrasOpcionais(body.regras());
         q.setRegrasJson(json(body.regras()));
     }
 
@@ -261,7 +263,86 @@ public class OperacaoCatalogoService {
         u.setArea(valor(body.area()));
         u.setValorVenda(valor(body.valorVenda()));
         u.setStatus(body.status().trim().toLowerCase(Locale.ROOT));
+        validarRegrasOpcionais(body.regras());
         u.setRegrasJson(json(body.regras()));
+    }
+
+    private String tipoAgrupamento(String valor) {
+        String tipo = valor == null ? "quadra" : valor.trim().toLowerCase(Locale.ROOT);
+        if (!"quadra".equals(tipo) && !"bloco".equals(tipo) && !"setor".equals(tipo)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Tipo de agrupamento deve ser quadra, bloco ou setor"
+            );
+        }
+        return tipo;
+    }
+
+    private void validarRegrasOpcionais(JsonNode regras) {
+        if (regras == null || regras.isNull()) return;
+        if (!regras.isObject()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Regra financeira inválida");
+        }
+
+        BigDecimal socio = percentualRegras(regras, "socioPct");
+        BigDecimal empresa = percentualRegras(regras, "empresaPct");
+        percentualRegras(regras, "corretorPct");
+        percentualRegras(regras, "aliquotaTributaria");
+        percentualRegras(regras, "repasseComissaoPct");
+
+        if (socio != null && empresa != null
+                && socio.add(empresa).compareTo(new BigDecimal("100")) != 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Participação do sócio e da empresa deve totalizar 100%"
+            );
+        }
+
+        JsonNode inad = regras.path("inadimplencia");
+        if (inad.isObject()) {
+            decimalNaoNegativo(inad, "correcaoPctMes");
+            decimalNaoNegativo(inad, "jurosPctMes");
+            decimalNaoNegativo(inad, "jurosPctDia");
+            decimalNaoNegativo(inad, "moraPct");
+
+            if (inad.has("diasTolerancia") && inad.path("diasTolerancia").asInt() < 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Dias de tolerância não pode ser negativo"
+                );
+            }
+        }
+    }
+
+    private BigDecimal percentualRegras(JsonNode node, String campo) {
+        BigDecimal valor = decimalNaoNegativo(node, campo);
+        if (valor != null && valor.compareTo(new BigDecimal("100")) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    campo + " não pode ultrapassar 100%"
+            );
+        }
+        return valor;
+    }
+
+    private BigDecimal decimalNaoNegativo(JsonNode node, String campo) {
+        JsonNode valor = node.get(campo);
+        if (valor == null || valor.isNull()) return null;
+
+        BigDecimal numero;
+        try {
+            numero = valor.decimalValue();
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, campo + " inválido");
+        }
+
+        if (numero.signum() < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    campo + " não pode ser negativo"
+            );
+        }
+        return numero;
     }
 
     private void validarQuadraDaUnidade(Long empresaId, Long empreendimentoId, Long quadraId) {
@@ -405,6 +486,7 @@ public class OperacaoCatalogoService {
                 q.getEmpresaId(),
                 q.getEmpreendimentoId(),
                 q.getNome(),
+                q.getTipoAgrupamento(),
                 q.getDescricao(),
                 json(q.getRegrasJson()),
                 q.getVersao(),
