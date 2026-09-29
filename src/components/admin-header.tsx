@@ -59,22 +59,24 @@ export function AdminHeader() {
 
         <Separator orientation="vertical" className="mx-1 h-6" />
 
-        <div className="flex items-center gap-2 pr-1">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-primary text-xs text-primary-foreground">
+        <div className="flex items-center gap-2.5 rounded-xl px-1.5 py-1">
+          <Avatar className="h-9 w-9 border border-border/70 shadow-sm">
+            <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
               {iniciais(usuario?.nome ?? "Admin")}
             </AvatarFallback>
           </Avatar>
-          <div className="hidden leading-tight sm:block">
-            <div className="max-w-44 truncate text-sm font-medium">
+          <div className="hidden min-w-0 items-center gap-2 sm:flex">
+            <span className="max-w-36 truncate text-sm font-medium text-foreground">
               {usuario?.nome ?? "Administradora"}
-            </div>
-            <div className="text-xs text-muted-foreground">Super administradora</div>
+            </span>
+            <span className="shrink-0 rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+              Super Admin
+            </span>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9"
+            className="h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground"
             title="Sair"
             aria-label="Sair"
             onClick={() => void handleLogout()}
