@@ -36,6 +36,12 @@ public class ClienteController {
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "20") int tamanho
     ) {
+        acesso.exigirQualquer(
+                usuario,
+                PermissaoUsuario.CLIENTES_VISUALIZAR,
+                PermissaoUsuario.CLIENTES_GERENCIAR,
+                PermissaoUsuario.VENDAS_GERENCIAR
+        );
         return service.listar(usuario, empresaId, pagina, tamanho);
     }
 
@@ -45,6 +51,12 @@ public class ClienteController {
             @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @PathVariable Long id
     ) {
+        acesso.exigirQualquer(
+                usuario,
+                PermissaoUsuario.CLIENTES_VISUALIZAR,
+                PermissaoUsuario.CLIENTES_GERENCIAR,
+                PermissaoUsuario.VENDAS_GERENCIAR
+        );
         return service.detalhar(usuario, empresaId, id);
     }
 
