@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { KeyRound, Pencil, Plus, RefreshCw, UsersRound } from "lucide-react";
+import { KeyRound, Pencil, Plus, RefreshCw, ShieldCheck, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -7,6 +7,7 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,11 @@ import {
 } from "@/components/ui/table";
 import { apiJson } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  GRUPOS_PERMISSOES,
+  PRESETS_PERMISSOES,
+  type PermissaoUsuario,
+} from "@/lib/permissoes";
 
 export const Route = createFileRoute("/equipe")({
   component: EquipePage,
@@ -44,8 +50,10 @@ type UsuarioEquipe = {
   id: number;
   nome: string;
   email: string;
+  telefone: string | null;
   perfil: "USUARIO";
   ativo: boolean;
+  permissoes: PermissaoUsuario[];
   versao: number;
 };
 
@@ -57,13 +65,23 @@ type Pagina<T> = {
 type FormEquipe = {
   nome: string;
   email: string;
+  telefone: string;
   senha: string;
   ativo: boolean;
+  permissoes: PermissaoUsuario[];
   versao: number | null;
 };
 
 function vazio(): FormEquipe {
-  return { nome: "", email: "", senha: "", ativo: true, versao: null };
+  return {
+    nome: "",
+    email: "",
+    telefone: "",
+    senha: "",
+    ativo: true,
+    permissoes: [...PRESETS_PERMISSOES.consulta],
+    versao: null,
+  };
 }
 
 function EquipePage() {
@@ -135,8 +153,10 @@ function PainelEquipe() {
     setForm({
       nome: alvo.nome,
       email: alvo.email,
+      telefone: alvo.telefone ?? "",
       senha: "",
       ativo: alvo.ativo,
+      permissoes: [...(alvo.permissoes ?? [])],
       versao: alvo.versao,
     });
     setDialogAberto(true);
@@ -160,7 +180,9 @@ function PainelEquipe() {
           body: JSON.stringify({
             nome: form.nome.trim(),
             email: form.email.trim(),
+            telefone: form.telefone.trim() || null,
             ativo: form.ativo,
+            permissoes: form.permissoes,
             versao: form.versao,
           }),
         });
@@ -171,7 +193,9 @@ function PainelEquipe() {
           body: JSON.stringify({
             nome: form.nome.trim(),
             email: form.email.trim(),
+            telefone: form.telefone.trim() || null,
             senha: form.senha,
+            permissoes: form.permissoes,
           }),
         });
         toast.success("Funcionário criado");
@@ -276,6 +300,7 @@ function PainelEquipe() {
             <TableHeader>
               <TableRow>
                 <TableHead>Funcionário</TableHead>
+                <TableHead>Permissões</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -283,13 +308,13 @@ function PainelEquipe() {
             <TableBody>
               {carregando ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
                     Carregando equipe...
                   </TableCell>
                 </TableRow>
               ) : usuarios.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
                     Nenhum funcionário cadastrado.
                   </TableCell>
                 </TableRow>
@@ -305,6 +330,14 @@ function PainelEquipe() {
                           <div className="font-medium">{alvo.nome}</div>
                           <div className="text-xs text-muted-foreground">{alvo.email}</div>
                         </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                        <span>
+                          {alvo.permissoes?.length ?? 0} de {GRUPOS_PERMISSOES.flatMap((grupo) => grupo.itens).length}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -338,7 +371,7 @@ function PainelEquipe() {
       </Card>
 
       <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editando ? "Editar funcionário" : "Novo funcionário"}</DialogTitle>
             <DialogDescription>
@@ -353,6 +386,14 @@ function PainelEquipe() {
             <div>
               <Label>E-mail de acesso</Label>
               <Input type="email" value={form.email} onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Telefone</Label>
+              <Input
+                value={form.telefone}
+                onChange={(e) => setForm((s) => ({ ...s, telefone: e.target.value }))}
+                placeholder="Opcional"
+              />
             </div>
             {!editando ? (
               <div>
@@ -379,6 +420,76 @@ function PainelEquipe() {
                 </Select>
               </div>
             )}
+
+            <div className="border-t border-border/70 pt-4">
+              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                <div>
+                  <Label className="text-sm font-semibold">Permissões do usuário</Label>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Defina o que este funcionário poderá fazer dentro de ${usuario?.empresa?.nome ?? "sua empresa"}.
+                    O ADMIN continua com acesso total e pode alterar estas permissões depois.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries({
+                    comercial: "Comercial",
+                    financeiro: "Financeiro",
+                    consulta: "Consulta",
+                    gestor: "Gestor",
+                  }).map(([id, label]) => (
+                    <Button
+                      key={id}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setForm((s) => ({
+                          ...s,
+                          permissoes: [...PRESETS_PERMISSOES[id]],
+                        }))
+                      }
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {GRUPOS_PERMISSOES.map((grupo) => (
+                  <div key={grupo.titulo} className="rounded-lg border border-border/70 p-4">
+                    <div className="font-medium">{grupo.titulo}</div>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {grupo.descricao}
+                    </p>
+                    <div className="mt-3 space-y-3">
+                      {grupo.itens.map((item) => {
+                        const checked = form.permissoes.includes(item.id);
+                        return (
+                          <label
+                            key={item.id}
+                            className="flex cursor-pointer items-start gap-3 text-sm"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(valor) =>
+                                setForm((s) => ({
+                                  ...s,
+                                  permissoes: valor
+                                    ? Array.from(new Set([...s.permissoes, item.id]))
+                                    : s.permissoes.filter((p) => p !== item.id),
+                                }))
+                              }
+                            />
+                            <span>{item.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogAberto(false)}>Cancelar</Button>
