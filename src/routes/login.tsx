@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   BarChart3,
   Building2,
@@ -174,15 +174,12 @@ function LoginPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <Label htmlFor="senha" className="text-sm font-medium">Senha</Label>
-                    <button
-                      type="button"
+                    <Link
+                      to="/recuperar-senha"
                       className="text-xs font-semibold text-primary transition-opacity hover:opacity-75"
-                      onClick={() =>
-                        toast.info("A recuperação de senha será disponibilizada em breve.")
-                      }
                     >
                       Esqueceu sua senha?
-                    </button>
+                    </Link>
                   </div>
                   <div className="relative">
                     <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
