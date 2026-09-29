@@ -57,6 +57,10 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/csrf",
+                                "/api/auth/recuperar-senha",
+                                "/api/auth/redefinir-senha",
+                                "/api/auth/ativar-conta",
+                                "/api/auth/verificar-email",
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
