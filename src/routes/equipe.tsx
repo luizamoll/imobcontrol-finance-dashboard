@@ -79,7 +79,7 @@ function vazio(): FormEquipe {
     telefone: "",
     senha: "",
     ativo: true,
-    permissoes: [...PRESETS_PERMISSOES.consulta],
+    permissoes: [],
     versao: null,
   };
 }
