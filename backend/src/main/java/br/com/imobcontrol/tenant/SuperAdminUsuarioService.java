@@ -1,5 +1,6 @@
 package br.com.imobcontrol.tenant;
 
+import br.com.imobcontrol.auth.AcessoContaService;
 import br.com.imobcontrol.cliente.AuditoriaOperacional;
 import br.com.imobcontrol.cliente.AuditoriaOperacionalRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -23,17 +24,20 @@ public class SuperAdminUsuarioService {
     private final UsuarioRepository usuarios;
     private final EmpresaRepository empresas;
     private final PasswordEncoder passwordEncoder;
+    private final AcessoContaService acessoConta;
     private final AuditoriaOperacionalRepository auditoria;
 
     public SuperAdminUsuarioService(
             UsuarioRepository usuarios,
             EmpresaRepository empresas,
             PasswordEncoder passwordEncoder,
+            AcessoContaService acessoConta,
             AuditoriaOperacionalRepository auditoria
     ) {
         this.usuarios = usuarios;
         this.empresas = empresas;
         this.passwordEncoder = passwordEncoder;
+        this.acessoConta = acessoConta;
         this.auditoria = auditoria;
     }
 
@@ -89,13 +93,16 @@ public class SuperAdminUsuarioService {
         usuario.setNome(body.nome().trim());
         usuario.setEmail(email);
         usuario.setTelefone(textoOpcional(body.telefone()));
-        usuario.setSenhaHash(passwordEncoder.encode(body.senha()));
+        usuario.setSenhaHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+        usuario.setSenhaDefinida(false);
+        usuario.setEmailVerificado(false);
         usuario.setPerfil(body.perfil());
         usuario.setEmpresa(empresa);
         usuario.setAtivo(true);
 
         Usuario salvo = salvar(usuario);
         registrarAuditoria(ator, salvo, "USUARIO_CRIADO");
+        acessoConta.enviarConvite(salvo);
         return UsuarioAdminResponse.from(salvo);
     }
 
@@ -151,8 +158,25 @@ public class SuperAdminUsuarioService {
         validarAlvoGerenciavel(usuario);
 
         usuario.setSenhaHash(passwordEncoder.encode(body.senha()));
+        usuario.setSenhaDefinida(true);
         Usuario salvo = salvar(usuario);
+        acessoConta.invalidarTokensDoUsuario(salvo.getId());
+        acessoConta.encerrarSessoes(salvo.getEmail());
         registrarAuditoria(ator, salvo, "SENHA_REDEFINIDA");
+    }
+
+    @Transactional
+    public boolean reenviarConvite(Authentication autenticacao, Long id) {
+        Usuario ator = ator(autenticacao);
+        Usuario usuario = usuarios.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário não encontrado"));
+        validarAlvoGerenciavel(usuario);
+        if (usuario.isSenhaDefinida() && usuario.isEmailVerificado()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este usuário já ativou a conta");
+        }
+        boolean enviado = acessoConta.enviarConvite(usuario);
+        registrarAuditoria(ator, usuario, "CONVITE_REENVIADO");
+        return enviado;
     }
 
     private Usuario ator(Authentication autenticacao) {
