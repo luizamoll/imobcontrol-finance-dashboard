@@ -126,7 +126,11 @@ public class SuperAdminUsuarioService {
             );
         }
 
+        String emailAnterior = usuario.getEmail();
+        Long empresaAnteriorId = usuario.getEmpresa() == null ? null : usuario.getEmpresa().getId();
+        PerfilUsuario perfilAnterior = usuario.getPerfil();
         String email = normalizarEmail(body.email());
+        boolean emailAlterado = !email.equalsIgnoreCase(emailAnterior);
         usuarios.findByEmailIgnoreCase(email)
                 .filter(outro -> !outro.getId().equals(usuario.getId()))
                 .ifPresent(outro -> {
@@ -134,14 +138,35 @@ public class SuperAdminUsuarioService {
                 });
 
         Empresa empresa = empresaAtiva(body.empresaId());
+        boolean empresaAlterada = !Objects.equals(empresaAnteriorId, empresa.getId());
+        boolean perfilAlterado = perfilAnterior != body.perfil();
+
         usuario.setNome(body.nome().trim());
         usuario.setEmail(email);
+        if (emailAlterado) {
+            usuario.setEmailVerificado(false);
+            usuario.setConviteEnviadoEm(null);
+        }
         usuario.setTelefone(textoOpcional(body.telefone()));
         usuario.setEmpresa(empresa);
         usuario.setPerfil(body.perfil());
         usuario.setAtivo(body.ativo());
 
         Usuario salvo = salvar(usuario);
+
+        if (!salvo.isAtivo() || emailAlterado || empresaAlterada || perfilAlterado) {
+            acessoConta.encerrarSessoes(emailAnterior);
+            if (emailAlterado) acessoConta.encerrarSessoes(salvo.getEmail());
+        }
+
+        if (salvo.isAtivo() && emailAlterado) {
+            if (salvo.isSenhaDefinida()) {
+                acessoConta.enviarVerificacaoEmail(salvo);
+            } else {
+                acessoConta.enviarConvite(salvo);
+            }
+        }
+
         registrarAuditoria(ator, salvo, body.ativo() ? "USUARIO_ATUALIZADO" : "USUARIO_DESATIVADO");
         return UsuarioAdminResponse.from(salvo);
     }
