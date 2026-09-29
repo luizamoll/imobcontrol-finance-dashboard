@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   Building2,
@@ -108,8 +108,12 @@ function AdminDashboard() {
               <CardTitle className="text-base">Empresas</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">Visualize as empresas cadastradas e entre rapidamente no ambiente que precisa administrar.</p>
             </div>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/empresas">Gerenciar empresas</Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void navigate({ to: "/admin/empresas" })}
+            >
+              Gerenciar empresas
             </Button>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -142,9 +146,24 @@ function AdminDashboard() {
             <CardTitle className="text-base">Atalhos de gestão</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <QuickAction icon={Building2} title="Empresas" description="Criar, renomear, ativar e acessar ambientes." to="/admin/empresas" />
-            <QuickAction icon={Users} title="Usuários e acessos" description="Gerenciar contas, papéis e senhas." to="/admin/usuarios" />
-            <QuickAction icon={ScrollText} title="Auditoria" description="Ver quem alterou o quê e quando." to="/admin/auditoria" />
+            <QuickAction
+              icon={Building2}
+              title="Empresas"
+              description="Criar, renomear, ativar e acessar ambientes."
+              onClick={() => void navigate({ to: "/admin/empresas" })}
+            />
+            <QuickAction
+              icon={Users}
+              title="Usuários e acessos"
+              description="Gerenciar contas, papéis e senhas."
+              onClick={() => void navigate({ to: "/admin/usuarios" })}
+            />
+            <QuickAction
+              icon={ScrollText}
+              title="Auditoria"
+              description="Ver quem alterou o quê e quando."
+              onClick={() => void navigate({ to: "/admin/auditoria" })}
+            />
           </CardContent>
         </Card>
       </div>
@@ -177,23 +196,31 @@ function Stat({ icon: Icon, label, value }: { icon: React.ComponentType<{ classN
   );
 }
 
-function QuickAction({ icon: Icon, title, description, to }: {
+function QuickAction({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+}: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
-  to: "/admin/empresas" | "/admin/usuarios" | "/admin/auditoria";
+  onClick: () => void;
 }) {
   return (
-    <Button asChild variant="outline" className="h-auto w-full justify-start gap-3 p-4 text-left">
-      <Link to={to}>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div>
-          <div className="text-sm font-semibold">{title}</div>
-          <div className="mt-0.5 text-xs font-normal text-muted-foreground">{description}</div>
-        </div>
-      </Link>
+    <Button
+      type="button"
+      variant="outline"
+      className="h-auto w-full justify-start gap-3 p-4 text-left"
+      onClick={onClick}
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div>
+        <div className="text-sm font-semibold">{title}</div>
+        <div className="mt-0.5 text-xs font-normal text-muted-foreground">{description}</div>
+      </div>
     </Button>
   );
 }
