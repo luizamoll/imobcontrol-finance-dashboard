@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Building2, CheckCircle2, Copy, KeyRound, Pencil, Plus, Power, PowerOff, Search, ShieldCheck, UserPlus } from "lucide-react";
+import { Building2, CheckCircle2, Mail, Pencil, Plus, Power, PowerOff, Search, ShieldCheck, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -40,23 +40,12 @@ type AcessoCriado = {
   empresa: Empresa;
   nome: string;
   email: string;
-  senha: string;
+  conviteEnviado: boolean;
 };
 
-function gerarSenhaInicial() {
-  const letras = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  const numeros = "23456789";
-  const simbolos = "!@#$%";
-  const todos = letras + numeros + simbolos;
-  const bytes = new Uint32Array(14);
-  crypto.getRandomValues(bytes);
-
-  const base = Array.from(bytes, (valor) => todos[valor % todos.length]);
-  base[0] = letras[bytes[0] % letras.length];
-  base[1] = numeros[bytes[1] % numeros.length];
-  base[2] = simbolos[bytes[2] % simbolos.length];
-  return base.join("");
-}
+type UsuarioCriado = {
+  conviteEnviadoEm: string | null;
+};
 
 function AdminEmpresasPage() {
   const navigate = useNavigate();
@@ -74,7 +63,6 @@ function AdminEmpresasPage() {
   const [adminNome, setAdminNome] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminTelefone, setAdminTelefone] = useState("");
-  const [adminSenha, setAdminSenha] = useState("");
   const [salvandoAdmin, setSalvandoAdmin] = useState(false);
   const [acessoCriado, setAcessoCriado] = useState<AcessoCriado | null>(null);
 
@@ -104,19 +92,18 @@ function AdminEmpresasPage() {
     setAdminNome("");
     setAdminEmail("");
     setAdminTelefone("");
-    setAdminSenha(gerarSenhaInicial());
   };
 
   const criarPrimeiroAdmin = async () => {
     if (!empresaOnboarding) return;
-    if (!adminNome.trim() || !adminEmail.trim() || adminSenha.length < 8) {
-      toast.error("Preencha nome, e-mail e uma senha com pelo menos 8 caracteres");
+    if (!adminNome.trim() || !adminEmail.trim()) {
+      toast.error("Preencha nome e e-mail do administrador");
       return;
     }
 
     setSalvandoAdmin(true);
     try {
-      await apiJson("/api/super-admin/usuarios", {
+      const criado = await apiJson<UsuarioCriado>("/api/super-admin/usuarios", {
         method: "POST",
         body: JSON.stringify({
           nome: adminNome.trim(),
@@ -124,7 +111,6 @@ function AdminEmpresasPage() {
           telefone: adminTelefone.trim() || null,
           empresaId: empresaOnboarding.id,
           perfil: "ADMIN",
-          senha: adminSenha,
         }),
       });
 
@@ -132,7 +118,7 @@ function AdminEmpresasPage() {
         empresa: empresaOnboarding,
         nome: adminNome.trim(),
         email: adminEmail.trim(),
-        senha: adminSenha,
+        conviteEnviado: Boolean(criado.conviteEnviadoEm),
       });
       setEmpresaOnboarding(null);
       toast.success("Administrador criado e vinculado à empresa");
@@ -356,27 +342,14 @@ function AdminEmpresasPage() {
                 placeholder="Opcional"
               />
             </div>
-            <div>
-              <div className="mb-1.5 flex items-center justify-between gap-3">
-                <Label>Senha inicial</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setAdminSenha(gerarSenhaInicial())}
-                >
-                  <KeyRound className="mr-1.5 h-3.5 w-3.5" />
-                  Gerar outra
-                </Button>
+            <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
+              <div className="flex items-start gap-3">
+                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  O administrador receberá um convite neste e-mail. Ele próprio confirmará o endereço
+                  e criará a senha do primeiro acesso.
+                </p>
               </div>
-              <Input
-                value={adminSenha}
-                onChange={(e) => setAdminSenha(e.target.value)}
-                autoComplete="new-password"
-              />
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                O administrador poderá trocar essa senha depois em Minha conta.
-              </p>
             </div>
           </div>
 
@@ -405,36 +378,30 @@ function AdminEmpresasPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-lg border border-success/20 bg-success/5 p-4">
+          <div className={`rounded-lg border p-4 ${
+            acessoCriado?.conviteEnviado
+              ? "border-success/20 bg-success/5"
+              : "border-warning/30 bg-warning/10"
+          }`}>
             <div className="flex items-start gap-3">
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+              {acessoCriado?.conviteEnviado ? (
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+              ) : (
+                <Mail className="mt-0.5 h-5 w-5 shrink-0 text-warning-foreground" />
+              )}
               <div className="min-w-0">
                 <div className="font-medium">{acessoCriado?.nome}</div>
-                <div className="mt-2 space-y-1 text-sm">
-                  <div><span className="text-muted-foreground">E-mail:</span> {acessoCriado?.email}</div>
-                  <div><span className="text-muted-foreground">Senha inicial:</span> <span className="font-mono">{acessoCriado?.senha}</span></div>
-                </div>
+                <div className="mt-1 text-sm text-muted-foreground">{acessoCriado?.email}</div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {acessoCriado?.conviteEnviado
+                    ? "Convite enviado. O administrador criará a própria senha pelo link recebido."
+                    : "A conta foi criada, mas o e-mail ainda não pôde ser enviado. O convite ficará pendente e poderá ser reenviado em Usuários e acessos."}
+                </p>
               </div>
             </div>
           </div>
 
-          <p className="text-xs leading-5 text-muted-foreground">
-            Guarde ou envie essas credenciais agora. A senha não fica armazenada em texto aberto no sistema.
-          </p>
-
-          <DialogFooter className="gap-2 sm:justify-between">
-            <Button
-              variant="outline"
-              onClick={async () => {
-                if (!acessoCriado) return;
-                await navigator.clipboard.writeText(
-                  `ImobControl — ${acessoCriado.empresa.nome}\nE-mail: ${acessoCriado.email}\nSenha inicial: ${acessoCriado.senha}`,
-                );
-                toast.success("Acesso copiado");
-              }}
-            >
-              <Copy className="mr-1.5 h-4 w-4" /> Copiar acesso
-            </Button>
+          <DialogFooter>
             <Button
               onClick={() => {
                 if (!acessoCriado) return;
