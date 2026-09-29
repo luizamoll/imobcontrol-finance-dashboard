@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Building2, Plus, Upload } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { CurrencyInput } from "@/components/currency-input";
@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { criarEmpreendimentoRemoto } from "@/lib/catalogo-api";
+import { carregarConfiguracaoEmpresa } from "@/lib/empresa-config-api";
 import { useAuth } from "@/lib/auth";
 import { brl, formatCNPJ, num, pct } from "@/lib/format";
 import {
@@ -251,6 +252,8 @@ type NovoEmpreendimento = {
   aliquotaTributaria: number;
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
+  repasseComissaoPct: number;
+  comissaoSobreAcrescimos: boolean;
   inadimplencia: RegrasInadimplencia;
   observacoes?: string;
   status: EmpStatus;
@@ -283,6 +286,8 @@ function NewEmpreendimentoDialog({
   const [socioPct, setSocioPct] = useState("");
   const [empresaPct, setEmpresaPct] = useState("");
   const [corretorPct, setCorretorPct] = useState("");
+  const [repasseComissaoPct, setRepasseComissaoPct] = useState("50");
+  const [comissaoSobreAcrescimos, setComissaoSobreAcrescimos] = useState(false);
   const [aliq, setAliq] = useState("");
   const [obs, setObs] = useState("");
   const [status, setStatus] = useState<EmpStatus>("planejamento");
@@ -299,6 +304,45 @@ function NewEmpreendimentoDialog({
   const [moraPct, setMoraPct] = useState("");
   const [toleranciaAtiva, setToleranciaAtiva] = useState(false);
   const [diasTolerancia, setDiasTolerancia] = useState("");
+
+  useEffect(() => {
+    if (empresaAtualId == null) return;
+
+    let cancelado = false;
+    void carregarConfiguracaoEmpresa(empresaAtualId)
+      .then(({ config }) => {
+        if (cancelado) return;
+        const regra = config.padroesEmpreendimento;
+        const inad = regra.inadimplencia;
+
+        setSocioPct(String(regra.socioPct ?? 0));
+        setEmpresaPct(String(regra.empresaPct ?? 100));
+        setCorretorPct(String(regra.corretorPct ?? 5));
+        setRepasseComissaoPct(String(regra.repasseComissaoPct ?? 50));
+        setComissaoSobreAcrescimos(regra.comissaoSobreAcrescimos ?? false);
+        setAliq(String(regra.aliquotaTributaria ?? 0));
+
+        setCorrecaoAtiva(inad.correcaoAtiva);
+        setCorrecaoIndice(inad.correcaoIndice ?? "");
+        setCorrecaoPct(String(inad.correcaoPctMes ?? 0));
+        setJurosAtivo(inad.jurosAtivo);
+        setJurosTipo(inad.jurosTipo);
+        setJurosPctMes(String(inad.jurosPctMes ?? 0));
+        setJurosPctDia(String(inad.jurosPctDia ?? 0));
+        setInicioJuros(inad.inicioJuros);
+        setMoraAtiva(inad.moraAtiva);
+        setMoraPct(String(inad.moraPct ?? 0));
+        setToleranciaAtiva(inad.toleranciaAtiva);
+        setDiasTolerancia(String(inad.diasTolerancia ?? 0));
+      })
+      .catch(() => {
+        // O formulário mantém os padrões locais caso a configuração ainda não exista.
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId]);
 
   const salvar = () => {
     const socio = Number(socioPct) || 0;
@@ -344,6 +388,8 @@ function NewEmpreendimentoDialog({
       aliquotaTributaria: Number(aliq) || 0,
       entradaPctCorretor: Number(corretorPct) || 0,
       parcelasPctCorretor: Number(corretorPct) || 0,
+      repasseComissaoPct: Number(repasseComissaoPct) || 0,
+      comissaoSobreAcrescimos,
       inadimplencia,
       observacoes: obs.trim(),
       status,
@@ -520,9 +566,21 @@ function NewEmpreendimentoDialog({
               <Input
                 type="number"
                 min="0"
+                max="100"
                 step="0.01"
                 value={corretorPct}
                 onChange={(e) => setCorretorPct(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Repasse de cada recebimento para a comissão (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={repasseComissaoPct}
+                onChange={(e) => setRepasseComissaoPct(e.target.value)}
               />
             </div>
             <div>
@@ -530,23 +588,37 @@ function NewEmpreendimentoDialog({
               <Input
                 type="number"
                 min="0"
+                max="100"
                 step="0.01"
                 value={aliq}
                 onChange={(e) => setAliq(e.target.value)}
               />
             </div>
+            <div className="rounded-lg border border-border/70 bg-background/70 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Comissão sobre acréscimos</p>
+                  <p className="text-xs text-muted-foreground">
+                    Inclui juros, multa e correção na base do repasse.
+                  </p>
+                </div>
+                <Switch
+                  checked={comissaoSobreAcrescimos}
+                  onCheckedChange={setComissaoSobreAcrescimos}
+                />
+              </div>
+            </div>
             <div className="sm:col-span-2 rounded-md border border-border/60 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">
               <strong className="text-foreground">Repasse da comissão:</strong>{" "}
-              o mesmo percentual da comissão do corretor é aplicado a cada valor efetivamente recebido,
-              seja entrada, pagamento à vista ou parcela, até que o total da comissão do contrato seja
-              quitado. Depois disso, os recebimentos seguintes não geram nova comissão.
+              a comissão total define o teto do corretor e o percentual de repasse define quanto de
+              cada recebimento é usado para quitar esse teto. Ex.: 5% de comissão total e 50% de
+              repasse significa usar metade de cada entrada/parcela até completar os 5% do contrato.
             </div>
           </div>
           <div className="mt-4 rounded-md border border-border/60 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">
-            <strong className="text-foreground">Como funciona a comissão:</strong>{" "}
-            a comissão total é calculada sobre o valor do contrato e o mesmo percentual é aplicado a
-            cada recebimento financeiro até atingir esse total. O sistema limita automaticamente o último
-            repasse e zera a comissão dos recebimentos seguintes.
+            <strong className="text-foreground">Origem dos valores:</strong>{" "}
+            estes campos começam com os padrões da empresa selecionada. Eles são apenas uma sugestão:
+            ao salvar, passam a pertencer a este empreendimento e podem ser diferentes dos demais.
           </div>
         </div>
 
