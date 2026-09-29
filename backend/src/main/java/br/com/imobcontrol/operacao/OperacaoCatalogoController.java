@@ -41,6 +41,18 @@ public class OperacaoCatalogoController {
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "100") int tamanho
     ) {
+        acesso.exigirQualquer(
+                usuario,
+                PermissaoUsuario.EMPREENDIMENTOS_VISUALIZAR,
+                PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
+                PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
+                PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RELATORIOS_VISUALIZAR
+        );
         return service.listarEmpreendimentos(usuario, empresaId, pagina, tamanho);
     }
 
@@ -50,6 +62,18 @@ public class OperacaoCatalogoController {
             @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @PathVariable Long id
     ) {
+        acesso.exigirQualquer(
+                usuario,
+                PermissaoUsuario.EMPREENDIMENTOS_VISUALIZAR,
+                PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
+                PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
+                PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RELATORIOS_VISUALIZAR
+        );
         return service.detalharEmpreendimento(usuario, empresaId, id);
     }
 
@@ -81,6 +105,18 @@ public class OperacaoCatalogoController {
             @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @PathVariable Long id
     ) {
+        acesso.exigirQualquer(
+                usuario,
+                PermissaoUsuario.EMPREENDIMENTOS_VISUALIZAR,
+                PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
+                PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
+                PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RELATORIOS_VISUALIZAR
+        );
         return service.listarQuadras(usuario, empresaId, id);
     }
 
@@ -112,6 +148,18 @@ public class OperacaoCatalogoController {
             @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @PathVariable Long id
     ) {
+        acesso.exigirQualquer(
+                usuario,
+                PermissaoUsuario.EMPREENDIMENTOS_VISUALIZAR,
+                PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
+                PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
+                PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RELATORIOS_VISUALIZAR
+        );
         return service.listarUnidades(usuario, empresaId, id);
     }
 
