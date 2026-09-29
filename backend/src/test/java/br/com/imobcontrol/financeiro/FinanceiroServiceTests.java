@@ -4,6 +4,8 @@ import br.com.imobcontrol.cliente.Cliente;
 import br.com.imobcontrol.cliente.ClienteRepository;
 import br.com.imobcontrol.operacao.Empreendimento;
 import br.com.imobcontrol.operacao.EmpreendimentoRepository;
+import br.com.imobcontrol.operacao.Quadra;
+import br.com.imobcontrol.operacao.QuadraRepository;
 import br.com.imobcontrol.operacao.Unidade;
 import br.com.imobcontrol.operacao.UnidadeRepository;
 import br.com.imobcontrol.tenant.Empresa;
@@ -36,6 +38,7 @@ class FinanceiroServiceTests {
     @Autowired EmpresaRepository empresas;
     @Autowired UsuarioRepository usuarios;
     @Autowired EmpreendimentoRepository empreendimentos;
+    @Autowired QuadraRepository quadras;
     @Autowired UnidadeRepository unidades;
     @Autowired ClienteRepository clientes;
     @Autowired JsonMapper json;
@@ -280,6 +283,105 @@ class FinanceiroServiceTests {
 
         assertDinheiro("106.00", movimento.valorRecebido());
         assertDinheiro("5.00", movimento.comissaoPaga());
+    }
+
+    @Test
+    void novaVendaRespeitaPrioridadeUnidadeAgrupamentoEmpreendimento() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Cliente cliente = criarCliente(empresa, usuario);
+
+        Quadra bloco = new Quadra();
+        bloco.setEmpresaId(empresa.getId());
+        bloco.setEmpreendimentoId(empreendimento.getId());
+        bloco.setNome("Bloco A");
+        bloco.setTipoAgrupamento("bloco");
+        bloco.setRegrasJson(
+                "{\"aliquotaTributaria\":10,\"socioPct\":0,\"empresaPct\":100,"
+                        + "\"corretorPct\":5,\"repasseComissaoPct\":50,"
+                        + "\"comissaoSobreAcrescimos\":false,\"inadimplencia\":{}}"
+        );
+        bloco.setCriadoPorUsuarioId(usuario.getId());
+        bloco.setAtualizadoPorUsuarioId(usuario.getId());
+        bloco = quadras.saveAndFlush(bloco);
+
+        Unidade herdada = criarUnidade(empresa, usuario, empreendimento);
+        herdada.setQuadraId(bloco.getId());
+        unidades.saveAndFlush(herdada);
+
+        Unidade propria = new Unidade();
+        propria.setEmpresaId(empresa.getId());
+        propria.setEmpreendimentoId(empreendimento.getId());
+        propria.setQuadraId(bloco.getId());
+        propria.setNumero("002");
+        propria.setUnidade("Unidade 02");
+        propria.setArea(new BigDecimal("100"));
+        propria.setValorVenda(new BigDecimal("100.00"));
+        propria.setStatus("disponivel");
+        propria.setRegrasJson(
+                "{\"aliquotaTributaria\":20,\"socioPct\":0,\"empresaPct\":100,"
+                        + "\"corretorPct\":5,\"repasseComissaoPct\":50,"
+                        + "\"comissaoSobreAcrescimos\":false,\"inadimplencia\":{}}"
+        );
+        propria.setCriadoPorUsuarioId(usuario.getId());
+        propria.setAtualizadoPorUsuarioId(usuario.getId());
+        propria = unidades.saveAndFlush(propria);
+
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+        List<VendaRequest.PagamentoRequest> composicao = List.of(
+                new VendaRequest.PagamentoRequest(
+                        "parcelas", "Parcela única", new BigDecimal("100.00"),
+                        1, contrato.plusMonths(1), "pendente"
+                )
+        );
+
+        VendaResponse vendaHerdada = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        herdada.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        null,
+                        new BigDecimal("5"),
+                        new BigDecimal("50"),
+                        false,
+                        null,
+                        composicao,
+                        null
+                )
+        );
+
+        VendaResponse vendaPropria = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        propria.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        null,
+                        new BigDecimal("5"),
+                        new BigDecimal("50"),
+                        false,
+                        null,
+                        composicao,
+                        null
+                )
+        );
+
+        assertDinheiro(
+                "10.00",
+                vendaHerdada.regras().path("aliquotaTributaria").decimalValue()
+        );
+        assertDinheiro(
+                "20.00",
+                vendaPropria.regras().path("aliquotaTributaria").decimalValue()
+        );
     }
 
     @Test
