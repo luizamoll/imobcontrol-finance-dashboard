@@ -14,4 +14,12 @@ public record EmpresaUsuarioUpdateRequest(
         Set<PermissaoUsuario> permissoes,
         @NotNull Long versao
 ) {
+    public EmpresaUsuarioUpdateRequest(
+            String nome,
+            String email,
+            boolean ativo,
+            Long versao
+    ) {
+        this(nome, email, null, ativo, Set.of(), versao);
+    }
 }
