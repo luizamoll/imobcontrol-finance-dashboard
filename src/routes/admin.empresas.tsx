@@ -59,7 +59,6 @@ function AdminEmpresasPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [busca, setBusca] = useState("");
   const [carregando, setCarregando] = useState(true);
-  const [novoAberto, setNovoAberto] = useState(false);
   const [novoNome, setNovoNome] = useState("");
   const [editando, setEditando] = useState<Empresa | null>(null);
   const [nomeEdicao, setNomeEdicao] = useState("");
@@ -85,7 +84,11 @@ function AdminEmpresasPage() {
   useEffect(() => { void carregar(); }, []);
 
   useEffect(() => {
-    if (nova) setNovoAberto(true);
+    if (!nova) return;
+    window.setTimeout(() => {
+      document.getElementById("cadastro-empresa")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("nova-empresa-inline")?.focus();
+    }, 50);
   }, [nova]);
 
   const filtradas = useMemo(() => {
@@ -115,7 +118,6 @@ function AdminEmpresasPage() {
       });
       toast.success("Empresa criada. Agora crie o primeiro administrador.");
       setNovoNome("");
-      setNovoAberto(false);
       iniciarAdmin(criada);
       await carregar();
     } catch (error) {
@@ -183,21 +185,17 @@ function AdminEmpresasPage() {
         title="Empresas"
         description="Cadastre empresas, controle o status e entre no ambiente operacional de cada cliente."
         actions={
-          <Button size="sm" onClick={() => setNovoAberto(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Nova empresa
+          <Button asChild size="sm">
+            <a href="#cadastro-empresa">
+              <Plus className="mr-2 h-4 w-4" /> Nova empresa
+            </a>
           </Button>
         }
       />
 
-      <Card className="border-primary/20 bg-primary/[0.03]">
+      <Card id="cadastro-empresa" className="scroll-mt-24 border-primary/20 bg-primary/[0.03]">
         <CardContent className="p-5">
-          <form
-            className="flex flex-col gap-3 sm:flex-row sm:items-end"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void criarEmpresa();
-            }}
-          >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <Label htmlFor="nova-empresa-inline">Cadastrar empresa</Label>
               <Input
@@ -211,11 +209,15 @@ function AdminEmpresasPage() {
                 Cria o ambiente da empresa primeiro. O administrador pode ser vinculado logo em seguida.
               </p>
             </div>
-            <Button type="submit" disabled={salvando || !novoNome.trim()}>
+            <Button
+              type="button"
+              disabled={salvando || !novoNome.trim()}
+              onClick={() => void criarEmpresa()}
+            >
               <Plus className="mr-2 h-4 w-4" />
               {salvando ? "Criando..." : "Criar empresa"}
             </Button>
-          </form>
+          </div>
         </CardContent>
       </Card>
 
@@ -332,28 +334,6 @@ function AdminEmpresasPage() {
           </CardContent>
         </Card>
       )}
-
-      <Dialog open={novoAberto} onOpenChange={setNovoAberto}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nova empresa</DialogTitle>
-            <DialogDescription>Cria um novo ambiente de cliente no ImobControl.</DialogDescription>
-          </DialogHeader>
-          <div>
-            <Label>Nome da empresa</Label>
-            <Input value={novoNome} onChange={(event) => setNovoNome(event.target.value)} placeholder="Ex.: Empresa Líder" />
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setNovoAberto(false)}>Cancelar</Button>
-            <Button
-              disabled={salvando || !novoNome.trim()}
-              onClick={() => void criarEmpresa()}
-            >
-              {salvando ? "Criando..." : "Criar empresa"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={Boolean(empresaOnboarding)}
