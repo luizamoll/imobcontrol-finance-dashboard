@@ -275,8 +275,10 @@ export interface State {
 
 const LEGACY_DATA_KEY = "imobcontrol.v2";
 
-function dataKey(empresaId: number | null) {
-  return empresaId == null ? null : `imobcontrol.v2.empresa.${empresaId}`;
+function dataKey(empresaId: number | null, usuarioId: number | null) {
+  return empresaId == null || usuarioId == null
+    ? null
+    : `imobcontrol.v2.usuario.${usuarioId}.empresa.${empresaId}`;
 }
 
 // O dado antigo permanece intacto para uma migração assistida posterior.
@@ -324,9 +326,9 @@ function pareceSeedAntigo(state: State) {
   return state.empreendimentos.some((e) => nomesDemo.has(e.nome));
 }
 
-function loadState(empresaId: number | null): State {
+function loadState(empresaId: number | null, usuarioId: number | null): State {
   if (typeof window === "undefined") return makeEmptyState();
-  const key = dataKey(empresaId);
+  const key = dataKey(empresaId, usuarioId);
   if (!key) return makeEmptyState();
 
   try {
@@ -544,25 +546,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const { usuario } = useAuth();
   const { empresaAtualId } = useTenant();
   const usuarioNome = usuario?.nome?.trim() || "Usuário autenticado";
+  const usuarioId = usuario?.id ?? null;
   const [state, setStateRaw] = useState<State>(() => makeEmptyState());
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     setHydrated(false);
-    setStateRaw(loadState(empresaAtualId));
+    setStateRaw(loadState(empresaAtualId, usuarioId));
     setHydrated(true);
-  }, [empresaAtualId]);
+  }, [empresaAtualId, usuarioId]);
 
   useEffect(() => {
     if (!hydrated || empresaAtualId == null) return;
-    const key = dataKey(empresaAtualId);
+    const key = dataKey(empresaAtualId, usuarioId);
     if (!key) return;
     try {
       window.localStorage.setItem(key, JSON.stringify(state));
     } catch {
       // O cache local não é a fonte de verdade e não deve derrubar a interface.
     }
-  }, [state, hydrated, empresaAtualId]);
+  }, [state, hydrated, empresaAtualId, usuarioId]);
 
   useEffect(() => {
     if (empresaAtualId == null) return;
