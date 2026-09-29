@@ -30,7 +30,7 @@ public class SecurityConfig {
                 .map(usuario -> User.withUsername(usuario.getEmail())
                         .password(usuario.getSenhaHash())
                         .authorities("ROLE_" + usuario.getPerfil().name())
-                        .disabled(!usuario.isAtivo())
+                        .disabled(!usuario.isAtivo() || !usuario.isSenhaDefinida() || !usuario.isEmailVerificado())
                         .build())
                 .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado"));
     }
