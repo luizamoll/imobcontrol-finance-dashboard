@@ -2,6 +2,7 @@ package br.com.imobcontrol.operacao;
 
 import br.com.imobcontrol.cliente.AuditoriaOperacional;
 import br.com.imobcontrol.cliente.AuditoriaOperacionalRepository;
+import br.com.imobcontrol.financeiro.VendaRepository;
 import br.com.imobcontrol.tenant.TenantContextService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -27,6 +28,7 @@ public class OperacaoCatalogoService {
     private final EmpreendimentoRepository empreendimentos;
     private final QuadraRepository quadras;
     private final UnidadeRepository unidades;
+    private final VendaRepository vendas;
     private final AuditoriaOperacionalRepository auditoria;
     private final TenantContextService tenants;
     private final JsonMapper objectMapper;
@@ -35,6 +37,7 @@ public class OperacaoCatalogoService {
             EmpreendimentoRepository empreendimentos,
             QuadraRepository quadras,
             UnidadeRepository unidades,
+            VendaRepository vendas,
             AuditoriaOperacionalRepository auditoria,
             TenantContextService tenants,
             JsonMapper objectMapper
@@ -42,6 +45,7 @@ public class OperacaoCatalogoService {
         this.empreendimentos = empreendimentos;
         this.quadras = quadras;
         this.unidades = unidades;
+        this.vendas = vendas;
         this.auditoria = auditoria;
         this.tenants = tenants;
         this.objectMapper = objectMapper;
@@ -220,6 +224,19 @@ public class OperacaoCatalogoService {
         }
 
         validarQuadraDaUnidade(ctx.empresaId(), body.empreendimentoId(), body.quadraId());
+
+        boolean possuiVendaAtiva = vendas.existsByEmpresaIdAndUnidadeIdAndStatus(
+                ctx.empresaId(),
+                atual.getId(),
+                "ativa"
+        );
+        if (possuiVendaAtiva && !"vendido".equalsIgnoreCase(body.status())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Esta unidade possui uma venda ativa e deve permanecer com status vendido"
+            );
+        }
+
         preencher(atual, body);
         atual.setAtualizadoPorUsuarioId(ctx.usuarioId());
         Unidade salva = salvarUnidade(atual);
