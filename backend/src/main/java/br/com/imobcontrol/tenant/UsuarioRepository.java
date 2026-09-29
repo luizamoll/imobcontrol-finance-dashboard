@@ -37,4 +37,5 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     long countByAtivoTrue();
     long countByAtivoFalse();
     long countByPerfil(PerfilUsuario perfil);
+    long countByEmpresa_IdAndPerfilAndAtivoTrue(Long empresaId, PerfilUsuario perfil);
 }
