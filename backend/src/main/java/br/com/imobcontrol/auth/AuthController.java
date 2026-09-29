@@ -1,6 +1,7 @@
 package br.com.imobcontrol.auth;
 
 import br.com.imobcontrol.tenant.Empresa;
+import br.com.imobcontrol.tenant.PermissaoUsuario;
 import br.com.imobcontrol.tenant.Usuario;
 import br.com.imobcontrol.tenant.UsuarioRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -29,6 +31,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -88,22 +91,36 @@ public class AuthController {
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
 
-        if (!passwordEncoder.matches(body.senhaAtual(), usuario.getSenhaHash())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Senha atual incorreta");
+        String novoEmail = body.email().trim().toLowerCase();
+        boolean alterandoEmail = !novoEmail.equalsIgnoreCase(usuario.getEmail());
+        boolean alterandoSenha = body.novaSenha() != null && !body.novaSenha().isBlank();
+
+        if ((alterandoEmail || alterandoSenha)
+                && (body.senhaAtual() == null
+                || body.senhaAtual().isBlank()
+                || !passwordEncoder.matches(body.senhaAtual(), usuario.getSenhaHash()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Confirme sua senha atual para alterar e-mail ou senha"
+            );
         }
 
-        String novoEmail = body.email().trim().toLowerCase();
-        if (!novoEmail.equalsIgnoreCase(usuario.getEmail())
-                && usuarioRepository.existsByEmailIgnoreCase(novoEmail)) {
+        if (alterandoEmail && usuarioRepository.existsByEmailIgnoreCase(novoEmail)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado");
         }
 
-        if (body.novaSenha() != null && !body.novaSenha().isBlank() && body.novaSenha().length() < 8) {
+        if (alterandoSenha && body.novaSenha().length() < 8) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A nova senha deve ter pelo menos 8 caracteres");
         }
 
+        usuario.setNome(body.nome().trim());
         usuario.setEmail(novoEmail);
-        if (body.novaSenha() != null && !body.novaSenha().isBlank()) {
+        usuario.setTelefone(
+                body.telefone() == null || body.telefone().isBlank()
+                        ? null
+                        : body.telefone().trim()
+        );
+        if (alterandoSenha) {
             usuario.setSenhaHash(passwordEncoder.encode(body.novaSenha()));
         }
         Usuario salvo = usuarioRepository.saveAndFlush(usuario);
@@ -146,8 +163,10 @@ public class AuthController {
     }
 
     public record MinhaContaRequest(
-            @NotBlank @Email String email,
-            @NotBlank String senhaAtual,
+            @NotBlank @Size(max = 160) String nome,
+            @NotBlank @Email @Size(max = 200) String email,
+            @Size(max = 30) String telefone,
+            String senhaAtual,
             String novaSenha
     ) {
     }
@@ -156,7 +175,9 @@ public class AuthController {
             Long id,
             String nome,
             String email,
+            String telefone,
             String perfil,
+            Set<PermissaoUsuario> permissoes,
             EmpresaResumo empresa
     ) {
         static AuthResponse from(Usuario usuario) {
@@ -169,7 +190,9 @@ public class AuthController {
                     usuario.getId(),
                     usuario.getNome(),
                     usuario.getEmail(),
+                    usuario.getTelefone(),
                     usuario.getPerfil().name(),
+                    Set.copyOf(usuario.getPermissoes()),
                     empresaResumo
             );
         }
