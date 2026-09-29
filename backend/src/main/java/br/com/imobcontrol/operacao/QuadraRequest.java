@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 public record QuadraRequest(
         @NotNull Long empreendimentoId,
         @NotBlank @Size(max = 120) String nome,
+        @NotBlank @Size(max = 30) String tipoAgrupamento,
         String descricao,
         JsonNode regras,
         Long versao
