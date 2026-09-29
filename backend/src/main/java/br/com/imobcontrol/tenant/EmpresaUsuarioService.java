@@ -175,9 +175,25 @@ public class EmpresaUsuarioService {
     }
 
     private LinkedHashSet<PermissaoUsuario> permissoes(java.util.Set<PermissaoUsuario> permissoes) {
-        return permissoes == null
+        LinkedHashSet<PermissaoUsuario> resultado = permissoes == null
                 ? new LinkedHashSet<>()
                 : new LinkedHashSet<>(permissoes);
+
+        if (resultado.contains(PermissaoUsuario.CLIENTES_GERENCIAR)) {
+            resultado.add(PermissaoUsuario.CLIENTES_VISUALIZAR);
+        }
+        if (resultado.contains(PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR)) {
+            resultado.add(PermissaoUsuario.EMPREENDIMENTOS_VISUALIZAR);
+        }
+        if (resultado.contains(PermissaoUsuario.VENDAS_GERENCIAR)) {
+            resultado.add(PermissaoUsuario.VENDAS_VISUALIZAR);
+        }
+        if (resultado.contains(PermissaoUsuario.RECEBIMENTOS_REGISTRAR)
+                || resultado.contains(PermissaoUsuario.RECEBIMENTOS_ESTORNAR)) {
+            resultado.add(PermissaoUsuario.RECEBIMENTOS_VISUALIZAR);
+        }
+
+        return resultado;
     }
 
     private Usuario salvar(Usuario usuario) {
