@@ -133,13 +133,19 @@ function RootComponent() {
   const currentPath = useRouterState({
     select: (routerState) => routerState.location.pathname,
   });
-  const isLoginPage = currentPath === "/login";
+  const isPublicAuthPage = [
+    "/login",
+    "/recuperar-senha",
+    "/redefinir-senha",
+    "/ativar-conta",
+    "/verificar-email",
+  ].includes(currentPath);
   const isAdminPage = currentPath === "/admin" || currentPath.startsWith("/admin/");
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {isLoginPage ? (
+        {isPublicAuthPage ? (
           <>
             <Outlet />
             <Toaster position="top-right" />
