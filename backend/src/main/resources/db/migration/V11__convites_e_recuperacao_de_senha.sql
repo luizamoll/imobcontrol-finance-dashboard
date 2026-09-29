@@ -1,6 +1,10 @@
 ALTER TABLE usuarios
-    ADD COLUMN email_verificado BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN senha_definida BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN email_verificado BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE usuarios
+    ADD COLUMN senha_definida BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE usuarios
     ADD COLUMN convite_enviado_em TIMESTAMP NULL;
 
 CREATE TABLE tokens_acesso (
