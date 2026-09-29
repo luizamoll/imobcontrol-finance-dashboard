@@ -61,6 +61,7 @@ type UsuarioAdmin = {
   id: number;
   nome: string;
   email: string;
+  telefone: string | null;
   perfil: Perfil;
   ativo: boolean;
   empresa: EmpresaResumo | null;
@@ -85,6 +86,7 @@ type Resumo = {
 type FormUsuario = {
   nome: string;
   email: string;
+  telefone: string;
   empresaId: string;
   perfil: "ADMIN" | "USUARIO";
   ativo: boolean;
@@ -96,6 +98,7 @@ function vazio(empresaId?: number): FormUsuario {
   return {
     nome: "",
     email: "",
+    telefone: "",
     empresaId: empresaId ? String(empresaId) : "",
     perfil: "USUARIO",
     ativo: true,
@@ -191,6 +194,7 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
     setForm({
       nome: alvo.nome,
       email: alvo.email,
+      telefone: alvo.telefone ?? "",
       empresaId: alvo.empresa ? String(alvo.empresa.id) : "",
       perfil: alvo.perfil as "ADMIN" | "USUARIO",
       ativo: alvo.ativo,
@@ -219,6 +223,7 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
           body: JSON.stringify({
             nome: form.nome.trim(),
             email: form.email.trim(),
+            telefone: form.telefone.trim() || null,
             empresaId: Number(form.empresaId),
             perfil: form.perfil,
             ativo: form.ativo,
@@ -232,6 +237,7 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
           body: JSON.stringify({
             nome: form.nome.trim(),
             email: form.email.trim(),
+            telefone: form.telefone.trim() || null,
             empresaId: Number(form.empresaId),
             perfil: form.perfil,
             senha: form.senha,
@@ -464,6 +470,14 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Telefone</Label>
+              <Input
+                value={form.telefone}
+                onChange={(e) => setForm((s) => ({ ...s, telefone: e.target.value }))}
+                placeholder="Opcional"
               />
             </div>
             <div>
