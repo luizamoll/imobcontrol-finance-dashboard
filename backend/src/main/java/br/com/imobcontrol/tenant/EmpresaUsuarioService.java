@@ -76,10 +76,6 @@ public class EmpresaUsuarioService {
         Usuario usuario = new Usuario();
         usuario.setNome(body.nome().trim());
         usuario.setEmail(email);
-        if (emailAlterado) {
-            usuario.setEmailVerificado(false);
-            usuario.setConviteEnviadoEm(null);
-        }
         usuario.setTelefone(textoOpcional(body.telefone()));
         usuario.setSenhaHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
         usuario.setSenhaDefinida(false);
