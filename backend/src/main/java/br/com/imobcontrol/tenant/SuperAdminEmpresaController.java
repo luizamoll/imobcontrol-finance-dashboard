@@ -131,7 +131,12 @@ public class SuperAdminEmpresaController {
     }
 
     private EmpresaResumo resumo(Empresa empresa) {
-        long administradoresAtivos = usuarios.countByEmpresa_IdAndPerfilAndAtivoTrue(
+        long administradoresAtivos =
+                usuarios.countByEmpresa_IdAndPerfilAndAtivoTrueAndEmailVerificadoTrueAndSenhaDefinidaTrue(
+                        empresa.getId(),
+                        PerfilUsuario.ADMIN
+                );
+        long administradoresPendentes = usuarios.countPendentesAtivacao(
                 empresa.getId(),
                 PerfilUsuario.ADMIN
         );
@@ -141,6 +146,7 @@ public class SuperAdminEmpresaController {
                 empresa.getSlug(),
                 empresa.isAtiva(),
                 administradoresAtivos,
+                administradoresPendentes,
                 empresa.getCriadoEm(),
                 empresa.getAtualizadoEm()
         );
@@ -152,6 +158,7 @@ public class SuperAdminEmpresaController {
             String slug,
             boolean ativa,
             long administradoresAtivos,
+            long administradoresPendentes,
             java.time.LocalDateTime criadoEm,
             java.time.LocalDateTime atualizadoEm
     ) {
