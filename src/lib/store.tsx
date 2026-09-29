@@ -138,10 +138,13 @@ export interface Empreendimento {
   versao?: number;
 }
 
+export type AgrupamentoTipo = "quadra" | "bloco" | "setor";
+
 export interface Quadra {
   id: string;
   empreendimentoId: string;
   nome: string;
+  tipoAgrupamento?: AgrupamentoTipo;
   descricao?: string;
   /** Quando ausente, herda as regras do empreendimento. */
   regras?: RegrasOperacao;
