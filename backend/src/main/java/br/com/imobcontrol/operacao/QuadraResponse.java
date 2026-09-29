@@ -9,6 +9,7 @@ public record QuadraResponse(
         Long empresaId,
         Long empreendimentoId,
         String nome,
+        String tipoAgrupamento,
         String descricao,
         JsonNode regras,
         Long versao,
