@@ -29,6 +29,9 @@ public class Quadra {
     @Column(nullable = false, length = 120)
     private String nome;
 
+    @Column(name = "tipo_agrupamento", nullable = false, length = 30)
+    private String tipoAgrupamento = "quadra";
+
     @Column(columnDefinition = "TEXT")
     private String descricao;
 
@@ -70,6 +73,8 @@ public class Quadra {
     public void setEmpreendimentoId(Long empreendimentoId) { this.empreendimentoId = empreendimentoId; }
     public String getNome() { return nome; }
     public void setNome(String nome) { this.nome = nome; }
+    public String getTipoAgrupamento() { return tipoAgrupamento; }
+    public void setTipoAgrupamento(String tipoAgrupamento) { this.tipoAgrupamento = tipoAgrupamento; }
     public String getDescricao() { return descricao; }
     public void setDescricao(String descricao) { this.descricao = descricao; }
     public String getRegrasJson() { return regrasJson; }
