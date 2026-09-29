@@ -843,6 +843,13 @@ function EditUnidadeDialog({
   regrasEmpreendimento: RegrasOperacao;
   onSave: (patch: Partial<Matricula>) => void;
 }) {
+  const [numero, setNumero] = useState(unidade.numero);
+  const [nomeUnidade, setNomeUnidade] = useState(unidade.unidade);
+  const [unidadeTipo, setUnidadeTipo] = useState<UnidadeTipo>(unidade.unidadeTipo ?? "lote");
+  const [descricao, setDescricao] = useState(unidade.descricao ?? "");
+  const [area, setArea] = useState(String(unidade.area || ""));
+  const [valor, setValor] = useState(unidade.valorVenda || 0);
+  const [status, setStatus] = useState<MatriculaStatus>(unidade.status);
   const [quadraId, setQuadraId] = useState(unidade.quadraId || "sem_quadra");
   const [regraPropria, setRegraPropria] = useState(Boolean(unidade.regras));
   const quadraInicial = quadras.find((q) => q.id === unidade.quadraId);
@@ -856,11 +863,22 @@ function EditUnidadeDialog({
   };
 
   const salvar = () => {
+    if (!numero.trim() || !nomeUnidade.trim()) {
+      toast.error("Informe matrícula e unidade");
+      return;
+    }
     if (regraPropria && !validaRegras(regras)) {
       toast.error("Sócio + Empresa precisam totalizar 100% do saldo líquido");
       return;
     }
     onSave({
+      numero: numero.trim(),
+      unidade: nomeUnidade.trim(),
+      unidadeTipo,
+      descricao: descricao.trim() || undefined,
+      area: Number(area) || 0,
+      valorVenda: valor,
+      status,
       quadraId: quadraId === "sem_quadra" ? undefined : quadraId,
       regras: regraPropria ? regras : undefined,
     });
@@ -869,23 +887,72 @@ function EditUnidadeDialog({
   return (
     <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Regra e vínculo — {unidade.unidade}</DialogTitle>
+        <DialogTitle>Editar unidade — {unidade.unidade}</DialogTitle>
         <DialogDescription>
-          Defina o agrupamento e, somente se necessário, uma exceção financeira específica desta unidade.
+          Atualize os dados da unidade, o agrupamento e, somente se necessário, uma exceção financeira própria.
         </DialogDescription>
       </DialogHeader>
-      <div>
-        <Label>Quadra</Label>
-        <Select
-          value={quadraId}
-          onValueChange={setQuadraId}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="sem_quadra">Sem quadra</SelectItem>
-            {quadras.map((q) => <SelectItem key={q.id} value={q.id}>{q.nome}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Número da matrícula</Label>
+          <Input value={numero} onChange={(e) => setNumero(e.target.value)} />
+        </div>
+        <div>
+          <Label>Unidade / Lote</Label>
+          <Input value={nomeUnidade} onChange={(e) => setNomeUnidade(e.target.value)} />
+        </div>
+        <div>
+          <Label>Tipo de unidade</Label>
+          <Select value={unidadeTipo} onValueChange={(value) => setUnidadeTipo(value as UnidadeTipo)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lote">Lote</SelectItem>
+              <SelectItem value="apartamento">Apartamento</SelectItem>
+              <SelectItem value="sala">Sala</SelectItem>
+              <SelectItem value="casa">Casa</SelectItem>
+              <SelectItem value="loja">Loja</SelectItem>
+              <SelectItem value="outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Agrupamento</Label>
+          <Select value={quadraId} onValueChange={setQuadraId}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sem_quadra">Direto no empreendimento</SelectItem>
+              {quadras.map((q) => (
+                <SelectItem key={q.id} value={q.id}>
+                  {agrupamentoTipoLegivel(q.tipoAgrupamento)} · {q.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Descrição</Label>
+          <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Opcional" />
+        </div>
+        <div>
+          <Label>Área (m²)</Label>
+          <Input type="number" min="0" value={area} onChange={(e) => setArea(e.target.value)} />
+        </div>
+        <div>
+          <Label>Valor de venda (R$)</Label>
+          <CurrencyInput value={valor} onValueChange={setValor} />
+        </div>
+        <div>
+          <Label>Status</Label>
+          <Select value={status} onValueChange={(value) => setStatus(value as MatriculaStatus)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="disponivel">Disponível</SelectItem>
+              <SelectItem value="reservado">Reservado</SelectItem>
+              <SelectItem value="vendido">Vendido</SelectItem>
+              <SelectItem value="cancelado">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <div className="rounded-lg border border-border/70 p-4">
         <div className="flex items-center justify-between gap-3">
@@ -908,7 +975,7 @@ function EditUnidadeDialog({
             <RegrasOperacaoForm
               value={regras}
               onChange={setRegras}
-              scopeLabel={`Unidade · ${unidade.unidade} · ${empreendimento.nome}`}
+              scopeLabel={`Unidade · ${nomeUnidade || unidade.unidade} · ${empreendimento.nome}`}
             />
           </div>
         )}
