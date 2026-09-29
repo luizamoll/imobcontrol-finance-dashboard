@@ -1,4 +1,4 @@
-import { Bell, Building2, HelpCircle, LogOut, Search } from "lucide-react";
+import { Bell, Building2, HelpCircle, LogOut, Search, ShieldCheck } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -260,14 +260,27 @@ export function AppHeader() {
 
       <div className="ml-auto flex items-center gap-2">
         {usuario?.perfil === "SUPER_ADMIN" && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="hidden md:flex"
-            onClick={() => void navigate({ to: "/admin" })}
-          >
-            Administração
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden md:flex"
+              onClick={() => void navigate({ to: "/admin" })}
+            >
+              <ShieldCheck className="mr-1.5 h-4 w-4" />
+              Administração
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 md:hidden"
+              title="Administração"
+              aria-label="Administração"
+              onClick={() => void navigate({ to: "/admin" })}
+            >
+              <ShieldCheck className="h-4 w-4" />
+            </Button>
+          </>
         )}
         {usuario?.perfil === "SUPER_ADMIN" && (
           <Popover>
