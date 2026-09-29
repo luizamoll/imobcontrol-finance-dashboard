@@ -11,11 +11,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -47,6 +49,32 @@ class EmpresaUsuarioServiceTests {
 
         assertEquals(PerfilUsuario.USUARIO, criado.perfil());
         assertEquals(empresa.getId(), criado.empresa().id());
+    }
+
+    @Test
+    void adminDefinePermissoesDoFuncionario() {
+        Empresa empresa = criarEmpresa();
+        Usuario admin = criarUsuario(empresa, PerfilUsuario.ADMIN);
+
+        UsuarioAdminResponse criado = service.criar(
+                autenticacao(admin),
+                new EmpresaUsuarioCreateRequest(
+                        "Comercial teste",
+                        "comercial-" + UUID.randomUUID() + "@teste.local",
+                        "(31) 99999-0000",
+                        "Senha123!",
+                        Set.of(
+                                PermissaoUsuario.CLIENTES_GERENCIAR,
+                                PermissaoUsuario.VENDAS_GERENCIAR
+                        )
+                )
+        );
+
+        assertEquals("(31) 99999-0000", criado.telefone());
+        assertTrue(criado.permissoes().contains(PermissaoUsuario.CLIENTES_GERENCIAR));
+        assertTrue(criado.permissoes().contains(PermissaoUsuario.CLIENTES_VISUALIZAR));
+        assertTrue(criado.permissoes().contains(PermissaoUsuario.VENDAS_GERENCIAR));
+        assertTrue(criado.permissoes().contains(PermissaoUsuario.VENDAS_VISUALIZAR));
     }
 
     @Test
