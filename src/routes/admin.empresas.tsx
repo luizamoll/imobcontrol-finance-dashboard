@@ -32,6 +32,7 @@ type Empresa = {
   slug: string;
   ativa: boolean;
   administradoresAtivos: number;
+  administradoresPendentes: number;
   criadoEm?: string;
   atualizadoEm?: string;
 };
@@ -183,6 +184,10 @@ function AdminEmpresasPage() {
                       <Badge variant="secondary" className="bg-success/10 text-success">
                         <CheckCircle2 className="mr-1 h-3 w-3" /> Pronta
                       </Badge>
+                    ) : empresa.administradoresPendentes > 0 ? (
+                      <Badge variant="secondary" className="bg-warning/15 text-warning-foreground">
+                        <Mail className="mr-1 h-3 w-3" /> Aguardando ativação
+                      </Badge>
                     ) : (
                       <Badge variant="secondary" className="bg-warning/15 text-warning-foreground">
                         Sem administrador
@@ -203,7 +208,9 @@ function AdminEmpresasPage() {
                 >
                   Abrir ambiente
                 </Button>
-                {empresa.ativa && empresa.administradoresAtivos === 0 && (
+                {empresa.ativa
+                  && empresa.administradoresAtivos === 0
+                  && empresa.administradoresPendentes === 0 && (
                   <Button
                     size="sm"
                     variant="outline"
