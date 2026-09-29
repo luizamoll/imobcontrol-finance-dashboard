@@ -51,6 +51,7 @@ import {
   regrasEfetivasEmpreendimento,
   regrasEfetivasUnidade,
   useStore,
+  type AgrupamentoTipo,
   type Empreendimento,
   type EmpreendimentoTipo,
   type EmpStatus,
@@ -228,7 +229,7 @@ function EmpreendimentoDetail() {
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <Info label="Tipo" value={tipoLegivel(emp.tipo)} />
             <Info label="Área total" value={`${num(emp.areaTotal)} m²`} />
-            <Info label="Quadras" value={String(quadras.length)} />
+            <Info label="Agrupamentos" value={String(quadras.length)} />
             <Info label="Unidades cadastradas" value={String(matriculas.length)} />
           </div>
         </CardContent>
@@ -239,8 +240,8 @@ function EmpreendimentoDetail() {
           <div>
             <CardTitle className="text-base">Regras financeiras — {emp.nome}</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Aplicado a: <strong>Empreendimento · {emp.nome}</strong>. Quadras e unidades herdam estas
-              regras quando não possuem exceção própria.
+              Aplicado a: <strong>Empreendimento · {emp.nome}</strong>. Agrupamentos e unidades herdam
+              estas regras quando não possuem exceção própria.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
@@ -256,16 +257,17 @@ function EmpreendimentoDetail() {
         <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Layers3 className="h-4 w-4 text-primary" /> Quadras
+              <Layers3 className="h-4 w-4 text-primary" /> Quadras, blocos e setores
             </CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Uma quadra pode herdar as regras de {emp.nome} ou ter uma exceção própria.
+              Use somente quando o projeto tiver subdivisões. Cada agrupamento herda de {emp.nome}
+              ou pode ter uma exceção própria.
             </p>
           </div>
           <Dialog open={quadraOpen} onOpenChange={setQuadraOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline">
-                <Plus className="mr-2 h-4 w-4" /> Nova quadra
+                <Plus className="mr-2 h-4 w-4" /> Novo agrupamento
               </Button>
             </DialogTrigger>
             <QuadraDialog
@@ -279,11 +281,11 @@ function EmpreendimentoDetail() {
                     empreendimentoId: emp.id,
                   });
                   setState((s) => ({ ...s, quadras: [...s.quadras, criada] }));
-                  toast.success("Quadra cadastrada");
+                  toast.success("Agrupamento cadastrado");
                   setQuadraOpen(false);
                 } catch (error) {
                   toast.error(
-                    error instanceof Error ? error.message : "Não foi possível cadastrar a quadra",
+                    error instanceof Error ? error.message : "Não foi possível cadastrar o agrupamento",
                   );
                 }
               }}
@@ -294,7 +296,7 @@ function EmpreendimentoDetail() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Quadra</TableHead>
+                <TableHead>Agrupamento</TableHead>
                 <TableHead>Descrição</TableHead>
                 <TableHead className="text-right">Unidades</TableHead>
                 <TableHead>Regra financeira</TableHead>
@@ -305,13 +307,18 @@ function EmpreendimentoDetail() {
               {quadras.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                    Nenhuma quadra cadastrada. Unidades também podem ficar diretamente no empreendimento.
+                    Nenhum agrupamento cadastrado. As unidades também podem ficar diretamente no empreendimento.
                   </TableCell>
                 </TableRow>
               )}
               {quadras.map((q) => (
                 <TableRow key={q.id}>
-                  <TableCell className="font-medium">{q.nome}</TableCell>
+                  <TableCell className="font-medium">
+                    <div>{q.nome}</div>
+                    <div className="text-[11px] capitalize text-muted-foreground">
+                      {agrupamentoTipoLegivel(q.tipoAgrupamento)}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {q.descricao || "—"}
                   </TableCell>
@@ -319,7 +326,9 @@ function EmpreendimentoDetail() {
                     {matriculas.filter((m) => m.quadraId === q.id).length}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {q.regras ? "Regra própria da quadra" : `Herda de ${emp.nome}`}
+                    {q.regras
+                      ? `Regra própria do ${agrupamentoTipoLegivel(q.tipoAgrupamento).toLowerCase()}`
+                      : `Herda de ${emp.nome}`}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="ghost" onClick={() => setEditQuadra(q)}>
@@ -353,11 +362,11 @@ function EmpreendimentoDetail() {
                     q.id === editQuadra.id ? salva : q,
                   ),
                 }));
-                toast.success("Quadra atualizada");
+                toast.success("Agrupamento atualizado");
                 setEditQuadra(null);
               } catch (error) {
                 toast.error(
-                  error instanceof Error ? error.message : "Não foi possível atualizar a quadra",
+                  error instanceof Error ? error.message : "Não foi possível atualizar o agrupamento",
                 );
               }
             }}
@@ -372,7 +381,7 @@ function EmpreendimentoDetail() {
               <Building2 className="h-4 w-4 text-primary" /> Unidades / Matrículas
             </CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Cada unidade pode herdar do empreendimento, da quadra ou possuir uma regra própria.
+              Cada unidade pode herdar do empreendimento, do agrupamento escolhido ou possuir uma regra própria.
             </p>
           </div>
           <Dialog open={unitOpen} onOpenChange={setUnitOpen}>
@@ -413,7 +422,7 @@ function EmpreendimentoDetail() {
               <TableRow>
                 <TableHead>Matrícula</TableHead>
                 <TableHead>Unidade</TableHead>
-                <TableHead>Quadra</TableHead>
+                <TableHead>Agrupamento</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead>Regra financeira</TableHead>
                 <TableHead>Status</TableHead>
@@ -439,7 +448,9 @@ function EmpreendimentoDetail() {
                       <div className="text-[11px] text-muted-foreground">{num(m.area)} m²</div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {quadra?.nome || "Sem quadra"}
+                      {quadra
+                        ? `${agrupamentoTipoLegivel(quadra.tipoAgrupamento)} · ${quadra.nome}`
+                        : "Direto no empreendimento"}
                     </TableCell>
                     <TableCell className="text-right">{brl(m.valorVenda)}</TableCell>
                     <TableCell className="text-sm">{origemRegra(efetiva.origem, quadra, emp)}</TableCell>
@@ -549,6 +560,9 @@ function QuadraDialog({
   onSave: (quadra: Omit<Quadra, "id" | "empreendimentoId">) => void;
 }) {
   const [nome, setNome] = useState(quadra?.nome || "");
+  const [tipoAgrupamento, setTipoAgrupamento] = useState<AgrupamentoTipo>(
+    quadra?.tipoAgrupamento ?? "quadra",
+  );
   const [descricao, setDescricao] = useState(quadra?.descricao || "");
   const [regraPropria, setRegraPropria] = useState(Boolean(quadra?.regras));
   const [regras, setRegras] = useState<RegrasOperacao>(
@@ -557,30 +571,60 @@ function QuadraDialog({
 
   const salvar = () => {
     if (!nome.trim()) {
-      toast.error("Informe o nome da quadra");
+      toast.error("Informe o nome do agrupamento");
       return;
     }
     if (regraPropria && !validaRegras(regras)) {
       toast.error("Sócio + Empresa precisam totalizar 100% do saldo líquido");
       return;
     }
-    onSave({ nome: nome.trim(), descricao: descricao.trim(), regras: regraPropria ? regras : undefined });
+    onSave({
+      nome: nome.trim(),
+      tipoAgrupamento,
+      descricao: descricao.trim(),
+      regras: regraPropria ? regras : undefined,
+    });
   };
 
   return (
     <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>{quadra ? `Editar ${quadra.nome}` : "Nova quadra"}</DialogTitle>
+        <DialogTitle>{quadra ? `Editar ${quadra.nome}` : "Novo agrupamento"}</DialogTitle>
         <DialogDescription>
-          Esta quadra pertence a {empreendimento.nome}. Por padrão ela herda as regras do empreendimento.
+          Crie uma quadra, bloco ou setor dentro de {empreendimento.nome}. Sem exceção financeira,
+          este nível acompanha automaticamente as regras atuais do empreendimento.
         </DialogDescription>
       </DialogHeader>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label>Nome da quadra</Label>
-          <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Quadra A" />
+          <Label>Tipo</Label>
+          <Select
+            value={tipoAgrupamento}
+            onValueChange={(value) => setTipoAgrupamento(value as AgrupamentoTipo)}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="quadra">Quadra</SelectItem>
+              <SelectItem value="bloco">Bloco</SelectItem>
+              <SelectItem value="setor">Setor</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
+          <Label>Nome</Label>
+          <Input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder={
+              tipoAgrupamento === "bloco"
+                ? "Ex.: Bloco A"
+                : tipoAgrupamento === "setor"
+                  ? "Ex.: Setor Norte"
+                  : "Ex.: Quadra A"
+            }
+          />
+        </div>
+        <div className="sm:col-span-2">
           <Label>Descrição</Label>
           <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} />
         </div>
@@ -588,7 +632,9 @@ function QuadraDialog({
       <div className="rounded-lg border border-border/70 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">Regra financeira própria desta quadra</p>
+            <p className="text-sm font-medium">
+              Regra financeira própria deste {agrupamentoTipoLegivel(tipoAgrupamento).toLowerCase()}
+            </p>
             <p className="text-xs text-muted-foreground">
               Desligado: herda automaticamente de {empreendimento.nome}.
             </p>
@@ -606,13 +652,13 @@ function QuadraDialog({
             <RegrasOperacaoForm
               value={regras}
               onChange={setRegras}
-              scopeLabel={`Quadra · ${nome || "nova quadra"} · ${empreendimento.nome}`}
+              scopeLabel={`${agrupamentoTipoLegivel(tipoAgrupamento)} · ${nome || "novo agrupamento"} · ${empreendimento.nome}`}
             />
           </div>
         )}
       </div>
       <DialogFooter>
-        <Button onClick={salvar}>Salvar quadra</Button>
+        <Button onClick={salvar}>Salvar agrupamento</Button>
       </DialogFooter>
     </DialogContent>
   );
@@ -667,7 +713,7 @@ function NewUnidadeDialog({
       <DialogHeader>
         <DialogTitle>Nova unidade</DialogTitle>
         <DialogDescription>
-          A unidade pode ficar diretamente em {empreendimento.nome} ou pertencer a uma quadra.
+          A unidade pode ficar diretamente em {empreendimento.nome} ou pertencer a uma quadra, bloco ou setor.
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -680,19 +726,19 @@ function NewUnidadeDialog({
           <Input value={unidade} onChange={(e) => setUnidade(e.target.value)} />
         </div>
         <div>
-          <Label>Quadra</Label>
+          <Label>Agrupamento</Label>
           <Select
             value={quadraId}
-            onValueChange={(value) => {
-              setQuadraId(value);
-              const q = quadras.find((item) => item.id === value);
-              if (regraPropria) setRegras(cloneRegras(q?.regras ?? regrasEmpreendimento));
-            }}
+            onValueChange={setQuadraId}
           >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="sem_quadra">Sem quadra</SelectItem>
-              {quadras.map((q) => <SelectItem key={q.id} value={q.id}>{q.nome}</SelectItem>)}
+              <SelectItem value="sem_quadra">Direto no empreendimento</SelectItem>
+              {quadras.map((q) => (
+                <SelectItem key={q.id} value={q.id}>
+                  {agrupamentoTipoLegivel(q.tipoAgrupamento)} · {q.nome}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -722,7 +768,14 @@ function NewUnidadeDialog({
           <div>
             <p className="text-sm font-medium">Regra própria desta unidade</p>
             <p className="text-xs text-muted-foreground">
-              Desligado: {quadraId === "sem_quadra" ? `herda de ${empreendimento.nome}` : "herda da quadra quando ela tiver regra própria; caso contrário, do empreendimento"}.
+              Desligado: {quadraId === "sem_quadra"
+                ? `herda diretamente de ${empreendimento.nome}`
+                : (() => {
+                    const grupo = quadras.find((item) => item.id === quadraId);
+                    return grupo?.regras
+                      ? `herda de ${agrupamentoTipoLegivel(grupo.tipoAgrupamento).toLowerCase()} ${grupo.nome}`
+                      : `o agrupamento não tem exceção; herda de ${empreendimento.nome}`;
+                  })()}.
             </p>
           </div>
           <Switch
@@ -791,20 +844,14 @@ function EditUnidadeDialog({
       <DialogHeader>
         <DialogTitle>Regra e vínculo — {unidade.unidade}</DialogTitle>
         <DialogDescription>
-          Defina a quadra e, somente se necessário, uma exceção financeira específica desta unidade.
+          Defina o agrupamento e, somente se necessário, uma exceção financeira específica desta unidade.
         </DialogDescription>
       </DialogHeader>
       <div>
         <Label>Quadra</Label>
         <Select
           value={quadraId}
-          onValueChange={(value) => {
-            setQuadraId(value);
-            if (regraPropria) {
-              const q = quadras.find((item) => item.id === value);
-              setRegras(cloneRegras(q?.regras ?? regrasEmpreendimento));
-            }
-          }}
+          onValueChange={setQuadraId}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -818,7 +865,7 @@ function EditUnidadeDialog({
           <div>
             <p className="text-sm font-medium">Regra própria desta unidade</p>
             <p className="text-xs text-muted-foreground">
-              Desligue para voltar a herdar da quadra/empreendimento.
+              Desligue para voltar a herdar automaticamente do agrupamento escolhido ou do empreendimento.
             </p>
           </div>
           <Switch
@@ -981,8 +1028,16 @@ function origemRegra(
   emp: Empreendimento,
 ) {
   if (origem === "unidade") return "Regra própria da unidade";
-  if (origem === "quadra") return `Herda de ${quadra?.nome || "quadra"}`;
+  if (origem === "quadra") {
+    return `Herda de ${agrupamentoTipoLegivel(quadra?.tipoAgrupamento).toLowerCase()} ${quadra?.nome || ""}`.trim();
+  }
   return `Herda de ${emp.nome}`;
+}
+
+function agrupamentoTipoLegivel(tipo?: AgrupamentoTipo) {
+  if (tipo === "bloco") return "Bloco";
+  if (tipo === "setor") return "Setor";
+  return "Quadra";
 }
 
 function tipoLegivel(tipo: EmpreendimentoTipo) {
