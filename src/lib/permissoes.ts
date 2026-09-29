@@ -114,3 +114,10 @@ export function temPermissao(
   if (usuario.perfil === "SUPER_ADMIN" || usuario.perfil === "ADMIN") return true;
   return usuario.permissoes?.includes(permissao) ?? false;
 }
+
+export function temAlgumaPermissao(
+  usuario: AuthUsuario | null | undefined,
+  permissoes: PermissaoUsuario[],
+) {
+  return permissoes.some((permissao) => temPermissao(usuario, permissao));
+}
