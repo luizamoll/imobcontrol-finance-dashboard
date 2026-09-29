@@ -11,7 +11,7 @@ public record UsuarioAdminCreateRequest(
         @Size(max = 30) String telefone,
         @NotNull Long empresaId,
         @NotNull PerfilUsuario perfil,
-        @NotBlank @Size(min = 8, max = 72) String senha
+        @Size(min = 8, max = 72) String senha
 ) {
     public UsuarioAdminCreateRequest(
             String nome,
