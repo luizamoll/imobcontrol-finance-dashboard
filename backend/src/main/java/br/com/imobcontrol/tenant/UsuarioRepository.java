@@ -37,5 +37,21 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     long countByAtivoTrue();
     long countByAtivoFalse();
     long countByPerfil(PerfilUsuario perfil);
-    long countByEmpresa_IdAndPerfilAndAtivoTrue(Long empresaId, PerfilUsuario perfil);
+    long countByEmpresa_IdAndPerfilAndAtivoTrueAndEmailVerificadoTrueAndSenhaDefinidaTrue(
+            Long empresaId,
+            PerfilUsuario perfil
+    );
+
+    @Query("""
+            select count(u)
+            from Usuario u
+            where u.empresa.id = :empresaId
+              and u.perfil = :perfil
+              and u.ativo = true
+              and (u.emailVerificado = false or u.senhaDefinida = false)
+            """)
+    long countPendentesAtivacao(
+            @Param("empresaId") Long empresaId,
+            @Param("perfil") PerfilUsuario perfil
+    );
 }
