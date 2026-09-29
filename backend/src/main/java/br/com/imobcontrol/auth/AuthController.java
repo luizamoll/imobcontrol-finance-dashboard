@@ -20,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -41,17 +42,23 @@ public class AuthController {
     private final UsuarioRepository usuarioRepository;
     private final SecurityContextRepository securityContextRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AcessoContaService acessoConta;
+    private final SessaoUsuarioService sessoes;
 
     public AuthController(
             AuthService authService,
             UsuarioRepository usuarioRepository,
             SecurityContextRepository securityContextRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            AcessoContaService acessoConta,
+            SessaoUsuarioService sessoes
     ) {
         this.authService = authService;
         this.usuarioRepository = usuarioRepository;
         this.securityContextRepository = securityContextRepository;
         this.passwordEncoder = passwordEncoder;
+        this.acessoConta = acessoConta;
+        this.sessoes = sessoes;
     }
 
     @PostMapping("/login")
@@ -82,6 +89,7 @@ public class AuthController {
     }
 
     @PutMapping("/minha-conta")
+    @Transactional
     public AuthResponse atualizarMinhaConta(
             Authentication authentication,
             @Valid @RequestBody MinhaContaRequest body,
@@ -91,9 +99,17 @@ public class AuthController {
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
 
+        String emailAnterior = usuario.getEmail();
         String novoEmail = body.email().trim().toLowerCase();
         boolean alterandoEmail = !novoEmail.equalsIgnoreCase(usuario.getEmail());
         boolean alterandoSenha = body.novaSenha() != null && !body.novaSenha().isBlank();
+
+        if (alterandoEmail && !acessoConta.envioEmailDisponivel()) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "A confirmação de e-mail ainda não está configurada neste ambiente"
+            );
+        }
 
         if ((alterandoEmail || alterandoSenha)
                 && (body.senhaAtual() == null
@@ -115,6 +131,9 @@ public class AuthController {
 
         usuario.setNome(body.nome().trim());
         usuario.setEmail(novoEmail);
+        if (alterandoEmail) {
+            usuario.setEmailVerificado(false);
+        }
         usuario.setTelefone(
                 body.telefone() == null || body.telefone().isBlank()
                         ? null
@@ -122,8 +141,26 @@ public class AuthController {
         );
         if (alterandoSenha) {
             usuario.setSenhaHash(passwordEncoder.encode(body.novaSenha()));
+            usuario.setSenhaDefinida(true);
         }
         Usuario salvo = usuarioRepository.saveAndFlush(usuario);
+
+        if (alterandoEmail && !acessoConta.enviarVerificacaoEmail(salvo)) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Não foi possível enviar a confirmação para o novo e-mail"
+            );
+        }
+
+        String sessaoAtual = request.getSession(false) == null
+                ? null
+                : request.getSession(false).getId();
+        if (alterandoSenha || alterandoEmail) {
+            sessoes.encerrarOutras(emailAnterior, sessaoAtual);
+            if (alterandoEmail) {
+                sessoes.encerrarOutras(novoEmail, sessaoAtual);
+            }
+        }
 
         Authentication novaAutenticacao = UsernamePasswordAuthenticationToken.authenticated(
                 salvo.getEmail(),
@@ -136,6 +173,30 @@ public class AuthController {
         securityContextRepository.saveContext(context, request, response);
 
         return AuthResponse.from(salvo);
+    }
+
+    @PostMapping("/recuperar-senha")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recuperarSenha(@Valid @RequestBody EmailRequest body) {
+        acessoConta.solicitarRecuperacao(body.email());
+    }
+
+    @PostMapping("/ativar-conta")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void ativarConta(@Valid @RequestBody TokenSenhaRequest body) {
+        acessoConta.ativarConta(body.token(), body.novaSenha());
+    }
+
+    @PostMapping("/redefinir-senha")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void redefinirSenha(@Valid @RequestBody TokenSenhaRequest body) {
+        acessoConta.redefinirSenha(body.token(), body.novaSenha());
+    }
+
+    @PostMapping("/verificar-email")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void verificarEmail(@Valid @RequestBody TokenRequest body) {
+        acessoConta.verificarEmail(body.token());
     }
 
     @GetMapping("/csrf")
@@ -162,6 +223,22 @@ public class AuthController {
     ) {
     }
 
+    public record EmailRequest(
+            @NotBlank @Email @Size(max = 200) String email
+    ) {
+    }
+
+    public record TokenSenhaRequest(
+            @NotBlank String token,
+            @NotBlank @Size(min = 8, max = 72) String novaSenha
+    ) {
+    }
+
+    public record TokenRequest(
+            @NotBlank String token
+    ) {
+    }
+
     public record MinhaContaRequest(
             @NotBlank @Size(max = 160) String nome,
             @NotBlank @Email @Size(max = 200) String email,
@@ -176,6 +253,8 @@ public class AuthController {
             String nome,
             String email,
             String telefone,
+            boolean emailVerificado,
+            boolean senhaDefinida,
             String perfil,
             Set<PermissaoUsuario> permissoes,
             EmpresaResumo empresa
@@ -191,6 +270,8 @@ public class AuthController {
                     usuario.getNome(),
                     usuario.getEmail(),
                     usuario.getTelefone(),
+                    usuario.isEmailVerificado(),
+                    usuario.isSenhaDefinida(),
                     usuario.getPerfil().name(),
                     Set.copyOf(usuario.getPermissoes()),
                     empresaResumo
