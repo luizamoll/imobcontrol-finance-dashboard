@@ -20,16 +20,21 @@ public class EmailTransacionalService {
     public EmailTransacionalService(
             ObjectProvider<JavaMailSender> mailSenderProvider,
             @Value("${spring.mail.host:}") String smtpHost,
-            @Value("${imobcontrol.mail-from:no-reply@imobcontrol.local}") String remetente
+            @Value("${spring.mail.username:}") String smtpUsername,
+            @Value("${imobcontrol.mail-from:}") String remetente
     ) {
         this.mailSenderProvider = mailSenderProvider;
         this.smtpHost = smtpHost;
-        this.remetente = remetente;
+        this.remetente = remetente != null && !remetente.isBlank()
+                ? remetente.trim()
+                : smtpUsername == null ? "" : smtpUsername.trim();
     }
 
     public boolean disponivel() {
         return smtpHost != null
                 && !smtpHost.isBlank()
+                && remetente != null
+                && !remetente.isBlank()
                 && mailSenderProvider.getIfAvailable() != null;
     }
 
