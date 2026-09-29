@@ -523,7 +523,11 @@ function ResumoRegras({ regras }: { regras: RegrasOperacao }) {
         <Info label="Corretor" value={`${regras.corretorPct}%`} />
         <Info label="Sócio · saldo líquido" value={`${regras.socioPct}%`} />
         <Info label="Empresa · saldo líquido" value={`${regras.empresaPct}%`} />
-        <Info label="Repasse por recebimento" value={`${regras.corretorPct}%`} />
+        <Info label="Repasse por recebimento" value={`${regras.repasseComissaoPct ?? 50}%`} />
+        <Info
+          label="Comissão sobre acréscimos"
+          value={regras.comissaoSobreAcrescimos ? "Sim" : "Não"}
+        />
       </div>
       <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm">
         <span className="text-muted-foreground">Inadimplência: </span>
@@ -885,6 +889,8 @@ function EditEmpreendimentoDialog({
       aliquotaTributaria: regras.aliquotaTributaria,
       entradaPctCorretor: regras.corretorPct,
       parcelasPctCorretor: regras.corretorPct,
+      repasseComissaoPct: regras.repasseComissaoPct ?? 50,
+      comissaoSobreAcrescimos: regras.comissaoSobreAcrescimos ?? false,
       inadimplencia: cloneRegras(regras).inadimplencia,
       observacoes: observacoes.trim(),
       status,
@@ -896,8 +902,9 @@ function EditEmpreendimentoDialog({
       <DialogHeader>
         <DialogTitle>Editar {emp.nome}</DialogTitle>
         <DialogDescription>
-          Regras alteradas aqui afetam somente novas vendas que herdarem do empreendimento. Contratos
-          já registrados preservam o snapshot original.
+          Estas regras servem como padrão para novas vendas deste empreendimento. Vendas já criadas
+          mantêm suas próprias regras até serem editadas individualmente, e recebimentos históricos
+          nunca são reescritos.
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
