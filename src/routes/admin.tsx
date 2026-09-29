@@ -109,11 +109,15 @@ function AdminDashboard() {
               <p className="mt-1 text-sm text-muted-foreground">Visualize as empresas cadastradas e entre rapidamente no ambiente que precisa administrar.</p>
             </div>
             <Button
-              variant="outline"
+              variant={empresas.length === 0 ? "default" : "outline"}
               size="sm"
-              onClick={() => window.location.assign("/admin/empresas")}
+              onClick={() =>
+                window.location.assign(
+                  empresas.length === 0 ? "/admin/empresas?nova=1" : "/admin/empresas",
+                )
+              }
             >
-              Gerenciar empresas
+              {empresas.length === 0 ? "Cadastrar primeira empresa" : "Gerenciar empresas"}
             </Button>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -136,7 +140,17 @@ function AdminDashboard() {
               </div>
             ))}
             {!carregando && empresas.length === 0 && (
-              <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma empresa ativa cadastrada.</p>
+              <div className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma empresa ativa cadastrada.
+                </p>
+                <Button
+                  className="mt-4"
+                  onClick={() => window.location.assign("/admin/empresas?nova=1")}
+                >
+                  Cadastrar primeira empresa
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
