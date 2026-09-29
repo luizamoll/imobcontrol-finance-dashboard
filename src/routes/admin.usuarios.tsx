@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   KeyRound,
+  Mail,
   Pencil,
   Plus,
   RefreshCw,
@@ -64,6 +65,9 @@ type UsuarioAdmin = {
   telefone: string | null;
   perfil: Perfil;
   ativo: boolean;
+  emailVerificado: boolean;
+  senhaDefinida: boolean;
+  conviteEnviadoEm: string | null;
   empresa: EmpresaResumo | null;
   versao: number;
   criadoEm: string;
@@ -90,7 +94,6 @@ type FormUsuario = {
   empresaId: string;
   perfil: "ADMIN" | "USUARIO";
   ativo: boolean;
-  senha: string;
   versao: number | null;
 };
 
@@ -102,7 +105,6 @@ function vazio(empresaId?: number): FormUsuario {
     empresaId: empresaId ? String(empresaId) : "",
     perfil: "USUARIO",
     ativo: true,
-    senha: "",
     versao: null,
   };
 }
@@ -198,7 +200,6 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
       empresaId: alvo.empresa ? String(alvo.empresa.id) : "",
       perfil: alvo.perfil as "ADMIN" | "USUARIO",
       ativo: alvo.ativo,
-      senha: "",
       versao: alvo.versao,
     });
     setDialogAberto(true);
@@ -207,11 +208,6 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
   const salvar = async () => {
     if (!form.nome.trim() || !form.email.trim() || !form.empresaId) {
       toast.error("Preencha nome, e-mail e empresa");
-      return;
-    }
-
-    if (!editando && form.senha.length < 8) {
-      toast.error("A senha inicial deve ter pelo menos 8 caracteres");
       return;
     }
 
@@ -240,10 +236,9 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
             telefone: form.telefone.trim() || null,
             empresaId: Number(form.empresaId),
             perfil: form.perfil,
-            senha: form.senha,
           }),
         });
-        toast.success("Usuário criado");
+        toast.success("Usuário criado. O convite de primeiro acesso foi preparado.");
       }
 
       setDialogAberto(false);
@@ -286,7 +281,7 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
       <PageHeader
         eyebrow="Administração geral"
         title="Usuários e acessos"
-        description="Crie contas, vincule usuários às empresas, defina papéis, status e redefina senhas."
+        description="Crie contas por convite, vincule usuários às empresas, defina papéis, status e acessos."
         actions={
           <Button size="sm" onClick={abrirNovo} disabled={empresas.length === 0}>
             <Plus className="mr-2 h-4 w-4" /> Novo usuário
@@ -410,9 +405,19 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
                     <TableCell className="text-sm">{alvo.empresa?.nome ?? "Sistema"}</TableCell>
                     <TableCell><PerfilBadge perfil={alvo.perfil} /></TableCell>
                     <TableCell>
-                      <Badge variant={alvo.ativo ? "secondary" : "outline"}>
-                        {alvo.ativo ? "Ativo" : "Inativo"}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge variant={alvo.ativo ? "secondary" : "outline"}>
+                          {alvo.ativo ? "Ativo" : "Inativo"}
+                        </Badge>
+                        {alvo.ativo && (!alvo.senhaDefinida || !alvo.emailVerificado) && (
+                          <Badge variant="outline">
+                            {!alvo.conviteEnviadoEm ? "Convite pendente" : "Aguardando ativação"}
+                          </Badge>
+                        )}
+                        {alvo.emailVerificado && alvo.senhaDefinida && (
+                          <Badge variant="outline">E-mail verificado</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       {alvo.perfil === "SUPER_ADMIN" ? (
@@ -422,16 +427,41 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
                           <Button variant="ghost" size="sm" onClick={() => abrirEdicao(alvo)}>
                             <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSenhaUsuario(alvo);
-                              setNovaSenha("");
-                            }}
-                          >
-                            <KeyRound className="mr-1 h-3.5 w-3.5" /> Senha
-                          </Button>
+                          {alvo.senhaDefinida && alvo.emailVerificado ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSenhaUsuario(alvo);
+                                setNovaSenha("");
+                              }}
+                            >
+                              <KeyRound className="mr-1 h-3.5 w-3.5" /> Senha
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const resposta = await apiJson<{ enviado: boolean }>(
+                                    `/api/super-admin/usuarios/${alvo.id}/convite`,
+                                    { method: "POST" },
+                                  );
+                                  toast[resposta.enviado ? "success" : "warning"](
+                                    resposta.enviado
+                                      ? "Convite reenviado"
+                                      : "Convite pendente: o envio de e-mail ainda não está configurado",
+                                  );
+                                  await carregar();
+                                } catch (error) {
+                                  toast.error(error instanceof Error ? error.message : "Não foi possível reenviar o convite");
+                                }
+                              }}
+                            >
+                              <Mail className="mr-1 h-3.5 w-3.5" /> Reenviar convite
+                            </Button>
+                          )}
                         </div>
                       )}
                     </TableCell>
@@ -513,14 +543,13 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
             </div>
 
             {!editando && (
-              <div className="sm:col-span-2">
-                <Label>Senha inicial</Label>
-                <Input
-                  type="password"
-                  value={form.senha}
-                  onChange={(e) => setForm((s) => ({ ...s, senha: e.target.value }))}
-                  placeholder="Mínimo de 8 caracteres"
-                />
+              <div className="sm:col-span-2 rounded-lg border border-primary/15 bg-primary/5 p-4">
+                <div className="flex items-start gap-3">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    O usuário receberá um convite por e-mail para confirmar o endereço e criar a própria senha.
+                  </p>
+                </div>
               </div>
             )}
 
