@@ -48,7 +48,7 @@ public class SuperAdminEmpresaController {
                 ? empresas.findAllByOrderByNomeAsc()
                 : empresas.findAllByAtivaTrueOrderByNomeAsc())
                 .stream()
-                .map(EmpresaResumo::from)
+                .map(this::resumo)
                 .toList();
     }
 
@@ -74,7 +74,7 @@ public class SuperAdminEmpresaController {
                 salva.getId(),
                 "EMPRESA_CRIADA"
         ));
-        return EmpresaResumo.from(salva);
+        return resumo(salva);
     }
 
     @PutMapping("/{id}")
@@ -100,7 +100,7 @@ public class SuperAdminEmpresaController {
                 salva.getId(),
                 "EMPRESA_ATUALIZADA"
         ));
-        return EmpresaResumo.from(salva);
+        return resumo(salva);
     }
 
     private String slugUnico(String nome) {
@@ -130,23 +130,30 @@ public class SuperAdminEmpresaController {
     ) {
     }
 
+    private EmpresaResumo resumo(Empresa empresa) {
+        long administradoresAtivos = usuarios.countByEmpresa_IdAndPerfilAndAtivoTrue(
+                empresa.getId(),
+                PerfilUsuario.ADMIN
+        );
+        return new EmpresaResumo(
+                empresa.getId(),
+                empresa.getNome(),
+                empresa.getSlug(),
+                empresa.isAtiva(),
+                administradoresAtivos,
+                empresa.getCriadoEm(),
+                empresa.getAtualizadoEm()
+        );
+    }
+
     public record EmpresaResumo(
             Long id,
             String nome,
             String slug,
             boolean ativa,
+            long administradoresAtivos,
             java.time.LocalDateTime criadoEm,
             java.time.LocalDateTime atualizadoEm
     ) {
-        static EmpresaResumo from(Empresa empresa) {
-            return new EmpresaResumo(
-                    empresa.getId(),
-                    empresa.getNome(),
-                    empresa.getSlug(),
-                    empresa.isAtiva(),
-                    empresa.getCriadoEm(),
-                    empresa.getAtualizadoEm()
-            );
-        }
     }
 }
