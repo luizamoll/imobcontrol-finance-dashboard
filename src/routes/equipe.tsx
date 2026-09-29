@@ -426,7 +426,8 @@ function PainelEquipe() {
                 <div>
                   <Label className="text-sm font-semibold">Permissões do usuário</Label>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Defina o que este funcionário poderá fazer dentro de ${usuario?.empresa?.nome ?? "sua empresa"}.
+                    Defina o que este funcionário poderá fazer dentro de{" "}
+                    <strong>{usuario?.empresa?.nome ?? "sua empresa"}</strong>.
                     O ADMIN continua com acesso total e pode alterar estas permissões depois.
                   </p>
                 </div>
