@@ -30,7 +30,13 @@ public class SecurityConfig {
                 .map(usuario -> User.withUsername(usuario.getEmail())
                         .password(usuario.getSenhaHash())
                         .authorities("ROLE_" + usuario.getPerfil().name())
-                        .disabled(!usuario.isAtivo() || !usuario.isSenhaDefinida() || !usuario.isEmailVerificado())
+                        .disabled(
+                                !usuario.isAtivo()
+                                        || !usuario.isSenhaDefinida()
+                                        || !usuario.isEmailVerificado()
+                                        || (usuario.getPerfil() != br.com.imobcontrol.tenant.PerfilUsuario.SUPER_ADMIN
+                                            && (usuario.getEmpresa() == null || !usuario.getEmpresa().isAtiva()))
+                        )
                         .build())
                 .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado"));
     }
