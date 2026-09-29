@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import type { PermissaoUsuario } from "@/lib/permissoes";
 import {
   createContext,
   type ReactNode,
@@ -19,7 +20,9 @@ export type AuthUsuario = {
   id: number;
   nome: string;
   email: string;
+  telefone: string | null;
   perfil: "SUPER_ADMIN" | "ADMIN" | "USUARIO";
+  permissoes: PermissaoUsuario[];
   empresa: EmpresaResumo | null;
 };
 
