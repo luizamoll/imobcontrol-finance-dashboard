@@ -1,5 +1,7 @@
 package br.com.imobcontrol.operacao;
 
+import br.com.imobcontrol.tenant.PermissaoAcessoService;
+import br.com.imobcontrol.tenant.PermissaoUsuario;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -22,9 +24,14 @@ import java.util.List;
 public class OperacaoCatalogoController {
 
     private final OperacaoCatalogoService service;
+    private final PermissaoAcessoService acesso;
 
-    public OperacaoCatalogoController(OperacaoCatalogoService service) {
+    public OperacaoCatalogoController(
+            OperacaoCatalogoService service,
+            PermissaoAcessoService acesso
+    ) {
         this.service = service;
+        this.acesso = acesso;
     }
 
     @GetMapping("/empreendimentos")
@@ -53,6 +60,7 @@ public class OperacaoCatalogoController {
             @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @Valid @RequestBody EmpreendimentoRequest body
     ) {
+        acesso.exigir(usuario, PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR);
         return service.criarEmpreendimento(usuario, empresaId, body);
     }
 
@@ -63,6 +71,7 @@ public class OperacaoCatalogoController {
             @PathVariable Long id,
             @Valid @RequestBody EmpreendimentoRequest body
     ) {
+        acesso.exigir(usuario, PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR);
         return service.atualizarEmpreendimento(usuario, empresaId, id, body);
     }
 
@@ -82,6 +91,7 @@ public class OperacaoCatalogoController {
             @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @Valid @RequestBody QuadraRequest body
     ) {
+        acesso.exigir(usuario, PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR);
         return service.criarQuadra(usuario, empresaId, body);
     }
 
@@ -92,6 +102,7 @@ public class OperacaoCatalogoController {
             @PathVariable Long id,
             @Valid @RequestBody QuadraRequest body
     ) {
+        acesso.exigir(usuario, PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR);
         return service.atualizarQuadra(usuario, empresaId, id, body);
     }
 
@@ -111,6 +122,7 @@ public class OperacaoCatalogoController {
             @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @Valid @RequestBody UnidadeRequest body
     ) {
+        acesso.exigir(usuario, PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR);
         return service.criarUnidade(usuario, empresaId, body);
     }
 
@@ -121,6 +133,7 @@ public class OperacaoCatalogoController {
             @PathVariable Long id,
             @Valid @RequestBody UnidadeRequest body
     ) {
+        acesso.exigir(usuario, PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR);
         return service.atualizarUnidade(usuario, empresaId, id, body);
     }
 }
