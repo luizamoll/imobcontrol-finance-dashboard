@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Building2,
+  CheckCircle2,
   Download,
   Landmark,
   Plus,
+  Settings2,
   TrendingUp,
   Upload,
 } from "lucide-react";
@@ -20,6 +22,9 @@ import { UpcomingReceivables } from "@/components/dashboard/upcoming-receivables
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { brl0 } from "@/lib/format";
+import { carregarConfiguracaoEmpresa } from "@/lib/empresa-config-api";
+import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant";
 import { useLiveNow } from "@/lib/use-live-now";
 import { inadimplenciaCalc, useStore } from "@/lib/store";
 
@@ -37,10 +42,57 @@ export const Route = createFileRoute("/")({
   }),
 });
 
+function EtapaInicial({
+  titulo,
+  descricao,
+  ativa = false,
+}: {
+  titulo: string;
+  descricao: string;
+  ativa?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/70 p-4">
+      <div className="flex items-center gap-2">
+        {ativa ? (
+          <CheckCircle2 className="h-4 w-4 text-primary" />
+        ) : (
+          <div className="h-4 w-4 rounded-full border border-border" />
+        )}
+        <div className="text-sm font-medium">{titulo}</div>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">{descricao}</p>
+    </div>
+  );
+}
+
 function Dashboard() {
   const { state } = useStore();
+  const { usuario } = useAuth();
+  const { empresaAtualId, empresaAtual } = useTenant();
   const hasData = state.empreendimentos.length > 0;
   const hoje = useLiveNow();
+  const [configInicialConcluida, setConfigInicialConcluida] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!empresaAtualId || usuario?.perfil !== "ADMIN") {
+      setConfigInicialConcluida(null);
+      return;
+    }
+
+    let cancelado = false;
+    void carregarConfiguracaoEmpresa(empresaAtualId)
+      .then(({ config }) => {
+        if (!cancelado) setConfigInicialConcluida(config.onboardingConcluido);
+      })
+      .catch(() => {
+        if (!cancelado) setConfigInicialConcluida(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId, usuario?.perfil]);
 
   const stats = useMemo(() => {
     const monthKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
@@ -70,6 +122,64 @@ function Dashboard() {
     toast.info(`${recurso} ainda não disponível`, {
       description: "O recurso será liberado quando estiver ligado ao back-end e validado para dados reais.",
     });
+
+  if (!hasData && usuario?.perfil === "ADMIN" && configInicialConcluida === false) {
+    return (
+      <div className="mx-auto w-full max-w-[1500px] space-y-8 p-6 lg:p-8">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Primeiro acesso
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+            Configure {empresaAtual?.nome ?? "sua empresa"}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Antes do primeiro empreendimento, confirme os dados da empresa e os padrões que devem
+            aparecer como sugestão nos novos projetos.
+          </p>
+        </div>
+
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-6">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Settings2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">1. Configuração inicial da empresa</h2>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    Salve CNPJ, contato e o modelo inicial de comissão, distribuição, tributação,
+                    juros, multa, correção e tolerância. Esses valores não alteram operações antigas.
+                  </p>
+                </div>
+              </div>
+              <Button onClick={() => (window.location.href = "/configuracoes")}>
+                Configurar empresa
+                <Settings2 className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <EtapaInicial
+                ativa
+                titulo="1. Empresa"
+                descricao="Dados e padrões iniciais."
+              />
+              <EtapaInicial
+                titulo="2. Empreendimento"
+                descricao="Projeto, SPE, unidades e regras próprias."
+              />
+              <EtapaInicial
+                titulo="3. Operação"
+                descricao="Clientes, vendas, parcelas e recebimentos."
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!hasData) {
     return (
