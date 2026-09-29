@@ -38,6 +38,7 @@ type QuadraApi = {
   empresaId: number;
   empreendimentoId: number;
   nome: string;
+  tipoAgrupamento: "quadra" | "bloco" | "setor";
   descricao: string | null;
   regras: RegrasOperacao | null;
   versao: number;
@@ -91,6 +92,7 @@ function quadraFromApi(q: QuadraApi): QuadraRemota {
     id: String(q.id),
     empreendimentoId: String(q.empreendimentoId),
     nome: q.nome,
+    tipoAgrupamento: q.tipoAgrupamento ?? "quadra",
     descricao: q.descricao ?? undefined,
     regras: q.regras ?? undefined,
     versao: q.versao,
@@ -140,6 +142,7 @@ function quadraBody(q: Omit<Quadra, "id"> | QuadraRemota) {
   return {
     empreendimentoId: Number(q.empreendimentoId),
     nome: q.nome,
+    tipoAgrupamento: q.tipoAgrupamento ?? "quadra",
     descricao: q.descricao ?? null,
     regras: q.regras ?? null,
     versao: "versao" in q ? q.versao ?? null : null,
