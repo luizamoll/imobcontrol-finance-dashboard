@@ -1,5 +1,7 @@
 package br.com.imobcontrol.financeiro;
 
+import br.com.imobcontrol.tenant.PermissaoAcessoService;
+import br.com.imobcontrol.tenant.PermissaoUsuario;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -13,9 +15,11 @@ import java.util.List;
 public class FinanceiroController {
 
     private final FinanceiroService service;
+    private final PermissaoAcessoService acesso;
 
-    public FinanceiroController(FinanceiroService service) {
+    public FinanceiroController(FinanceiroService service, PermissaoAcessoService acesso) {
         this.service = service;
+        this.acesso = acesso;
     }
 
     @GetMapping("/vendas")
@@ -44,6 +48,7 @@ public class FinanceiroController {
             @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
             @Valid @RequestBody VendaRequest body
     ) {
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_GERENCIAR);
         return service.criarVenda(auth, empresaId, body);
     }
 
@@ -54,6 +59,7 @@ public class FinanceiroController {
             @PathVariable Long id,
             @Valid @RequestBody VendaRequest body
     ) {
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_GERENCIAR);
         return service.atualizarVenda(auth, empresaId, id, body);
     }
 
@@ -81,6 +87,7 @@ public class FinanceiroController {
             @PathVariable Long id,
             @Valid @RequestBody RecebimentoRequest body
     ) {
+        acesso.exigir(auth, PermissaoUsuario.RECEBIMENTOS_REGISTRAR);
         return service.receber(auth, empresaId, id, body);
     }
 
@@ -91,6 +98,7 @@ public class FinanceiroController {
             @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
             @PathVariable Long id
     ) {
+        acesso.exigir(auth, PermissaoUsuario.RECEBIMENTOS_ESTORNAR);
         service.reverterRecebimento(auth, empresaId, id);
     }
 }
