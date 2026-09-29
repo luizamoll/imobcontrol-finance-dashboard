@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { KeyRound, Pencil, Plus, RefreshCw, ShieldCheck, UsersRound } from "lucide-react";
+import { KeyRound, Mail, Pencil, Plus, RefreshCw, ShieldCheck, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -53,6 +53,9 @@ type UsuarioEquipe = {
   telefone: string | null;
   perfil: "USUARIO";
   ativo: boolean;
+  emailVerificado: boolean;
+  senhaDefinida: boolean;
+  conviteEnviadoEm: string | null;
   permissoes: PermissaoUsuario[];
   versao: number;
 };
@@ -66,7 +69,6 @@ type FormEquipe = {
   nome: string;
   email: string;
   telefone: string;
-  senha: string;
   ativo: boolean;
   permissoes: PermissaoUsuario[];
   versao: number | null;
@@ -77,7 +79,6 @@ function vazio(): FormEquipe {
     nome: "",
     email: "",
     telefone: "",
-    senha: "",
     ativo: true,
     permissoes: [],
     versao: null,
@@ -154,7 +155,6 @@ function PainelEquipe() {
       nome: alvo.nome,
       email: alvo.email,
       telefone: alvo.telefone ?? "",
-      senha: "",
       ativo: alvo.ativo,
       permissoes: [...(alvo.permissoes ?? [])],
       versao: alvo.versao,
@@ -167,11 +167,6 @@ function PainelEquipe() {
       toast.error("Preencha nome e e-mail");
       return;
     }
-    if (!editando && form.senha.length < 8) {
-      toast.error("A senha inicial deve ter pelo menos 8 caracteres");
-      return;
-    }
-
     setSalvando(true);
     try {
       if (editando) {
@@ -194,11 +189,10 @@ function PainelEquipe() {
             nome: form.nome.trim(),
             email: form.email.trim(),
             telefone: form.telefone.trim() || null,
-            senha: form.senha,
             permissoes: form.permissoes,
           }),
         });
-        toast.success("Funcionário criado");
+        toast.success("Funcionário criado. O convite de primeiro acesso foi preparado.");
       }
 
       setDialogAberto(false);
@@ -241,7 +235,7 @@ function PainelEquipe() {
       <PageHeader
         eyebrow="Gestão da empresa"
         title="Equipe e acessos"
-        description={`Cadastre e administre os funcionários de ${usuario?.empresa?.nome ?? "sua empresa"}.`}
+        description={`Cadastre funcionários por convite e administre permissões e acessos de ${usuario?.empresa?.nome ?? "sua empresa"}.`}
         actions={
           <Button size="sm" onClick={abrirNovo}>
             <Plus className="mr-2 h-4 w-4" /> Novo funcionário
@@ -341,25 +335,60 @@ function PainelEquipe() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={alvo.ativo ? "secondary" : "outline"}>
-                        {alvo.ativo ? "Ativo" : "Inativo"}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge variant={alvo.ativo ? "secondary" : "outline"}>
+                          {alvo.ativo ? "Ativo" : "Inativo"}
+                        </Badge>
+                        {alvo.ativo && (!alvo.senhaDefinida || !alvo.emailVerificado) && (
+                          <Badge variant="outline">
+                            {!alvo.conviteEnviadoEm ? "Convite pendente" : "Aguardando ativação"}
+                          </Badge>
+                        )}
+                        {alvo.emailVerificado && alvo.senhaDefinida && (
+                          <Badge variant="outline">E-mail verificado</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => abrirEdicao(alvo)}>
                           <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSenhaUsuario(alvo);
-                            setNovaSenha("");
-                          }}
-                        >
-                          <KeyRound className="mr-1 h-3.5 w-3.5" /> Senha
-                        </Button>
+                        {alvo.senhaDefinida && alvo.emailVerificado ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSenhaUsuario(alvo);
+                              setNovaSenha("");
+                            }}
+                          >
+                            <KeyRound className="mr-1 h-3.5 w-3.5" /> Senha
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                const resposta = await apiJson<{ enviado: boolean }>(
+                                  `/api/empresa/usuarios/${alvo.id}/convite`,
+                                  { method: "POST" },
+                                );
+                                toast[resposta.enviado ? "success" : "warning"](
+                                  resposta.enviado
+                                    ? "Convite reenviado"
+                                    : "Convite pendente: o envio de e-mail ainda não está configurado",
+                                );
+                                await carregar();
+                              } catch (error) {
+                                toast.error(error instanceof Error ? error.message : "Não foi possível reenviar o convite");
+                              }
+                            }}
+                          >
+                            <Mail className="mr-1 h-3.5 w-3.5" /> Convite
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -396,14 +425,13 @@ function PainelEquipe() {
               />
             </div>
             {!editando ? (
-              <div>
-                <Label>Senha inicial</Label>
-                <Input
-                  type="password"
-                  value={form.senha}
-                  onChange={(e) => setForm((s) => ({ ...s, senha: e.target.value }))}
-                  placeholder="Mínimo de 8 caracteres"
-                />
+              <div className="rounded-lg border border-primary/15 bg-primary/5 p-4">
+                <div className="flex items-start gap-3">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    O funcionário receberá um convite no e-mail informado para confirmar o endereço e criar a própria senha.
+                  </p>
+                </div>
               </div>
             ) : (
               <div>
