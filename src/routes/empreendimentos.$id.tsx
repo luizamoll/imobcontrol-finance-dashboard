@@ -179,8 +179,8 @@ function EmpreendimentoDetail() {
           <DialogHeader>
             <DialogTitle>Excluir empreendimento?</DialogTitle>
             <DialogDescription>
-              Esta ação remove o empreendimento, suas quadras e unidades. Vendas e recebimentos nunca
-              são apagados por esta ação.
+              Esta ação remove o empreendimento, seus agrupamentos e unidades. Vendas e recebimentos
+              nunca são apagados por esta ação.
             </DialogDescription>
           </DialogHeader>
           {possuiHistoricoFinanceiro ? (
@@ -193,7 +193,7 @@ function EmpreendimentoDetail() {
             </div>
           ) : (
             <div className="rounded-lg border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
-              {quadras.length} quadra(s) e {matriculas.length} unidade(s) também serão removidas.
+              {quadras.length} agrupamento(s) e {matriculas.length} unidade(s) também serão removidos.
             </div>
           )}
           <DialogFooter>
@@ -460,7 +460,7 @@ function EmpreendimentoDetail() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button size="sm" variant="ghost" onClick={() => setEditUnidade(m)}>
-                        <Pencil className="mr-1 h-3.5 w-3.5" /> Regra / vínculo
+                        <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
                       </Button>
                     </TableCell>
                   </TableRow>
