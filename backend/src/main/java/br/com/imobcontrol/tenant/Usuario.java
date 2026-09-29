@@ -11,7 +11,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -45,6 +44,15 @@ public class Usuario {
 
     @Column(name = "senha_hash", nullable = false, length = 100)
     private String senhaHash;
+
+    @Column(name = "email_verificado", nullable = false)
+    private boolean emailVerificado = true;
+
+    @Column(name = "senha_definida", nullable = false)
+    private boolean senhaDefinida = true;
+
+    @Column(name = "convite_enviado_em")
+    private LocalDateTime conviteEnviadoEm;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -128,6 +136,30 @@ public class Usuario {
 
     public void setSenhaHash(String senhaHash) {
         this.senhaHash = senhaHash;
+    }
+
+    public boolean isEmailVerificado() {
+        return emailVerificado;
+    }
+
+    public void setEmailVerificado(boolean emailVerificado) {
+        this.emailVerificado = emailVerificado;
+    }
+
+    public boolean isSenhaDefinida() {
+        return senhaDefinida;
+    }
+
+    public void setSenhaDefinida(boolean senhaDefinida) {
+        this.senhaDefinida = senhaDefinida;
+    }
+
+    public LocalDateTime getConviteEnviadoEm() {
+        return conviteEnviadoEm;
+    }
+
+    public void setConviteEnviadoEm(LocalDateTime conviteEnviadoEm) {
+        this.conviteEnviadoEm = conviteEnviadoEm;
     }
 
     public PerfilUsuario getPerfil() {
