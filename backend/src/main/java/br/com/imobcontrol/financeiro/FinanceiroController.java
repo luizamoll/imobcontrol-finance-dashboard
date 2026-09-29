@@ -29,6 +29,16 @@ public class FinanceiroController {
             @RequestParam(defaultValue="0") int pagina,
             @RequestParam(defaultValue="100") int tamanho
     ) {
+        acesso.exigirQualquer(
+                auth,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
+                PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
+                PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RELATORIOS_VISUALIZAR
+        );
         return service.listarVendas(auth, empresaId, pagina, tamanho);
     }
 
@@ -38,6 +48,16 @@ public class FinanceiroController {
             @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
             @PathVariable Long id
     ) {
+        acesso.exigirQualquer(
+                auth,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
+                PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
+                PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RELATORIOS_VISUALIZAR
+        );
         return service.detalharVenda(auth, empresaId, id);
     }
 
@@ -68,6 +88,16 @@ public class FinanceiroController {
             Authentication auth,
             @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId
     ) {
+        acesso.exigirQualquer(
+                auth,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
+                PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
+                PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RELATORIOS_VISUALIZAR
+        );
         return service.listarParcelas(auth, empresaId);
     }
 
@@ -76,6 +106,16 @@ public class FinanceiroController {
             Authentication auth,
             @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId
     ) {
+        acesso.exigirQualquer(
+                auth,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
+                PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
+                PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RELATORIOS_VISUALIZAR
+        );
         return service.listarMovimentos(auth, empresaId);
     }
 
