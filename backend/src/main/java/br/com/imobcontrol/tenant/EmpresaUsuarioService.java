@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -71,8 +72,10 @@ public class EmpresaUsuarioService {
         Usuario usuario = new Usuario();
         usuario.setNome(body.nome().trim());
         usuario.setEmail(email);
+        usuario.setTelefone(textoOpcional(body.telefone()));
         usuario.setSenhaHash(passwordEncoder.encode(body.senha()));
         usuario.setPerfil(PerfilUsuario.USUARIO);
+        usuario.setPermissoes(permissoes(body.permissoes()));
         usuario.setEmpresa(admin.getEmpresa());
         usuario.setAtivo(true);
 
@@ -106,6 +109,8 @@ public class EmpresaUsuarioService {
 
         usuario.setNome(body.nome().trim());
         usuario.setEmail(email);
+        usuario.setTelefone(textoOpcional(body.telefone()));
+        usuario.setPermissoes(permissoes(body.permissoes()));
         usuario.setAtivo(body.ativo());
 
         Usuario salvo = salvar(usuario);
@@ -162,6 +167,17 @@ public class EmpresaUsuarioService {
 
     private String normalizarEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String textoOpcional(String valor) {
+        if (valor == null || valor.isBlank()) return null;
+        return valor.trim();
+    }
+
+    private LinkedHashSet<PermissaoUsuario> permissoes(java.util.Set<PermissaoUsuario> permissoes) {
+        return permissoes == null
+                ? new LinkedHashSet<>()
+                : new LinkedHashSet<>(permissoes);
     }
 
     private Usuario salvar(Usuario usuario) {
