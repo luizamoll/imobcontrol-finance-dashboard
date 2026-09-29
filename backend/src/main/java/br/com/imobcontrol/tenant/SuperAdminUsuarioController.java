@@ -59,6 +59,14 @@ public class SuperAdminUsuarioController {
         return service.atualizar(autenticacao, id, body);
     }
 
+    @PostMapping("/{id}/convite")
+    public ConviteResponse reenviarConvite(
+            Authentication autenticacao,
+            @PathVariable Long id
+    ) {
+        return new ConviteResponse(service.reenviarConvite(autenticacao, id));
+    }
+
     @PostMapping("/{id}/senha")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void redefinirSenha(
@@ -67,5 +75,7 @@ public class SuperAdminUsuarioController {
             @Valid @RequestBody UsuarioAdminPasswordRequest body
     ) {
         service.redefinirSenha(autenticacao, id, body);
+    }
+    public record ConviteResponse(boolean enviado) {
     }
 }
