@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { apiJson } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
@@ -39,9 +41,38 @@ function AdminDashboard() {
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [saude, setSaude] = useState<"UP" | "DOWN" | "CHECKING">("CHECKING");
   const [carregando, setCarregando] = useState(true);
+  const [novaEmpresaNome, setNovaEmpresaNome] = useState("");
+  const [criandoEmpresa, setCriandoEmpresa] = useState(false);
 
   useEffect(() => {
-    if (usuario?.perfil !== "SUPER_ADMIN") {
+    async function criarPrimeiraEmpresa() {
+    const nome = novaEmpresaNome.trim();
+    if (!nome) {
+      toast.error("Informe o nome da empresa");
+      return;
+    }
+
+    setCriandoEmpresa(true);
+    try {
+      const criada = await apiJson<EmpresaResumo>("/api/super-admin/empresas", {
+        method: "POST",
+        body: JSON.stringify({ nome }),
+      });
+
+      setEmpresas((atuais) => {
+        const semDuplicar = atuais.filter((empresa) => empresa.id !== criada.id);
+        return [...semDuplicar, criada].sort((a, b) => a.nome.localeCompare(b.nome));
+      });
+      setNovaEmpresaNome("");
+      toast.success(`Empresa ${criada.nome} criada com sucesso`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível criar a empresa");
+    } finally {
+      setCriandoEmpresa(false);
+    }
+  }
+
+  if (usuario?.perfil !== "SUPER_ADMIN") {
       setCarregando(false);
       return;
     }
@@ -108,17 +139,15 @@ function AdminDashboard() {
               <CardTitle className="text-base">Empresas</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">Visualize as empresas cadastradas e entre rapidamente no ambiente que precisa administrar.</p>
             </div>
-            <Button
-              variant={empresas.length === 0 ? "default" : "outline"}
-              size="sm"
-              onClick={() =>
-                window.location.assign(
-                  empresas.length === 0 ? "/admin/empresas?nova=1" : "/admin/empresas",
-                )
-              }
-            >
-              {empresas.length === 0 ? "Cadastrar primeira empresa" : "Gerenciar empresas"}
-            </Button>
+            {empresas.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.location.assign("/admin/empresas")}
+              >
+                Gerenciar empresas
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="space-y-2">
             {empresas.slice(0, 5).map((empresa) => (
@@ -140,17 +169,42 @@ function AdminDashboard() {
               </div>
             ))}
             {!carregando && empresas.length === 0 && (
-              <div className="py-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma empresa ativa cadastrada.
-                </p>
-                <Button
-                  className="mt-4"
-                  onClick={() => window.location.assign("/admin/empresas?nova=1")}
-                >
-                  Cadastrar primeira empresa
-                </Button>
-              </div>
+              <form
+                className="rounded-xl border border-primary/20 bg-primary/[0.03] p-5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void criarPrimeiraEmpresa();
+                }}
+              >
+                <div className="text-left">
+                  <div className="text-sm font-semibold text-foreground">
+                    Cadastre a primeira empresa
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Crie primeiro o ambiente da empresa. O administrador e os demais acessos vêm na etapa seguinte.
+                  </p>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="flex-1 text-left">
+                    <Label htmlFor="primeira-empresa">Nome da empresa</Label>
+                    <Input
+                      id="primeira-empresa"
+                      value={novaEmpresaNome}
+                      onChange={(event) => setNovaEmpresaNome(event.target.value)}
+                      placeholder="Ex.: Líder"
+                      autoComplete="organization"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={criandoEmpresa || !novaEmpresaNome.trim()}
+                    className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    {criandoEmpresa ? "Criando..." : "Criar empresa"}
+                  </button>
+                </div>
+              </form>
             )}
           </CardContent>
         </Card>
