@@ -21,6 +21,8 @@ export type AuthUsuario = {
   nome: string;
   email: string;
   telefone: string | null;
+  emailVerificado: boolean;
+  senhaDefinida: boolean;
   perfil: "SUPER_ADMIN" | "ADMIN" | "USUARIO";
   permissoes: PermissaoUsuario[];
   empresa: EmpresaResumo | null;
