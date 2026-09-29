@@ -88,6 +88,7 @@ public class SuperAdminUsuarioService {
         Usuario usuario = new Usuario();
         usuario.setNome(body.nome().trim());
         usuario.setEmail(email);
+        usuario.setTelefone(textoOpcional(body.telefone()));
         usuario.setSenhaHash(passwordEncoder.encode(body.senha()));
         usuario.setPerfil(body.perfil());
         usuario.setEmpresa(empresa);
@@ -128,6 +129,7 @@ public class SuperAdminUsuarioService {
         Empresa empresa = empresaAtiva(body.empresaId());
         usuario.setNome(body.nome().trim());
         usuario.setEmail(email);
+        usuario.setTelefone(textoOpcional(body.telefone()));
         usuario.setEmpresa(empresa);
         usuario.setPerfil(body.perfil());
         usuario.setAtivo(body.ativo());
@@ -196,6 +198,11 @@ public class SuperAdminUsuarioService {
 
     private String normalizarEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String textoOpcional(String valor) {
+        if (valor == null || valor.isBlank()) return null;
+        return valor.trim();
     }
 
     private Usuario salvar(Usuario usuario) {
