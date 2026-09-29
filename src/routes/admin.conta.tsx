@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { KeyRound, Mail, Phone, ShieldCheck, UserRound } from "lucide-react";
+import { KeyRound, Mail, MailCheck, Phone, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -21,6 +21,8 @@ type AuthResponse = {
   nome: string;
   email: string;
   telefone: string | null;
+  emailVerificado: boolean;
+  senhaDefinida: boolean;
   perfil: "SUPER_ADMIN" | "ADMIN" | "USUARIO";
 };
 
@@ -73,7 +75,7 @@ function AdminContaPage() {
 
     setSalvando(true);
     try {
-      await apiJson<AuthResponse>("/api/auth/minha-conta", {
+      const resposta = await apiJson<AuthResponse>("/api/auth/minha-conta", {
         method: "PUT",
         body: JSON.stringify({
           nome: nome.trim(),
@@ -87,7 +89,11 @@ function AdminContaPage() {
       setSenhaAtual("");
       setNovaSenha("");
       setConfirmacao("");
-      toast.success("Conta administrativa atualizada.");
+      toast.success(
+        resposta.emailVerificado
+          ? "Conta administrativa atualizada."
+          : "Dados atualizados. Confirme o novo e-mail pelo link enviado.",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível atualizar sua conta.");
     } finally {
@@ -148,6 +154,14 @@ function AdminContaPage() {
                   onChange={(event) => setEmail(event.target.value)}
                   className="pl-9"
                 />
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MailCheck className="h-3.5 w-3.5 text-primary" />
+                <span>
+                  {usuario?.emailVerificado
+                    ? "E-mail verificado."
+                    : "E-mail aguardando confirmação. Confirme pelo link enviado antes do próximo login."}
+                </span>
               </div>
             </div>
 
