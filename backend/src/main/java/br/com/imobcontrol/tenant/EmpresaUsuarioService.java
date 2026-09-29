@@ -1,5 +1,6 @@
 package br.com.imobcontrol.tenant;
 
+import br.com.imobcontrol.auth.AcessoContaService;
 import br.com.imobcontrol.cliente.AuditoriaOperacional;
 import br.com.imobcontrol.cliente.AuditoriaOperacionalRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -23,15 +24,18 @@ public class EmpresaUsuarioService {
 
     private final UsuarioRepository usuarios;
     private final PasswordEncoder passwordEncoder;
+    private final AcessoContaService acessoConta;
     private final AuditoriaOperacionalRepository auditoria;
 
     public EmpresaUsuarioService(
             UsuarioRepository usuarios,
             PasswordEncoder passwordEncoder,
+            AcessoContaService acessoConta,
             AuditoriaOperacionalRepository auditoria
     ) {
         this.usuarios = usuarios;
         this.passwordEncoder = passwordEncoder;
+        this.acessoConta = acessoConta;
         this.auditoria = auditoria;
     }
 
@@ -73,7 +77,9 @@ public class EmpresaUsuarioService {
         usuario.setNome(body.nome().trim());
         usuario.setEmail(email);
         usuario.setTelefone(textoOpcional(body.telefone()));
-        usuario.setSenhaHash(passwordEncoder.encode(body.senha()));
+        usuario.setSenhaHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+        usuario.setSenhaDefinida(false);
+        usuario.setEmailVerificado(false);
         usuario.setPerfil(PerfilUsuario.USUARIO);
         usuario.setPermissoes(permissoes(body.permissoes()));
         usuario.setEmpresa(admin.getEmpresa());
@@ -81,6 +87,7 @@ public class EmpresaUsuarioService {
 
         Usuario salvo = salvar(usuario);
         registrarAuditoria(admin, salvo, "FUNCIONARIO_CRIADO");
+        acessoConta.enviarConvite(salvo);
         return UsuarioAdminResponse.from(salvo);
     }
 
@@ -132,8 +139,26 @@ public class EmpresaUsuarioService {
         Usuario usuario = alvoDaMesmaEmpresa(admin, id);
 
         usuario.setSenhaHash(passwordEncoder.encode(body.senha()));
+        usuario.setSenhaDefinida(true);
         Usuario salvo = salvar(usuario);
+        acessoConta.invalidarTokensDoUsuario(salvo.getId());
+        acessoConta.encerrarSessoes(salvo.getEmail());
         registrarAuditoria(admin, salvo, "SENHA_FUNCIONARIO_REDEFINIDA");
+    }
+
+    @Transactional
+    public boolean reenviarConvite(Authentication autenticacao, Long id) {
+        Usuario admin = admin(autenticacao);
+        Usuario usuario = alvoDaMesmaEmpresa(admin, id);
+        if (usuario.isSenhaDefinida() && usuario.isEmailVerificado()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Este funcionário já ativou a conta"
+            );
+        }
+        boolean enviado = acessoConta.enviarConvite(usuario);
+        registrarAuditoria(admin, usuario, "CONVITE_FUNCIONARIO_REENVIADO");
+        return enviado;
     }
 
     private Usuario admin(Authentication autenticacao) {
