@@ -52,4 +52,26 @@ public class PermissaoAcessoService {
             );
         }
     }
+
+    public void exigirQualquer(
+            Authentication autenticacao,
+            PermissaoUsuario... permissoes
+    ) {
+        Usuario usuario = usuarioAtual(autenticacao);
+        if (usuario.getPerfil() == PerfilUsuario.SUPER_ADMIN
+                || usuario.getPerfil() == PerfilUsuario.ADMIN) {
+            return;
+        }
+
+        for (PermissaoUsuario permissao : permissoes) {
+            if (usuario.getPermissoes().contains(permissao)) {
+                return;
+            }
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Seu usuário não possui permissão para acessar este módulo"
+        );
+    }
 }
