@@ -44,8 +44,7 @@ function AdminDashboard() {
   const [novaEmpresaNome, setNovaEmpresaNome] = useState("");
   const [criandoEmpresa, setCriandoEmpresa] = useState(false);
 
-  useEffect(() => {
-    async function criarPrimeiraEmpresa() {
+  async function criarPrimeiraEmpresa() {
     const nome = novaEmpresaNome.trim();
     if (!nome) {
       toast.error("Informe o nome da empresa");
@@ -72,7 +71,8 @@ function AdminDashboard() {
     }
   }
 
-  if (usuario?.perfil !== "SUPER_ADMIN") {
+  useEffect(() => {
+    if (usuario?.perfil !== "SUPER_ADMIN") {
       setCarregando(false);
       return;
     }
