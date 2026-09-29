@@ -33,6 +33,10 @@ public class AuthService {
             throw new DisabledException("Usuário inativo");
         }
 
+        if (!usuario.isSenhaDefinida() || !usuario.isEmailVerificado()) {
+            throw new BadCredentialsException("Credenciais inválidas");
+        }
+
         if (!passwordEncoder.matches(senha, usuario.getSenhaHash())) {
             throw new BadCredentialsException("Credenciais inválidas");
         }
