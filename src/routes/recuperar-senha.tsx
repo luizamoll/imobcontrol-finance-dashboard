@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Mail } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { toast } from "sonner";
 
 import { AuthPublicShell } from "@/components/auth-public-shell";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,8 @@ function RecuperarSenhaPage() {
         body: JSON.stringify({ email: email.trim() }),
       });
       setConcluido(true);
+    } catch {
+      toast.error("Não foi possível enviar a solicitação agora. Tente novamente.");
     } finally {
       setEnviando(false);
     }
