@@ -49,7 +49,7 @@ imobcontrol:
     email: ${IMOB_ADMIN_EMAIL:}
     password: ${IMOB_ADMIN_PASSWORD:}
   app-url: ${IMOB_APP_URL:http://localhost:3000}
-  mail-from: ${IMOB_MAIL_FROM:no-reply@imobcontrol.local}
+  mail-from: ${IMOB_MAIL_FROM:}
 
 info:
   app:
