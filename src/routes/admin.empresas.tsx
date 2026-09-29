@@ -96,6 +96,35 @@ function AdminEmpresasPage() {
     );
   }, [busca, empresas]);
 
+  const criarEmpresa = async () => {
+    const nome = novoNome.trim();
+    if (!nome) {
+      toast.error("Informe o nome da empresa");
+      return;
+    }
+
+    setSalvando(true);
+    try {
+      const criada = await apiJson<Empresa>("/api/super-admin/empresas", {
+        method: "POST",
+        body: JSON.stringify({ nome }),
+      });
+      setEmpresas((atuais) => {
+        const semDuplicar = atuais.filter((empresa) => empresa.id !== criada.id);
+        return [...semDuplicar, criada].sort((a, b) => a.nome.localeCompare(b.nome));
+      });
+      toast.success("Empresa criada. Agora crie o primeiro administrador.");
+      setNovoNome("");
+      setNovoAberto(false);
+      iniciarAdmin(criada);
+      await carregar();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível criar a empresa");
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const iniciarAdmin = (empresa: Empresa) => {
     setEmpresaOnboarding(empresa);
     setAdminNome("");
@@ -159,6 +188,36 @@ function AdminEmpresasPage() {
           </Button>
         }
       />
+
+      <Card className="border-primary/20 bg-primary/[0.03]">
+        <CardContent className="p-5">
+          <form
+            className="flex flex-col gap-3 sm:flex-row sm:items-end"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void criarEmpresa();
+            }}
+          >
+            <div className="flex-1">
+              <Label htmlFor="nova-empresa-inline">Cadastrar empresa</Label>
+              <Input
+                id="nova-empresa-inline"
+                value={novoNome}
+                onChange={(event) => setNovoNome(event.target.value)}
+                placeholder="Ex.: Líder"
+                autoComplete="organization"
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Cria o ambiente da empresa primeiro. O administrador pode ser vinculado logo em seguida.
+              </p>
+            </div>
+            <Button type="submit" disabled={salvando || !novoNome.trim()}>
+              <Plus className="mr-2 h-4 w-4" />
+              {salvando ? "Criando..." : "Criar empresa"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card className="border-border/70">
         <CardContent className="p-4">
@@ -265,7 +324,12 @@ function AdminEmpresasPage() {
 
       {!carregando && filtradas.length === 0 && (
         <Card className="border-border/70">
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">Nenhuma empresa encontrada.</CardContent>
+          <CardContent className="py-10 text-center">
+            <div className="text-sm font-medium text-foreground">Nenhuma empresa cadastrada ainda.</div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use o campo “Cadastrar empresa” acima para criar a primeira.
+            </p>
+          </CardContent>
         </Card>
       )}
 
@@ -283,24 +347,7 @@ function AdminEmpresasPage() {
             <Button variant="ghost" onClick={() => setNovoAberto(false)}>Cancelar</Button>
             <Button
               disabled={salvando || !novoNome.trim()}
-              onClick={async () => {
-                setSalvando(true);
-                try {
-                  const criada = await apiJson<Empresa>("/api/super-admin/empresas", {
-                    method: "POST",
-                    body: JSON.stringify({ nome: novoNome.trim() }),
-                  });
-                  toast.success("Empresa criada. Agora crie o primeiro administrador.");
-                  setNovoNome("");
-                  setNovoAberto(false);
-                  iniciarAdmin(criada);
-                  await carregar();
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Não foi possível criar a empresa");
-                } finally {
-                  setSalvando(false);
-                }
-              }}
+              onClick={() => void criarEmpresa()}
             >
               {salvando ? "Criando..." : "Criar empresa"}
             </Button>
