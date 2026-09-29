@@ -1,5 +1,7 @@
 package br.com.imobcontrol.cliente;
 
+import br.com.imobcontrol.tenant.PermissaoAcessoService;
+import br.com.imobcontrol.tenant.PermissaoUsuario;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -20,9 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ClienteController {
 
     private final ClienteService service;
+    private final PermissaoAcessoService acesso;
 
-    public ClienteController(ClienteService service) {
+    public ClienteController(ClienteService service, PermissaoAcessoService acesso) {
         this.service = service;
+        this.acesso = acesso;
     }
 
     @GetMapping
@@ -51,6 +55,7 @@ public class ClienteController {
             @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @Valid @RequestBody ClienteRequest dados
     ) {
+        acesso.exigir(usuario, PermissaoUsuario.CLIENTES_GERENCIAR);
         return service.cadastrar(usuario, empresaId, dados);
     }
 
@@ -61,6 +66,7 @@ public class ClienteController {
             @PathVariable Long id,
             @Valid @RequestBody ClienteRequest dados
     ) {
+        acesso.exigir(usuario, PermissaoUsuario.CLIENTES_GERENCIAR);
         return service.atualizar(usuario, empresaId, id, dados);
     }
 }
