@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { KeyRound, Mail, Phone, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -20,20 +20,25 @@ type AuthResponse = {
   id: number;
   nome: string;
   email: string;
+  telefone: string | null;
   perfil: "SUPER_ADMIN" | "ADMIN" | "USUARIO";
 };
 
 function AdminContaPage() {
   const { usuario, recarregar } = useAuth();
+  const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
   const [senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmacao, setConfirmacao] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
+    setNome(usuario?.nome ?? "");
     setEmail(usuario?.email ?? "");
-  }, [usuario?.email]);
+    setTelefone(usuario?.telefone ?? "");
+  }, [usuario?.email, usuario?.nome, usuario?.telefone]);
 
   if (usuario?.perfil !== "SUPER_ADMIN") {
     return (
@@ -48,8 +53,13 @@ function AdminContaPage() {
   }
 
   async function salvar() {
-    if (!email.trim() || !senhaAtual) {
-      toast.error("Informe o e-mail e a senha atual.");
+    if (!nome.trim() || !email.trim()) {
+      toast.error("Informe nome e e-mail.");
+      return;
+    }
+    const alterandoEmail = email.trim().toLowerCase() !== (usuario?.email ?? "").toLowerCase();
+    if ((alterandoEmail || novaSenha) && !senhaAtual) {
+      toast.error("Confirme sua senha atual para alterar e-mail ou senha.");
       return;
     }
     if (novaSenha && novaSenha.length < 8) {
@@ -66,8 +76,10 @@ function AdminContaPage() {
       await apiJson<AuthResponse>("/api/auth/minha-conta", {
         method: "PUT",
         body: JSON.stringify({
+          nome: nome.trim(),
           email: email.trim(),
-          senhaAtual,
+          telefone: telefone.trim() || null,
+          senhaAtual: senhaAtual || null,
           novaSenha: novaSenha || null,
         }),
       });
@@ -97,6 +109,34 @@ function AdminContaPage() {
             <CardTitle className="text-base">Credenciais administrativas</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="admin-nome">Nome</Label>
+                <div className="relative">
+                  <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="admin-nome"
+                    value={nome}
+                    onChange={(event) => setNome(event.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="admin-telefone">Telefone</Label>
+                <div className="relative">
+                  <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="admin-telefone"
+                    value={telefone}
+                    onChange={(event) => setTelefone(event.target.value)}
+                    className="pl-9"
+                    placeholder="Opcional"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="admin-email">E-mail de acesso</Label>
               <div className="relative">
@@ -113,6 +153,9 @@ function AdminContaPage() {
 
             <div className="space-y-2">
               <Label htmlFor="senha-atual">Senha atual</Label>
+              <p className="text-xs text-muted-foreground">
+                Necessária somente para alterar o e-mail ou definir uma nova senha.
+              </p>
               <Input
                 id="senha-atual"
                 type="password"
@@ -149,7 +192,7 @@ function AdminContaPage() {
 
             <Button onClick={() => void salvar()} disabled={salvando}>
               <KeyRound className="mr-2 h-4 w-4" />
-              {salvando ? "Salvando..." : "Atualizar credenciais"}
+              {salvando ? "Salvando..." : "Salvar minha conta"}
             </Button>
           </CardContent>
         </Card>
