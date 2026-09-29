@@ -76,6 +76,10 @@ public class EmpresaUsuarioService {
         Usuario usuario = new Usuario();
         usuario.setNome(body.nome().trim());
         usuario.setEmail(email);
+        if (emailAlterado) {
+            usuario.setEmailVerificado(false);
+            usuario.setConviteEnviadoEm(null);
+        }
         usuario.setTelefone(textoOpcional(body.telefone()));
         usuario.setSenhaHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
         usuario.setSenhaDefinida(false);
@@ -107,7 +111,9 @@ public class EmpresaUsuarioService {
             );
         }
 
+        String emailAnterior = usuario.getEmail();
         String email = normalizarEmail(body.email());
+        boolean emailAlterado = !email.equalsIgnoreCase(emailAnterior);
         usuarios.findByEmailIgnoreCase(email)
                 .filter(outro -> !outro.getId().equals(usuario.getId()))
                 .ifPresent(outro -> {
@@ -121,6 +127,19 @@ public class EmpresaUsuarioService {
         usuario.setAtivo(body.ativo());
 
         Usuario salvo = salvar(usuario);
+
+        if (!salvo.isAtivo()) {
+            acessoConta.encerrarSessoes(emailAnterior);
+            if (emailAlterado) acessoConta.encerrarSessoes(salvo.getEmail());
+        } else if (emailAlterado) {
+            acessoConta.encerrarSessoes(emailAnterior);
+            if (salvo.isSenhaDefinida()) {
+                acessoConta.enviarVerificacaoEmail(salvo);
+            } else {
+                acessoConta.enviarConvite(salvo);
+            }
+        }
+
         registrarAuditoria(
                 admin,
                 salvo,
