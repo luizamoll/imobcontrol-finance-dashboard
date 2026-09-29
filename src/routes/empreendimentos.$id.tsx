@@ -57,6 +57,7 @@ import {
   type EmpStatus,
   type Matricula,
   type MatriculaStatus,
+  type UnidadeTipo,
   type Quadra,
   type RegrasOperacao,
 } from "@/lib/store";
@@ -677,6 +678,8 @@ function NewUnidadeDialog({
 }) {
   const [numero, setNumero] = useState("");
   const [unidade, setUnidade] = useState("");
+  const [unidadeTipo, setUnidadeTipo] = useState<UnidadeTipo>("lote");
+  const [descricao, setDescricao] = useState("");
   const [area, setArea] = useState("");
   const [valor, setValor] = useState(0);
   const [status, setStatus] = useState<MatriculaStatus>("disponivel");
@@ -700,6 +703,8 @@ function NewUnidadeDialog({
     onSave({
       numero: numero.trim(),
       unidade: unidade.trim(),
+      unidadeTipo,
+      descricao: descricao.trim() || undefined,
       area: Number(area) || 0,
       valorVenda: valor,
       status,
@@ -726,6 +731,20 @@ function NewUnidadeDialog({
           <Input value={unidade} onChange={(e) => setUnidade(e.target.value)} />
         </div>
         <div>
+          <Label>Tipo de unidade</Label>
+          <Select value={unidadeTipo} onValueChange={(value) => setUnidadeTipo(value as UnidadeTipo)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lote">Lote</SelectItem>
+              <SelectItem value="apartamento">Apartamento</SelectItem>
+              <SelectItem value="sala">Sala</SelectItem>
+              <SelectItem value="casa">Casa</SelectItem>
+              <SelectItem value="loja">Loja</SelectItem>
+              <SelectItem value="outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
           <Label>Agrupamento</Label>
           <Select
             value={quadraId}
@@ -741,6 +760,14 @@ function NewUnidadeDialog({
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Descrição</Label>
+          <Input
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            placeholder="Opcional"
+          />
         </div>
         <div>
           <Label>Status</Label>
