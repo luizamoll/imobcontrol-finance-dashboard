@@ -15,11 +15,15 @@ type TenantContextValue = {
   empresaAtual: EmpresaResumo | null;
   empresaAtualId: number | null;
   carregando: boolean;
+  modoCliente: boolean;
   selecionarEmpresa: (id: number) => void;
+  entrarModoCliente: (id: number) => void;
+  sairModoCliente: () => void;
 };
 
 const TenantContext = createContext<TenantContextValue | null>(null);
 const STORAGE_KEY = "imobcontrol.superadmin.empresa";
+const CLIENT_MODE_KEY = "imobcontrol.superadmin.client-mode";
 
 export function TenantProvider({ children }: { children: ReactNode }) {
   const { usuario } = useAuth();
@@ -28,11 +32,19 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     usuario?.empresa?.id ?? null,
   );
   const [carregando, setCarregando] = useState(usuario?.perfil === "SUPER_ADMIN");
+  const [modoCliente, setModoCliente] = useState(() => {
+    try {
+      return window.sessionStorage.getItem(CLIENT_MODE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     if (!usuario) {
       setEmpresas([]);
       setEmpresaAtualId(null);
+      setModoCliente(false);
       setCarregando(false);
       return;
     }
@@ -41,6 +53,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       const lista = usuario.empresa ? [usuario.empresa] : [];
       setEmpresas(lista);
       setEmpresaAtualId(usuario.empresa?.id ?? null);
+      setModoCliente(false);
       setCarregando(false);
       return;
     }
@@ -91,6 +104,27 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const entrarModoCliente = (id: number) => {
+    if (usuario?.perfil !== "SUPER_ADMIN") return;
+    if (!empresas.some((empresa) => empresa.id === id)) return;
+    selecionarEmpresa(id);
+    setModoCliente(true);
+    try {
+      window.sessionStorage.setItem(CLIENT_MODE_KEY, "1");
+    } catch {
+      // A simulação continua funcionando mesmo sem persistência.
+    }
+  };
+
+  const sairModoCliente = () => {
+    setModoCliente(false);
+    try {
+      window.sessionStorage.removeItem(CLIENT_MODE_KEY);
+    } catch {
+      // Sem impacto funcional.
+    }
+  };
+
   const empresaAtual =
     empresas.find((empresa) => empresa.id === empresaAtualId) ?? null;
 
@@ -100,9 +134,12 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       empresaAtual,
       empresaAtualId,
       carregando,
+      modoCliente,
       selecionarEmpresa,
+      entrarModoCliente,
+      sairModoCliente,
     }),
-    [empresas, empresaAtual, empresaAtualId, carregando],
+    [empresas, empresaAtual, empresaAtualId, carregando, modoCliente],
   );
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
