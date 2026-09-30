@@ -3,6 +3,7 @@ import {
   Activity,
   Building2,
   ScrollText,
+  Pencil,
   ShieldCheck,
   UserCog,
   Users,
@@ -180,7 +181,15 @@ function AdminDashboard() {
                   <div className="truncate text-sm font-medium">{empresa.nome}</div>
                   <div className="truncate text-xs text-muted-foreground">{empresa.slug}</div>
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => window.location.assign(`/admin/empresas?editar=${empresa.id}`)}
+                  >
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    Editar empresa
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
