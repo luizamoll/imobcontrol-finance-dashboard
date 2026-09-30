@@ -139,7 +139,7 @@ export function temPermissao(
   // a permissão ampla anterior à separação entre criar/editar/excluir.
   if (
     permissoes.includes("VENDAS_GERENCIAR")
-    && ["VENDAS_CRIAR", "VENDAS_EDITAR", "VENDAS_EXCLUIR"].includes(permissao)
+    && (["VENDAS_CRIAR", "VENDAS_EDITAR", "VENDAS_EXCLUIR"] as PermissaoUsuario[]).includes(permissao)
   ) {
     return true;
   }
