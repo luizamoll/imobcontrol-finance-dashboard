@@ -36,7 +36,7 @@ type Resumo = {
 function AdminDashboard() {
   const navigate = useNavigate();
   const { usuario } = useAuth();
-  const { selecionarEmpresa } = useTenant();
+  const { selecionarEmpresa, entrarModoCliente } = useTenant();
   const [empresas, setEmpresas] = useState<EmpresaResumo[]>([]);
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [saude, setSaude] = useState<"UP" | "DOWN" | "CHECKING">("CHECKING");
@@ -160,11 +160,11 @@ function AdminDashboard() {
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    selecionarEmpresa(empresa.id);
+                    entrarModoCliente(empresa.id);
                     void navigate({ to: "/" });
                   }}
                 >
-                  Abrir ambiente
+                  Ver como ADMIN
                 </Button>
               </div>
             ))}
