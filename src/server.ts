@@ -57,7 +57,32 @@ async function proxyBackendRequest(request: Request): Promise<Response | null> {
     init.body = await request.arrayBuffer();
   }
 
-  return fetch(target, init);
+  const upstreamResponse = await fetch(target, init);
+
+  const responseHeaders = new Headers(upstreamResponse.headers);
+  // A resposta do fetch do servidor pode chegar descompactada, mas ainda
+  // carregar metadados de transporte do upstream. Repassar esses headers
+  // junto com um novo corpo pode fazer o navegador interpretar o stream de
+  // forma incorreta. O proxy entrega um corpo já materializado e deixa o
+  // servidor web recalcular os headers de transporte.
+  responseHeaders.delete("content-encoding");
+  responseHeaders.delete("content-length");
+  responseHeaders.delete("transfer-encoding");
+  responseHeaders.delete("connection");
+  responseHeaders.delete("keep-alive");
+
+  const semCorpo =
+    method === "HEAD"
+    || upstreamResponse.status === 204
+    || upstreamResponse.status === 304;
+
+  const body = semCorpo ? null : await upstreamResponse.arrayBuffer();
+
+  return new Response(body, {
+    status: upstreamResponse.status,
+    statusText: upstreamResponse.statusText,
+    headers: responseHeaders,
+  });
 }
 
 // h3 swallows in-handler throws into a normal 500 Response with body
