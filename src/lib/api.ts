@@ -50,12 +50,35 @@ export async function apiJson<T>(
     headers.set(token.headerName, token.token);
   }
 
-  const response = await fetch(url, {
-    ...options,
-    method,
-    headers,
-    credentials: "include",
-  });
+  const executar = () =>
+    fetch(url, {
+      ...options,
+      method,
+      headers,
+      credentials: "include",
+    });
+
+  let response: Response;
+  try {
+    response = await executar();
+  } catch (error) {
+    if (method === "GET") {
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+      try {
+        response = await executar();
+      } catch {
+        throw new Error("Conexão temporariamente indisponível. Tente novamente.");
+      }
+    } else {
+      throw new Error(
+        error instanceof TypeError
+          ? "Não foi possível conectar ao servidor. Tente novamente."
+          : error instanceof Error
+            ? error.message
+            : "Não foi possível concluir a operação.",
+      );
+    }
+  }
 
   if (!response.ok) {
     let mensagem = `Erro ${response.status}`;
