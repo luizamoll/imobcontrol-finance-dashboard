@@ -46,7 +46,7 @@ type Resumo = {
 function AdminDashboard() {
   const navigate = useNavigate();
   const { usuario } = useAuth();
-  const { selecionarEmpresa, entrarModoCliente } = useTenant();
+  const { entrarModoCliente } = useTenant();
   const [empresas, setEmpresas] = useState<EmpresaResumo[]>([]);
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [saude, setSaude] = useState<"UP" | "DOWN" | "CHECKING">("CHECKING");
