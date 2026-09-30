@@ -63,7 +63,7 @@ export async function apiJson<T>(
     response = await executar();
   } catch (error) {
     if (method === "GET") {
-      await new Promise((resolve) => window.setTimeout(resolve, 350));
+      await new Promise((resolve) => setTimeout(resolve, 350));
       try {
         response = await executar();
       } catch {
