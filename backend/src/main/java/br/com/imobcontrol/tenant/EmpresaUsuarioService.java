@@ -261,12 +261,12 @@ public class EmpresaUsuarioService {
 
     private Usuario alvoDaMesmaEmpresa(AcessoEquipe contexto, Long id) {
         Usuario alvo = usuarios.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Funcionário não encontrado"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Colaborador não encontrado"));
 
         if (alvo.getPerfil() != PerfilUsuario.USUARIO
                 || alvo.getEmpresa() == null
                 || !Objects.equals(alvo.getEmpresa().getId(), contexto.empresa().getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Funcionário não pertence à empresa");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Colaborador não pertence à empresa");
         }
 
         if (contexto.ator().getPerfil() == PerfilUsuario.USUARIO) {
