@@ -44,6 +44,11 @@ function RecebedoresPage() {
   const { state, updateConfig } = useStore();
   const [novoNome, setNovoNome] = useState("");
   const [novoTipo, setNovoTipo] = useState<"socio" | "empresa" | "corretor">("corretor");
+  const [novoDocumento, setNovoDocumento] = useState("");
+  const [novoCreci, setNovoCreci] = useState("");
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novoTelefone, setNovoTelefone] = useState("");
+  const [novaChavePix, setNovaChavePix] = useState("");
 
   const adicionarRecebedor = () => {
     const nome = novoNome.trim();
@@ -59,9 +64,25 @@ function RecebedoresPage() {
       return;
     }
     updateConfig({
-      recebedores: [...state.config.recebedores, { nome, tipo: novoTipo }],
+      recebedores: [
+        ...state.config.recebedores,
+        {
+          nome,
+          tipo: novoTipo,
+          documento: novoDocumento.trim() || undefined,
+          creci: novoTipo === "corretor" ? novoCreci.trim() || undefined : undefined,
+          email: novoEmail.trim() || undefined,
+          telefone: novoTelefone.trim() || undefined,
+          chavePix: novaChavePix.trim() || undefined,
+        },
+      ],
     });
     setNovoNome("");
+    setNovoDocumento("");
+    setNovoCreci("");
+    setNovoEmail("");
+    setNovoTelefone("");
+    setNovaChavePix("");
     toast.success("Recebedor cadastrado.");
   };
 
@@ -124,19 +145,16 @@ function RecebedoresPage() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <Label>Nome</Label>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="xl:col-span-2">
+              <Label>Nome / Razão social</Label>
               <Input
                 value={novoNome}
                 onChange={(e) => setNovoNome(e.target.value)}
                 placeholder="Nome da pessoa ou empresa"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") adicionarRecebedor();
-                }}
               />
             </div>
-            <div className="sm:w-44">
+            <div>
               <Label>Tipo</Label>
               <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as typeof novoTipo)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -147,9 +165,54 @@ function RecebedoresPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={adicionarRecebedor}>
-              <Plus className="mr-2 h-4 w-4" /> Adicionar
-            </Button>
+            <div>
+              <Label>{novoTipo === "empresa" ? "CNPJ" : "CPF"}</Label>
+              <Input
+                value={novoDocumento}
+                onChange={(e) => setNovoDocumento(e.target.value)}
+                placeholder={novoTipo === "empresa" ? "00.000.000/0000-00" : "000.000.000-00"}
+              />
+            </div>
+            {novoTipo === "corretor" && (
+              <div>
+                <Label>CRECI</Label>
+                <Input
+                  value={novoCreci}
+                  onChange={(e) => setNovoCreci(e.target.value)}
+                  placeholder="Ex.: MG-12345"
+                />
+              </div>
+            )}
+            <div>
+              <Label>E-mail</Label>
+              <Input
+                type="email"
+                value={novoEmail}
+                onChange={(e) => setNovoEmail(e.target.value)}
+                placeholder="contato@exemplo.com.br"
+              />
+            </div>
+            <div>
+              <Label>Telefone</Label>
+              <Input
+                value={novoTelefone}
+                onChange={(e) => setNovoTelefone(e.target.value)}
+                placeholder="(31) 99999-9999"
+              />
+            </div>
+            <div className="xl:col-span-2">
+              <Label>Chave PIX para repasse</Label>
+              <Input
+                value={novaChavePix}
+                onChange={(e) => setNovaChavePix(e.target.value)}
+                placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button className="w-full" onClick={adicionarRecebedor}>
+                <Plus className="mr-2 h-4 w-4" /> Adicionar recebedor
+              </Button>
+            </div>
           </div>
 
           {state.config.recebedores.length === 0 ? (
@@ -157,21 +220,55 @@ function RecebedoresPage() {
               Nenhum recebedor cadastrado ainda.
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {state.config.recebedores.map((r) => (
-                <Badge key={`${r.tipo}-${r.nome}`} variant="secondary" className="gap-2 rounded-full px-3 py-1.5 text-sm">
-                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{r.tipo}</span>
-                  {r.nome}
-                  <button
-                    type="button"
-                    onClick={() => removerRecebedor(r.nome)}
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label={`Remover ${r.nome}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </Badge>
-              ))}
+            <div className="overflow-hidden rounded-lg border border-border/70">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Recebedor</TableHead>
+                    <TableHead>Documento / registro</TableHead>
+                    <TableHead>Contato</TableHead>
+                    <TableHead>PIX</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {state.config.recebedores.map((r) => (
+                    <TableRow key={`${r.tipo}-${r.nome}`}>
+                      <TableCell>
+                        <div className="font-medium">{r.nome}</div>
+                        <div className="text-xs capitalize text-muted-foreground">{r.tipo}</div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <div>{r.documento || "—"}</div>
+                        {r.tipo === "corretor" && (
+                          <div className="text-xs text-muted-foreground">
+                            CRECI {r.creci || "não informado"}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <div>{r.email || "—"}</div>
+                        <div className="text-xs text-muted-foreground">{r.telefone || "—"}</div>
+                      </TableCell>
+                      <TableCell className="max-w-48 truncate text-sm" title={r.chavePix || undefined}>
+                        {r.chavePix || "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removerRecebedor(r.nome)}
+                          aria-label={`Remover ${r.nome}`}
+                        >
+                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                          Remover
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
