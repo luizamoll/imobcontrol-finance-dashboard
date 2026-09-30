@@ -214,6 +214,35 @@ public class FinanceiroService {
         return toVendaResponse(ctx.empresaId(), salva);
     }
 
+    @Transactional
+    public void excluirVenda(Authentication auth, Long empresaSolicitada, Long id) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Venda atual = venda(ctx.empresaId(), id);
+
+        if (movimentos.existsByEmpresaIdAndVendaId(ctx.empresaId(), atual.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Esta venda possui histórico de recebimentos e não pode ser excluída. Reverta os recebimentos e preserve o histórico financeiro."
+            );
+        }
+
+        Unidade unidade = unidade(ctx.empresaId(), atual.getUnidadeId());
+
+        pagamentos.deleteByEmpresaIdAndVendaId(ctx.empresaId(), atual.getId());
+        parcelas.deleteByEmpresaIdAndVendaId(ctx.empresaId(), atual.getId());
+        pagamentos.flush();
+        parcelas.flush();
+
+        vendas.delete(atual);
+        vendas.flush();
+
+        unidade.setStatus("disponivel");
+        unidade.setAtualizadoPorUsuarioId(ctx.usuarioId());
+        unidades.saveAndFlush(unidade);
+
+        registrar(ctx, "VENDA", id, "EXCLUSAO");
+    }
+
     @Transactional(readOnly = true)
     public List<ParcelaResponse> listarParcelas(Authentication auth, Long empresaSolicitada) {
         var ctx = tenants.resolver(auth, empresaSolicitada);
