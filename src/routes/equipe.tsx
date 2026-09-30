@@ -257,9 +257,14 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
         empresaId,
         body: JSON.stringify({ senha: novaSenha }),
       });
-      toast.success("Senha redefinida");
+      toast.success(
+        senhaUsuario.senhaDefinida && senhaUsuario.emailVerificado
+          ? "Senha redefinida"
+          : "Acesso temporário definido. O funcionário já pode entrar com e-mail e senha.",
+      );
       setSenhaUsuario(null);
       setNovaSenha("");
+      await carregar();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível redefinir a senha");
     } finally {
@@ -423,18 +428,18 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
                         <Button variant="ghost" size="sm" onClick={() => abrirEdicao(alvo)}>
                           <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
                         </Button>
-                        {alvo.senhaDefinida && alvo.emailVerificado ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSenhaUsuario(alvo);
-                              setNovaSenha("");
-                            }}
-                          >
-                            <KeyRound className="mr-1 h-3.5 w-3.5" /> Senha
-                          </Button>
-                        ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSenhaUsuario(alvo);
+                            setNovaSenha("");
+                          }}
+                        >
+                          <KeyRound className="mr-1 h-3.5 w-3.5" />
+                          {alvo.senhaDefinida && alvo.emailVerificado ? "Senha" : "Definir acesso"}
+                        </Button>
+                        {(!alvo.senhaDefinida || !alvo.emailVerificado) && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -624,9 +629,15 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Redefinir senha</DialogTitle>
+            <DialogTitle>
+              {senhaUsuario?.senhaDefinida && senhaUsuario?.emailVerificado
+                ? "Redefinir senha"
+                : "Definir acesso temporário"}
+            </DialogTitle>
             <DialogDescription>
-              Defina uma nova senha para {senhaUsuario?.nome}.
+              {senhaUsuario?.senhaDefinida && senhaUsuario?.emailVerificado
+                ? `Defina uma nova senha para ${senhaUsuario?.nome}.`
+                : `Crie uma senha temporária para ${senhaUsuario?.nome}. O acesso será ativado administrativamente para permitir login mesmo sem envio de convite por e-mail.`}
             </DialogDescription>
           </DialogHeader>
           <div>
@@ -641,7 +652,11 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSenhaUsuario(null)}>Cancelar</Button>
             <Button onClick={() => void redefinirSenha()} disabled={salvandoSenha}>
-              {salvandoSenha ? "Salvando..." : "Redefinir senha"}
+              {salvandoSenha
+                ? "Salvando..."
+                : senhaUsuario?.senhaDefinida && senhaUsuario?.emailVerificado
+                  ? "Redefinir senha"
+                  : "Ativar acesso temporário"}
             </Button>
           </DialogFooter>
         </DialogContent>
