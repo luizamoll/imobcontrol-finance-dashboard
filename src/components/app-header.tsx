@@ -55,6 +55,8 @@ export function AppHeader() {
     empresaAtualId,
     carregando: carregandoEmpresas,
     selecionarEmpresa,
+    modoCliente,
+    sairModoCliente,
   } = useTenant();
   const [busca, setBusca] = useState("");
   const [buscaAberta, setBuscaAberta] = useState(false);
@@ -66,8 +68,15 @@ export function AppHeader() {
     await navigate({ to: "/login", replace: true });
   }
 
-  const nome = usuario?.nome ?? "Usuário";
-  const perfil = usuario?.perfil ? perfilLegivel(usuario.perfil) : "";
+  const simulandoCliente = usuario?.perfil === "SUPER_ADMIN" && modoCliente && Boolean(empresaAtual);
+  const nome = simulandoCliente
+    ? `ADMIN · ${empresaAtual?.nome ?? "Empresa"}`
+    : usuario?.nome ?? "Usuário";
+  const perfil = simulandoCliente
+    ? "Visão do cliente"
+    : usuario?.perfil
+      ? perfilLegivel(usuario.perfil)
+      : "";
   const termo = busca.trim().toLowerCase();
 
   const resultados = useMemo(() => {
@@ -215,6 +224,20 @@ export function AppHeader() {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-6" />
 
+      {simulandoCliente && (
+        <div className="hidden min-w-0 items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 md:flex">
+          <Building2 className="h-4 w-4 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <div className="truncate text-xs font-semibold text-foreground">
+              Visão do cliente · ADMIN
+            </div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {empresaAtual?.nome}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative hidden max-w-md flex-1 md:block">
         <Search className="absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -259,7 +282,7 @@ export function AppHeader() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        {usuario?.perfil === "SUPER_ADMIN" && (
+        {usuario?.perfil === "SUPER_ADMIN" && !simulandoCliente && (
           <>
             <Button
               variant="outline"
@@ -282,7 +305,7 @@ export function AppHeader() {
             </Button>
           </>
         )}
-        {usuario?.perfil === "SUPER_ADMIN" && (
+        {usuario?.perfil === "SUPER_ADMIN" && !simulandoCliente && (
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -338,7 +361,7 @@ export function AppHeader() {
             </PopoverContent>
           </Popover>
         )}
-        {usuario?.perfil === "SUPER_ADMIN" && (
+        {usuario?.perfil === "SUPER_ADMIN" && !simulandoCliente && (
           <div className="hidden min-w-48 lg:block">
             <Select
               value={empresaAtualId != null ? String(empresaAtualId) : ""}
@@ -369,6 +392,21 @@ export function AppHeader() {
             </Select>
           </div>
         )}
+        {simulandoCliente && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              sairModoCliente();
+              void navigate({ to: "/admin" });
+            }}
+          >
+            <ShieldCheck className="mr-1.5 h-4 w-4" />
+            Voltar ao Super Admin
+          </Button>
+        )}
+
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="h-9 w-9" title="Ajuda" aria-label="Ajuda">
