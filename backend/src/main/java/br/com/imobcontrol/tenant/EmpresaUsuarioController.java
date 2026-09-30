@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -27,48 +28,53 @@ public class EmpresaUsuarioController {
     @GetMapping
     public Page<UsuarioAdminResponse> listar(
             Authentication autenticacao,
+            @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @RequestParam(required = false) Boolean ativo,
             @RequestParam(required = false) String busca,
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "50") int tamanho
     ) {
-        return service.listar(autenticacao, ativo, busca, pagina, tamanho);
+        return service.listar(autenticacao, empresaId, ativo, busca, pagina, tamanho);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public UsuarioAdminResponse criar(
             Authentication autenticacao,
+            @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @Valid @RequestBody EmpresaUsuarioCreateRequest body
     ) {
-        return service.criar(autenticacao, body);
+        return service.criar(autenticacao, empresaId, body);
     }
 
     @PutMapping("/{id}")
     public UsuarioAdminResponse atualizar(
             Authentication autenticacao,
+            @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @PathVariable Long id,
             @Valid @RequestBody EmpresaUsuarioUpdateRequest body
     ) {
-        return service.atualizar(autenticacao, id, body);
+        return service.atualizar(autenticacao, empresaId, id, body);
     }
 
     @PostMapping("/{id}/convite")
     public ConviteResponse reenviarConvite(
             Authentication autenticacao,
+            @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @PathVariable Long id
     ) {
-        return new ConviteResponse(service.reenviarConvite(autenticacao, id));
+        return new ConviteResponse(service.reenviarConvite(autenticacao, empresaId, id));
     }
 
     @PostMapping("/{id}/senha")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void redefinirSenha(
             Authentication autenticacao,
+            @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @PathVariable Long id,
             @Valid @RequestBody UsuarioAdminPasswordRequest body
     ) {
-        service.redefinirSenha(autenticacao, id, body);
+        service.redefinirSenha(autenticacao, empresaId, id, body);
     }
     public record ConviteResponse(boolean enviado) {
     }
