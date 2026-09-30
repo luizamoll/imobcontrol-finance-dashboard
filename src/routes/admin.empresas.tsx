@@ -55,7 +55,7 @@ function AdminEmpresasPage() {
   const navigate = useNavigate();
   const { nova } = Route.useSearch();
   const { usuario } = useAuth();
-  const { selecionarEmpresa } = useTenant();
+  const { selecionarEmpresa, entrarModoCliente } = useTenant();
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [busca, setBusca] = useState("");
   const [carregando, setCarregando] = useState(true);
@@ -271,11 +271,11 @@ function AdminEmpresasPage() {
                   size="sm"
                   disabled={!empresa.ativa}
                   onClick={() => {
-                    selecionarEmpresa(empresa.id);
+                    entrarModoCliente(empresa.id);
                     void navigate({ to: "/" });
                   }}
                 >
-                  Abrir ambiente
+                  Ver como ADMIN
                 </Button>
                 {empresa.ativa
                   && empresa.administradoresAtivos === 0
@@ -447,13 +447,13 @@ function AdminEmpresasPage() {
             <Button
               onClick={() => {
                 if (!acessoCriado) return;
-                selecionarEmpresa(acessoCriado.empresa.id);
+                entrarModoCliente(acessoCriado.empresa.id);
                 setAcessoCriado(null);
                 void navigate({ to: "/" });
               }}
             >
               <Building2 className="mr-1.5 h-4 w-4" />
-              Abrir ambiente
+              Ver como ADMIN
             </Button>
           </DialogFooter>
         </DialogContent>
