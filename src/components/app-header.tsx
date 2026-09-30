@@ -243,7 +243,7 @@ export function AppHeader() {
       <Separator orientation="vertical" className="h-6" />
 
       {simulandoFuncionario && (
-        <div className="hidden min-w-0 items-center gap-2 rounded-lg border border-primary/25 bg-primary/[0.07] px-3 py-1.5 md:flex">
+        <div className="flex min-w-0 max-w-[230px] items-center gap-2 rounded-lg border border-primary/25 bg-primary/[0.07] px-3 py-1.5">
           <Eye className="h-4 w-4 shrink-0 text-primary" />
           <div className="min-w-0">
             <div className="truncate text-xs font-semibold text-foreground">
@@ -257,7 +257,7 @@ export function AppHeader() {
       )}
 
       {simulandoCliente && (
-        <div className="hidden min-w-0 items-center gap-2 rounded-lg border border-primary/25 bg-primary/[0.07] px-3 py-1.5 md:flex">
+        <div className="flex min-w-0 max-w-[230px] items-center gap-2 rounded-lg border border-primary/25 bg-primary/[0.07] px-3 py-1.5">
           <Building2 className="h-4 w-4 shrink-0 text-primary" />
           <div className="min-w-0">
             <div className="truncate text-xs font-semibold text-foreground">
