@@ -21,6 +21,8 @@ import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
 import { RegrasInadimplenciaForm } from "@/components/regras-inadimplencia-form";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { apiJson } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { temPermissao } from "@/lib/permissoes";
 import type { VendaUpdatePatch } from "@/lib/financeiro-api";
 import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
@@ -104,7 +106,10 @@ type PaginaClientesEdicao = {
 function VendaDetail() {
   const { id } = Route.useParams();
   const { empresaAtualId } = useTenant();
+  const { usuario } = useAuth();
   const { state, receberParcela, reverterParcela, updateVenda, deleteVenda } = useStore();
+  const podeEditarVenda = temPermissao(usuario, "VENDAS_EDITAR");
+  const podeExcluirVenda = temPermissao(usuario, "VENDAS_EXCLUIR");
   const navigate = Route.useNavigate();
   const [editarAberta, setEditarAberta] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
@@ -192,9 +197,12 @@ function VendaDetail() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <VendaStatusBadge status={v.status} />
-            <Button size="sm" variant="outline" onClick={() => setEditarAberta(true)}>
-              <Pencil className="mr-1 h-3.5 w-3.5" /> Editar venda
-            </Button>
+            {podeEditarVenda && (
+              <Button size="sm" variant="outline" onClick={() => setEditarAberta(true)}>
+                <Pencil className="mr-1 h-3.5 w-3.5" /> Editar venda
+              </Button>
+            )}
+            {podeExcluirVenda && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button size="sm" variant="destructive">
@@ -237,6 +245,7 @@ function VendaDetail() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+            )}
           </div>
         }
       />
