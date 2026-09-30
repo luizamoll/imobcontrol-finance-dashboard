@@ -218,7 +218,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
             versao: form.versao,
           }),
         });
-        toast.success("Funcionário atualizado");
+        toast.success("Colaborador atualizado");
       } else {
         await apiJson<UsuarioEquipe>("/api/empresa/usuarios", {
           method: "POST",
@@ -230,13 +230,13 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
             permissoes: form.permissoes,
           }),
         });
-        toast.success("Funcionário criado. O convite de primeiro acesso foi preparado.");
+        toast.success("Colaborador criado. O convite de primeiro acesso foi preparado.");
       }
 
       setDialogAberto(false);
       await carregar();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o funcionário");
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o colaborador");
       if ((error as Error & { status?: number })?.status === 409) await carregar();
     } finally {
       setSalvando(false);
@@ -260,7 +260,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
       toast.success(
         senhaUsuario.senhaDefinida && senhaUsuario.emailVerificado
           ? "Senha redefinida"
-          : "Acesso temporário definido. O funcionário já pode entrar com e-mail e senha.",
+          : "Acesso temporário definido. O colaborador já pode entrar com e-mail e senha.",
       );
       setSenhaUsuario(null);
       setNovaSenha("");
@@ -279,10 +279,10 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
       <PageHeader
         eyebrow="Gestão da empresa"
         title="Equipe e acessos"
-        description={`Cadastre funcionários por convite e administre permissões e acessos de ${empresaNome}.`}
+        description={`Cadastre colaboradores por convite e administre permissões e acessos de ${empresaNome}.`}
         actions={
           <Button size="sm" onClick={abrirNovo}>
-            <Plus className="mr-2 h-4 w-4" /> Novo funcionário
+            <Plus className="mr-2 h-4 w-4" /> Novo colaborador
           </Button>
         }
       />
@@ -290,7 +290,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card className="border-border/70">
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Funcionários</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Colaboradores</p>
             <p className="mt-1 text-2xl font-semibold">{usuarios.length}</p>
           </CardContent>
         </Card>
@@ -311,7 +311,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
       <Card className="border-border/70">
         <CardContent className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-[1fr_190px_auto] sm:items-end">
           <div>
-            <Label>Buscar funcionário</Label>
+            <Label>Buscar colaborador</Label>
             <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nome ou e-mail" />
           </div>
           <div>
@@ -337,7 +337,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Funcionário</TableHead>
+                <TableHead>Colaborador</TableHead>
                 <TableHead>Permissões</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -353,7 +353,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
               ) : usuarios.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
-                    Nenhum funcionário cadastrado.
+                    Nenhum colaborador cadastrado.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -405,7 +405,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
                             variant="outline"
                             size="sm"
                             disabled={!alvo.ativo}
-                            title={alvo.ativo ? "Ver o sistema exatamente com as permissões deste funcionário" : "Funcionário inativo"}
+                            title={alvo.ativo ? "Ver o sistema exatamente com as permissões deste colaborador" : "Colaborador inativo"}
                             onClick={() => {
                               const usuarioSimulado: AuthUsuario = {
                                 id: alvo.id,
@@ -476,7 +476,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
       <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
         <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editando ? "Editar funcionário" : "Novo funcionário"}</DialogTitle>
+            <DialogTitle>{editando ? "Editar colaborador" : "Novo colaborador"}</DialogTitle>
             <DialogDescription>
               O acesso criado ficará vinculado somente à sua empresa.
             </DialogDescription>
@@ -503,7 +503,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
                 <div className="flex items-start gap-3">
                   <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <p className="text-xs leading-5 text-muted-foreground">
-                    O funcionário receberá um convite no e-mail informado para confirmar o endereço e criar a própria senha.
+                    O colaborador receberá um convite no e-mail informado para confirmar o endereço e criar a própria senha.
                   </p>
                 </div>
               </div>
@@ -528,7 +528,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
                 <div>
                   <Label className="text-sm font-semibold">Permissões do usuário</Label>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Defina o que este funcionário poderá fazer dentro de{" "}
+                    Defina o que este colaborador poderá fazer dentro de{" "}
                     <strong>{empresaNome}</strong>. “Acesso total operacional” libera todos os módulos,
                     mas não permite administrar outros usuários. “Administrador delegado” também libera
                     equipe e permissões e só pode ser concedido pelo ADMIN principal.
@@ -612,7 +612,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogAberto(false)}>Cancelar</Button>
             <Button onClick={() => void salvar()} disabled={salvando}>
-              {salvando ? "Salvando..." : editando ? "Salvar alterações" : "Criar funcionário"}
+              {salvando ? "Salvando..." : editando ? "Salvar alterações" : "Criar colaborador"}
             </Button>
           </DialogFooter>
         </DialogContent>
