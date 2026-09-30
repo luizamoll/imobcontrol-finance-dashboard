@@ -1,4 +1,4 @@
-import { Bell, Building2, HelpCircle, LogOut, Search, ShieldCheck, UserCog } from "lucide-react";
+import { Bell, Building2, Eye, HelpCircle, LogOut, Search, ShieldCheck, UserCog } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -48,7 +48,13 @@ function perfilLegivel(perfil: string) {
 
 export function AppHeader() {
   const navigate = useNavigate();
-  const { usuario, sair } = useAuth();
+  const {
+    usuario,
+    usuarioReal,
+    simulacaoFuncionario,
+    encerrarSimulacaoFuncionario,
+    sair,
+  } = useAuth();
   const { state } = useStore();
   const {
     empresas,
@@ -69,15 +75,26 @@ export function AppHeader() {
     await navigate({ to: "/login", replace: true });
   }
 
-  const simulandoCliente = usuario?.perfil === "SUPER_ADMIN" && modoCliente && Boolean(empresaAtual);
-  const nome = simulandoCliente
-    ? `ADMIN · ${empresaAtual?.nome ?? "Empresa"}`
-    : usuario?.nome ?? "Usuário";
-  const perfil = simulandoCliente
-    ? "Visão do cliente"
-    : usuario?.perfil
-      ? perfilLegivel(usuario.perfil)
-      : "";
+  const simulandoFuncionario = Boolean(simulacaoFuncionario);
+  const simulandoCliente =
+    usuarioReal?.perfil === "SUPER_ADMIN"
+    && modoCliente
+    && Boolean(empresaAtual)
+    && !simulandoFuncionario;
+
+  const nome = simulandoFuncionario
+    ? usuario?.nome ?? "Funcionário"
+    : simulandoCliente
+      ? `ADMIN · ${empresaAtual?.nome ?? "Empresa"}`
+      : usuario?.nome ?? "Usuário";
+
+  const perfil = simulandoFuncionario
+    ? "Funcionário"
+    : simulandoCliente
+      ? "ADMIN"
+      : usuario?.perfil
+        ? perfilLegivel(usuario.perfil)
+        : "";
   const termo = busca.trim().toLowerCase();
 
   const resultados = useMemo(() => {
@@ -225,12 +242,26 @@ export function AppHeader() {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-6" />
 
+      {simulandoFuncionario && (
+        <div className="hidden min-w-0 items-center gap-2 rounded-lg border border-primary/25 bg-primary/[0.07] px-3 py-1.5 md:flex">
+          <Eye className="h-4 w-4 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <div className="truncate text-xs font-semibold text-foreground">
+              Visualizando como funcionário
+            </div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {usuario?.nome} · {usuario?.empresa?.nome ?? empresaAtual?.nome}
+            </div>
+          </div>
+        </div>
+      )}
+
       {simulandoCliente && (
-        <div className="hidden min-w-0 items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 md:flex">
+        <div className="hidden min-w-0 items-center gap-2 rounded-lg border border-primary/25 bg-primary/[0.07] px-3 py-1.5 md:flex">
           <Building2 className="h-4 w-4 shrink-0 text-primary" />
           <div className="min-w-0">
             <div className="truncate text-xs font-semibold text-foreground">
-              Visão do cliente · ADMIN
+              Visualizando como ADMIN
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
               {empresaAtual?.nome}
@@ -283,7 +314,7 @@ export function AppHeader() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        {usuario?.perfil === "SUPER_ADMIN" && !simulandoCliente && (
+        {usuarioReal?.perfil === "SUPER_ADMIN" && !simulandoCliente && !simulandoFuncionario && (
           <>
             <Button
               variant="outline"
@@ -306,7 +337,7 @@ export function AppHeader() {
             </Button>
           </>
         )}
-        {usuario?.perfil === "SUPER_ADMIN" && !simulandoCliente && (
+        {usuarioReal?.perfil === "SUPER_ADMIN" && !simulandoCliente && !simulandoFuncionario && (
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -362,7 +393,7 @@ export function AppHeader() {
             </PopoverContent>
           </Popover>
         )}
-        {usuario?.perfil === "SUPER_ADMIN" && !simulandoCliente && (
+        {usuarioReal?.perfil === "SUPER_ADMIN" && !simulandoCliente && !simulandoFuncionario && (
           <div className="hidden min-w-48 lg:block">
             <Select
               value={empresaAtualId != null ? String(empresaAtualId) : ""}
@@ -403,6 +434,23 @@ export function AppHeader() {
               <UserCog className="mr-1.5 h-4 w-4" />
               Equipe e acessos
             </a>
+          </Button>
+        )}
+
+        {simulandoFuncionario && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              encerrarSimulacaoFuncionario();
+              void navigate({ to: "/" });
+            }}
+          >
+            <ShieldCheck className="mr-1.5 h-4 w-4" />
+            {usuarioReal?.perfil === "SUPER_ADMIN" && !modoCliente
+              ? "Voltar ao Super Admin"
+              : "Voltar ao ADMIN"}
           </Button>
         )}
 
