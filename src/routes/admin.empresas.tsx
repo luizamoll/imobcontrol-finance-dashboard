@@ -23,9 +23,13 @@ import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/admin/empresas")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    nova: search.nova === "1" || search.nova === 1 || search.nova === true,
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const editarRaw = Number(search.editar);
+    return {
+      nova: search.nova === "1" || search.nova === 1 || search.nova === true,
+      editar: Number.isFinite(editarRaw) && editarRaw > 0 ? editarRaw : null,
+    };
+  },
   component: AdminEmpresasPage,
   head: () => ({ meta: [{ title: "Empresas · Administração · ImobControl" }] }),
 });
@@ -58,7 +62,7 @@ type UsuarioCriado = {
 
 function AdminEmpresasPage() {
   const navigate = useNavigate();
-  const { nova } = Route.useSearch();
+  const { nova, editar } = Route.useSearch();
   const { usuario } = useAuth();
   const { entrarModoCliente } = useTenant();
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -104,6 +108,12 @@ function AdminEmpresasPage() {
     }, 50);
   }, [nova]);
 
+  useEffect(() => {
+    if (editar == null || empresas.length === 0 || editando) return;
+    const empresa = empresas.find((item) => item.id === editar);
+    if (empresa) abrirEdicao(empresa);
+  }, [editar, empresas, editando]);
+
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     if (!termo) return empresas;
@@ -148,6 +158,15 @@ function AdminEmpresasPage() {
     } finally {
       setSalvando(false);
     }
+  };
+
+  const abrirEdicao = (empresa: Empresa) => {
+    setEditando(empresa);
+    setNomeEdicao(empresa.nome);
+    setRazaoEdicao(empresa.razaoSocial ?? "");
+    setCnpjEdicao(empresa.cnpj ? formatCNPJ(empresa.cnpj) : "");
+    setEmailEdicao(empresa.email ?? "");
+    setTelefoneEdicao(empresa.telefone ?? "");
   };
 
   const iniciarAdmin = (empresa: Empresa) => {
@@ -360,14 +379,7 @@ function AdminEmpresasPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => {
-                    setEditando(empresa);
-                    setNomeEdicao(empresa.nome);
-                    setRazaoEdicao(empresa.razaoSocial ?? "");
-                    setCnpjEdicao(empresa.cnpj ? formatCNPJ(empresa.cnpj) : "");
-                    setEmailEdicao(empresa.email ?? "");
-                    setTelefoneEdicao(empresa.telefone ?? "");
-                  }}
+                  onClick={() => abrirEdicao(empresa)}
                 >
                   <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar cadastro
                 </Button>
