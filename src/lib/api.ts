@@ -11,18 +11,46 @@ let csrfPromise: Promise<CsrfPayload> | null = null;
 
 async function csrf(): Promise<CsrfPayload> {
   if (!csrfPromise) {
-    csrfPromise = fetch("/api/auth/csrf", {
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    }).then(async (response) => {
-      if (!response.ok) {
-        csrfPromise = null;
-        throw new Error("Não foi possível preparar a operação segura.");
+    csrfPromise = (async () => {
+      let ultimaFalha: unknown;
+
+      for (let tentativa = 0; tentativa < 2; tentativa += 1) {
+        try {
+          const response = await fetch("/api/auth/csrf", {
+            credentials: "include",
+            headers: { Accept: "application/json" },
+          });
+
+          if (!response.ok) {
+            throw new Error("Não foi possível preparar a operação segura.");
+          }
+
+          return (await response.json()) as CsrfPayload;
+        } catch (error) {
+          ultimaFalha = error;
+          if (tentativa === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 350));
+          }
+        }
       }
-      return (await response.json()) as CsrfPayload;
-    });
+
+      csrfPromise = null;
+      throw new Error(
+        ultimaFalha instanceof TypeError
+          ? "Conexão temporariamente indisponível. Tente novamente."
+          : ultimaFalha instanceof Error
+            ? ultimaFalha.message
+            : "Não foi possível preparar a operação segura.",
+      );
+    })();
   }
-  return csrfPromise;
+
+  try {
+    return await csrfPromise;
+  } catch (error) {
+    csrfPromise = null;
+    throw error;
+  }
 }
 
 function metodoSeguro(method: string) {
