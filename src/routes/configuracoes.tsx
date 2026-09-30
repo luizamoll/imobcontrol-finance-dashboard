@@ -24,6 +24,11 @@ import {
   type ConfiguracaoEmpresa,
 } from "@/lib/empresa-config-api";
 import { formatCNPJ } from "@/lib/format";
+import {
+  carregarPerfilEmpresa,
+  salvarPerfilEmpresa,
+  type EmpresaPerfil,
+} from "@/lib/empresa-perfil-api";
 import { useAuth } from "@/lib/auth";
 import { temPermissao } from "@/lib/permissoes";
 import { useTenant } from "@/lib/tenant";
@@ -50,6 +55,7 @@ function ConfigPage() {
   const { usuario } = useAuth();
   const { empresaAtual, empresaAtualId } = useTenant();
   const [config, setConfig] = useState<ConfiguracaoEmpresa>(clonePadrao);
+  const [perfilEmpresa, setPerfilEmpresa] = useState<EmpresaPerfil | null>(null);
   const [versao, setVersao] = useState<number | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -65,11 +71,15 @@ function ConfigPage() {
     let cancelado = false;
     setCarregando(true);
 
-    void carregarConfiguracaoEmpresa(empresaAtualId)
-      .then((response) => {
+    void Promise.all([
+      carregarConfiguracaoEmpresa(empresaAtualId),
+      carregarPerfilEmpresa(empresaAtualId),
+    ])
+      .then(([response, perfil]) => {
         if (cancelado) return;
         setConfig(response.config);
         setVersao(response.versao);
+        setPerfilEmpresa(perfil);
       })
       .catch((error) => {
         if (!cancelado) {
@@ -122,14 +132,29 @@ function ConfigPage() {
 
     setSalvando(true);
     try {
-      const salva = await salvarConfiguracaoEmpresa(
-        empresaAtualId,
-        { ...config, onboardingConcluido: true },
-        versao,
-      );
+      if (!perfilEmpresa?.nome.trim()) {
+        toast.error("Informe o nome fantasia da empresa.");
+        return;
+      }
+
+      const [salva, perfilSalvo] = await Promise.all([
+        salvarConfiguracaoEmpresa(
+          empresaAtualId,
+          { ...config, onboardingConcluido: true },
+          versao,
+        ),
+        salvarPerfilEmpresa(empresaAtualId, {
+          nome: perfilEmpresa.nome.trim(),
+          razaoSocial: perfilEmpresa.razaoSocial?.trim() || null,
+          cnpj: perfilEmpresa.cnpj?.trim() || null,
+          email: perfilEmpresa.email?.trim() || null,
+          telefone: perfilEmpresa.telefone?.trim() || null,
+        }),
+      ]);
       setConfig(salva.config);
       setVersao(salva.versao);
-      toast.success("Configuração inicial da empresa salva");
+      setPerfilEmpresa(perfilSalvo);
+      toast.success("Dados da empresa e configurações salvos");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Não foi possível salvar as configurações",
@@ -183,61 +208,71 @@ function ConfigPage() {
 
       <Card className="border-border/70">
         <CardHeader>
-          <CardTitle className="text-base">Dados básicos da empresa</CardTitle>
+          <CardTitle className="text-base">Cadastro da empresa</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Estes são os dados da empresa cliente. Eles ficam separados dos dados pessoais do ADMIN e podem ser editados depois.
+          </p>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
-            <Label>Empresa no ImobControl</Label>
-            <Input value={empresaAtual?.nome ?? ""} disabled />
-            <p className="mt-1 text-xs text-muted-foreground">
-              O vínculo da empresa é controlado pela administração da plataforma.
-            </p>
+            <Label>Nome fantasia</Label>
+            <Input
+              value={perfilEmpresa?.nome ?? ""}
+              onChange={(e) =>
+                setPerfilEmpresa((atual) =>
+                  atual ? { ...atual, nome: e.target.value } : atual,
+                )
+              }
+              placeholder="Ex.: Líder"
+            />
+          </div>
+          <div>
+            <Label>Razão social</Label>
+            <Input
+              value={perfilEmpresa?.razaoSocial ?? ""}
+              onChange={(e) =>
+                setPerfilEmpresa((atual) =>
+                  atual ? { ...atual, razaoSocial: e.target.value } : atual,
+                )
+              }
+              placeholder="Razão social da empresa"
+            />
           </div>
           <div>
             <Label>CNPJ</Label>
             <Input
-              value={config.dadosEmpresa.cnpj}
+              value={perfilEmpresa?.cnpj ? formatCNPJ(perfilEmpresa.cnpj) : ""}
               onChange={(e) =>
-                setConfig((atual) => ({
-                  ...atual,
-                  dadosEmpresa: {
-                    ...atual.dadosEmpresa,
-                    cnpj: formatCNPJ(e.target.value),
-                  },
-                }))
+                setPerfilEmpresa((atual) =>
+                  atual
+                    ? { ...atual, cnpj: formatCNPJ(e.target.value) }
+                    : atual,
+                )
               }
               placeholder="00.000.000/0000-00"
             />
           </div>
           <div>
-            <Label>Telefone</Label>
+            <Label>Telefone da empresa</Label>
             <Input
-              value={config.dadosEmpresa.telefone}
+              value={perfilEmpresa?.telefone ?? ""}
               onChange={(e) =>
-                setConfig((atual) => ({
-                  ...atual,
-                  dadosEmpresa: {
-                    ...atual.dadosEmpresa,
-                    telefone: e.target.value,
-                  },
-                }))
+                setPerfilEmpresa((atual) =>
+                  atual ? { ...atual, telefone: e.target.value } : atual,
+                )
               }
-              placeholder="Contato da empresa"
+              placeholder="Contato comercial"
             />
           </div>
           <div className="md:col-span-2">
-            <Label>E-mail de contato</Label>
+            <Label>E-mail da empresa</Label>
             <Input
               type="email"
-              value={config.dadosEmpresa.email}
+              value={perfilEmpresa?.email ?? ""}
               onChange={(e) =>
-                setConfig((atual) => ({
-                  ...atual,
-                  dadosEmpresa: {
-                    ...atual.dadosEmpresa,
-                    email: e.target.value,
-                  },
-                }))
+                setPerfilEmpresa((atual) =>
+                  atual ? { ...atual, email: e.target.value } : atual,
+                )
               }
               placeholder="contato@empresa.com.br"
             />
@@ -317,7 +352,7 @@ function ConfigPage() {
               O ADMIN pode criar funcionários, definir permissões e bloquear acessos sem sair do
               ambiente da própria empresa.
             </p>
-            {usuario?.perfil === "ADMIN" && (
+            {temPermissao(usuario, "EQUIPE_GERENCIAR") && (
               <Button asChild variant="outline" size="sm" className="mt-4">
                 <Link to="/equipe">
                   Abrir equipe <ArrowRight className="ml-2 h-4 w-4" />
