@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { KeyRound, Mail, Pencil, Plus, RefreshCw, ShieldCheck, UsersRound } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Eye, KeyRound, Mail, Pencil, Plus, RefreshCw, ShieldCheck, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -34,7 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiJson } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type AuthUsuario, type EmpresaResumo } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import {
   GRUPOS_PERMISSOES,
@@ -108,22 +108,36 @@ function EquipePage() {
     );
   }
 
-  return (
-    <PainelEquipe
-      empresaId={empresaAtualId}
-      empresaNome={empresaAtual?.nome ?? usuario?.empresa?.nome ?? "Empresa"}
-    />
-  );
+  const empresa = empresaAtual ?? usuario?.empresa ?? null;
+
+  if (!empresa) {
+    return (
+      <PageShell>
+        <PageHeader
+          eyebrow="Gestão da empresa"
+          title="Empresa não selecionada"
+          description="Selecione uma empresa para visualizar a equipe."
+        />
+      </PageShell>
+    );
+  }
+
+  return <PainelEquipe empresa={empresa} />;
 }
 
-function PainelEquipe({
-  empresaId,
-  empresaNome,
-}: {
-  empresaId: number;
-  empresaNome: string;
-}) {
-  const { usuario } = useAuth();
+function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
+  const navigate = useNavigate();
+  const {
+    usuario,
+    usuarioReal,
+    simulacaoFuncionario,
+    simularFuncionario,
+  } = useAuth();
+  const empresaId = empresa.id;
+  const empresaNome = empresa.nome;
+  const podeSimular =
+    !simulacaoFuncionario
+    && (usuarioReal?.perfil === "ADMIN" || usuarioReal?.perfil === "SUPER_ADMIN");
   const [usuarios, setUsuarios] = useState<UsuarioEquipe[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [busca, setBusca] = useState("");
@@ -381,6 +395,31 @@ function PainelEquipe({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        {podeSimular && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!alvo.ativo}
+                            title={alvo.ativo ? "Ver o sistema exatamente com as permissões deste funcionário" : "Funcionário inativo"}
+                            onClick={() => {
+                              const usuarioSimulado: AuthUsuario = {
+                                id: alvo.id,
+                                nome: alvo.nome,
+                                email: alvo.email,
+                                telefone: alvo.telefone,
+                                emailVerificado: alvo.emailVerificado,
+                                senhaDefinida: alvo.senhaDefinida,
+                                perfil: "USUARIO",
+                                permissoes: [...(alvo.permissoes ?? [])],
+                                empresa,
+                              };
+                              simularFuncionario(usuarioSimulado);
+                              void navigate({ to: "/" });
+                            }}
+                          >
+                            <Eye className="mr-1 h-3.5 w-3.5" /> Ver como
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => abrirEdicao(alvo)}>
                           <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
                         </Button>
