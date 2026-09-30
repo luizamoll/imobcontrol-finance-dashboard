@@ -87,6 +87,43 @@ function vazio(): FormEquipe {
   };
 }
 
+function normalizarPermissoesVenda(permissoes: PermissaoUsuario[]) {
+  const set = new Set(permissoes);
+  if (set.has("VENDAS_GERENCIAR")) {
+    set.delete("VENDAS_GERENCIAR");
+    set.add("VENDAS_VISUALIZAR");
+    set.add("VENDAS_CRIAR");
+    set.add("VENDAS_EDITAR");
+    set.add("VENDAS_EXCLUIR");
+  }
+  return [...set];
+}
+
+function atualizarPermissao(
+  permissoes: PermissaoUsuario[],
+  permissao: PermissaoUsuario,
+  ativa: boolean,
+) {
+  const set = new Set(normalizarPermissoesVenda(permissoes));
+
+  if (ativa) {
+    set.add(permissao);
+    if (["VENDAS_CRIAR", "VENDAS_EDITAR", "VENDAS_EXCLUIR"].includes(permissao)) {
+      set.add("VENDAS_VISUALIZAR");
+    }
+  } else {
+    set.delete(permissao);
+    if (permissao === "VENDAS_VISUALIZAR") {
+      set.delete("VENDAS_CRIAR");
+      set.delete("VENDAS_EDITAR");
+      set.delete("VENDAS_EXCLUIR");
+    }
+  }
+
+  return [...set];
+}
+
+
 function EquipePage() {
   const { usuario } = useAuth();
   const { empresaAtualId, empresaAtual, modoCliente } = useTenant();
@@ -192,7 +229,7 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
       email: alvo.email,
       telefone: alvo.telefone ?? "",
       ativo: alvo.ativo,
-      permissoes: [...(alvo.permissoes ?? [])],
+      permissoes: normalizarPermissoesVenda(alvo.permissoes ?? []),
       versao: alvo.versao,
     });
     setDialogAberto(true);
@@ -586,9 +623,11 @@ function PainelEquipe({ empresa }: { empresa: EmpresaResumo }) {
                               onCheckedChange={(valor) =>
                                 setForm((s) => ({
                                   ...s,
-                                  permissoes: valor
-                                    ? Array.from(new Set([...s.permissoes, item.id]))
-                                    : s.permissoes.filter((p) => p !== item.id),
+                                  permissoes: atualizarPermissao(
+                                    s.permissoes,
+                                    item.id,
+                                    Boolean(valor),
+                                  ),
                                 }))
                               }
                             />
