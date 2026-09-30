@@ -12,7 +12,8 @@ import {
   Settings,
   ContactRound,
   Inbox,
-  AlertOctagon
+  AlertOctagon,
+  ShieldCheck,
 } from "lucide-react";
 
 import { useTenant } from "@/lib/tenant";
@@ -64,7 +65,7 @@ const gestao: Array<{
 export function AppSidebar() {
   const { state } = useSidebar();
   const { empresaAtual, modoCliente } = useTenant();
-  const { usuario } = useAuth();
+  const { usuario, usuarioReal, simulacaoFuncionario } = useAuth();
   const collapsed = state === "collapsed";
   const currentPath = useRouterState({
     select: (r) => r.location.pathname,
@@ -94,6 +95,28 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="mt-2">
+        {usuarioReal?.perfil === "SUPER_ADMIN" && !simulacaoFuncionario && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Super Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/admin")}
+                    tooltip="Administração"
+                  >
+                    <Link to="/admin">
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>Administração</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
         <SidebarGroup>
           <SidebarGroupLabel>Principal</SidebarGroupLabel>
           <SidebarGroupContent>
