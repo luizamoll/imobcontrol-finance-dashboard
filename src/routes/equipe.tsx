@@ -35,9 +35,11 @@ import {
 } from "@/components/ui/table";
 import { apiJson } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant";
 import {
   GRUPOS_PERMISSOES,
   PRESETS_PERMISSOES,
+  temPermissao,
   type PermissaoUsuario,
 } from "@/lib/permissoes";
 
@@ -87,23 +89,40 @@ function vazio(): FormEquipe {
 
 function EquipePage() {
   const { usuario } = useAuth();
+  const { empresaAtualId, empresaAtual, modoCliente } = useTenant();
 
-  if (usuario?.perfil !== "ADMIN") {
+  const podeGerenciar =
+    usuario?.perfil === "SUPER_ADMIN"
+      ? modoCliente && empresaAtualId != null
+      : temPermissao(usuario, "EQUIPE_GERENCIAR");
+
+  if (!podeGerenciar || empresaAtualId == null) {
     return (
       <PageShell>
         <PageHeader
           eyebrow="Gestão da empresa"
           title="Acesso restrito"
-          description="A gestão da equipe é exclusiva do administrador da empresa."
+          description="Seu perfil não possui permissão para gerenciar equipe e acessos."
         />
       </PageShell>
     );
   }
 
-  return <PainelEquipe />;
+  return (
+    <PainelEquipe
+      empresaId={empresaAtualId}
+      empresaNome={empresaAtual?.nome ?? usuario?.empresa?.nome ?? "Empresa"}
+    />
+  );
 }
 
-function PainelEquipe() {
+function PainelEquipe({
+  empresaId,
+  empresaNome,
+}: {
+  empresaId: number;
+  empresaNome: string;
+}) {
   const { usuario } = useAuth();
   const [usuarios, setUsuarios] = useState<UsuarioEquipe[]>([]);
   const [carregando, setCarregando] = useState(false);
@@ -129,14 +148,17 @@ function PainelEquipe() {
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const pagina = await apiJson<Pagina<UsuarioEquipe>>(`/api/empresa/usuarios?${query}`);
+      const pagina = await apiJson<Pagina<UsuarioEquipe>>(
+        `/api/empresa/usuarios?${query}`,
+        { empresaId },
+      );
       setUsuarios(pagina.content);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível carregar a equipe");
     } finally {
       setCarregando(false);
     }
-  }, [query]);
+  }, [empresaId, query]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void carregar(), 200);
@@ -172,6 +194,7 @@ function PainelEquipe() {
       if (editando) {
         await apiJson<UsuarioEquipe>(`/api/empresa/usuarios/${editando.id}`, {
           method: "PUT",
+          empresaId,
           body: JSON.stringify({
             nome: form.nome.trim(),
             email: form.email.trim(),
@@ -185,6 +208,7 @@ function PainelEquipe() {
       } else {
         await apiJson<UsuarioEquipe>("/api/empresa/usuarios", {
           method: "POST",
+          empresaId,
           body: JSON.stringify({
             nome: form.nome.trim(),
             email: form.email.trim(),
@@ -216,6 +240,7 @@ function PainelEquipe() {
     try {
       await apiJson<void>(`/api/empresa/usuarios/${senhaUsuario.id}/senha`, {
         method: "POST",
+        empresaId,
         body: JSON.stringify({ senha: novaSenha }),
       });
       toast.success("Senha redefinida");
@@ -235,7 +260,7 @@ function PainelEquipe() {
       <PageHeader
         eyebrow="Gestão da empresa"
         title="Equipe e acessos"
-        description={`Cadastre funcionários por convite e administre permissões e acessos de ${usuario?.empresa?.nome ?? "sua empresa"}.`}
+        description={`Cadastre funcionários por convite e administre permissões e acessos de ${empresaNome}.`}
         actions={
           <Button size="sm" onClick={abrirNovo}>
             <Plus className="mr-2 h-4 w-4" /> Novo funcionário
@@ -327,11 +352,16 @@ function PainelEquipe() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                        <span>
-                          {alvo.permissoes?.length ?? 0} de {GRUPOS_PERMISSOES.flatMap((grupo) => grupo.itens).length}
-                        </span>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                          <span>
+                            {alvo.permissoes?.length ?? 0} de {GRUPOS_PERMISSOES.flatMap((grupo) => grupo.itens).length}
+                          </span>
+                        </div>
+                        {alvo.permissoes?.includes("EQUIPE_GERENCIAR") && (
+                          <Badge variant="outline">Administrador delegado</Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -455,22 +485,26 @@ function PainelEquipe() {
                   <Label className="text-sm font-semibold">Permissões do usuário</Label>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     Defina o que este funcionário poderá fazer dentro de{" "}
-                    <strong>{usuario?.empresa?.nome ?? "sua empresa"}</strong>.
-                    O ADMIN continua com acesso total e pode alterar estas permissões depois.
+                    <strong>{empresaNome}</strong>. “Acesso total operacional” libera todos os módulos,
+                    mas não permite administrar outros usuários. “Administrador delegado” também libera
+                    equipe e permissões e só pode ser concedido pelo ADMIN principal.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries({
                     comercial: "Comercial",
                     financeiro: "Financeiro",
-                    consulta: "Consulta",
-                    gestor: "Gestor",
+                    consulta: "Somente consulta",
+                    gestor: "Acesso total operacional",
+                    ...(usuario?.perfil === "ADMIN" || usuario?.perfil === "SUPER_ADMIN"
+                      ? { administradorDelegado: "Administrador delegado" }
+                      : {}),
                   }).map(([id, label]) => (
                     <Button
                       key={id}
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant={id === "administradorDelegado" ? "default" : "outline"}
                       onClick={() =>
                         setForm((s) => ({
                           ...s,
@@ -501,6 +535,10 @@ function PainelEquipe() {
                           >
                             <Checkbox
                               checked={checked}
+                              disabled={
+                                item.id === "EQUIPE_GERENCIAR"
+                                && usuario?.perfil === "USUARIO"
+                              }
                               onCheckedChange={(valor) =>
                                 setForm((s) => ({
                                   ...s,
@@ -510,7 +548,14 @@ function PainelEquipe() {
                                 }))
                               }
                             />
-                            <span>{item.label}</span>
+                            <span>
+                              {item.label}
+                              {item.id === "EQUIPE_GERENCIAR" && (
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  · permissão administrativa
+                                </span>
+                              )}
+                            </span>
                           </label>
                         );
                       })}
