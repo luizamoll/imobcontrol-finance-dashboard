@@ -41,7 +41,18 @@ public class PermissaoAcessoService {
                 || usuario.getPerfil() == PerfilUsuario.ADMIN) {
             return true;
         }
-        return usuario.getPermissoes().contains(permissao);
+        return possui(usuario, permissao);
+    }
+
+    private boolean possui(Usuario usuario, PermissaoUsuario permissao) {
+        if (usuario.getPermissoes().contains(permissao)) {
+            return true;
+        }
+
+        return usuario.getPermissoes().contains(PermissaoUsuario.VENDAS_GERENCIAR)
+                && (permissao == PermissaoUsuario.VENDAS_CRIAR
+                || permissao == PermissaoUsuario.VENDAS_EDITAR
+                || permissao == PermissaoUsuario.VENDAS_EXCLUIR);
     }
 
     public void exigir(Authentication autenticacao, PermissaoUsuario permissao) {
@@ -64,7 +75,7 @@ public class PermissaoAcessoService {
         }
 
         for (PermissaoUsuario permissao : permissoes) {
-            if (usuario.getPermissoes().contains(permissao)) {
+            if (possui(usuario, permissao)) {
                 return;
             }
         }
