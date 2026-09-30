@@ -12,7 +12,8 @@ export type PermissaoUsuario =
   | "RECEBIMENTOS_ESTORNAR"
   | "FINANCEIRO_VISUALIZAR"
   | "RELATORIOS_VISUALIZAR"
-  | "CONFIGURACOES_GERENCIAR";
+  | "CONFIGURACOES_GERENCIAR"
+  | "EQUIPE_GERENCIAR";
 
 export const TODAS_PERMISSOES: PermissaoUsuario[] = [
   "CLIENTES_VISUALIZAR",
@@ -27,6 +28,7 @@ export const TODAS_PERMISSOES: PermissaoUsuario[] = [
   "FINANCEIRO_VISUALIZAR",
   "RELATORIOS_VISUALIZAR",
   "CONFIGURACOES_GERENCIAR",
+  "EQUIPE_GERENCIAR",
 ];
 
 export const GRUPOS_PERMISSOES: Array<{
@@ -73,7 +75,14 @@ export const GRUPOS_PERMISSOES: Array<{
     itens: [
       { id: "FINANCEIRO_VISUALIZAR", label: "Visualizar financeiro" },
       { id: "RELATORIOS_VISUALIZAR", label: "Visualizar relatórios" },
-      { id: "CONFIGURACOES_GERENCIAR", label: "Alterar configurações da operação" },
+      { id: "CONFIGURACOES_GERENCIAR", label: "Alterar configurações e dados da empresa" },
+    ],
+  },
+  {
+    titulo: "Equipe e acessos",
+    descricao: "Usuários, convites e permissões da empresa.",
+    itens: [
+      { id: "EQUIPE_GERENCIAR", label: "Gerenciar funcionários e permissões" },
     ],
   },
 ];
@@ -103,7 +112,8 @@ export const PRESETS_PERMISSOES: Record<string, PermissaoUsuario[]> = {
     "FINANCEIRO_VISUALIZAR",
     "RELATORIOS_VISUALIZAR",
   ],
-  gestor: TODAS_PERMISSOES,
+  gestor: TODAS_PERMISSOES.filter((permissao) => permissao !== "EQUIPE_GERENCIAR"),
+  administradorDelegado: TODAS_PERMISSOES,
 };
 
 export function temPermissao(
