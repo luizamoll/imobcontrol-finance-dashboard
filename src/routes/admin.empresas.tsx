@@ -441,7 +441,7 @@ function AdminEmpresasPage() {
                 <div className="font-medium">ADMIN da empresa</div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   Este acesso terá controle total somente dentro desta empresa e poderá criar
-                  funcionários com permissões específicas.
+                  colaboradores com permissões específicas.
                 </p>
               </div>
             </div>
