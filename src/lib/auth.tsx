@@ -14,6 +14,10 @@ export type EmpresaResumo = {
   id: number;
   nome: string;
   slug: string;
+  razaoSocial?: string | null;
+  cnpj?: string | null;
+  email?: string | null;
+  telefone?: string | null;
 };
 
 export type AuthUsuario = {
