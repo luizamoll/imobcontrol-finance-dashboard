@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building, Plus, Trash2, User, Users } from "lucide-react";
+import { Building, Pencil, Plus, Trash2, User, Users, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -41,7 +41,7 @@ export const Route = createFileRoute("/recebedores")({
 });
 
 function RecebedoresPage() {
-  const { state, updateConfig } = useStore();
+  const { state, setState, updateConfig } = useStore();
   const [novoNome, setNovoNome] = useState("");
   const [novoTipo, setNovoTipo] = useState<"socio" | "empresa" | "corretor">("corretor");
   const [novoDocumento, setNovoDocumento] = useState("");
@@ -49,41 +49,88 @@ function RecebedoresPage() {
   const [novoEmail, setNovoEmail] = useState("");
   const [novoTelefone, setNovoTelefone] = useState("");
   const [novaChavePix, setNovaChavePix] = useState("");
+  const [editandoNomeOriginal, setEditandoNomeOriginal] = useState<string | null>(null);
 
-  const adicionarRecebedor = () => {
-    const nome = novoNome.trim();
-    if (!nome) {
-      toast.error("Informe o nome do recebedor.");
-      return;
-    }
-    const jaExiste = state.config.recebedores.some(
-      (r) => r.nome.toLowerCase() === nome.toLowerCase(),
-    );
-    if (jaExiste) {
-      toast.error("Já existe um recebedor com esse nome.");
-      return;
-    }
-    updateConfig({
-      recebedores: [
-        ...state.config.recebedores,
-        {
-          nome,
-          tipo: novoTipo,
-          documento: novoDocumento.trim() || undefined,
-          creci: novoTipo === "corretor" ? novoCreci.trim() || undefined : undefined,
-          email: novoEmail.trim() || undefined,
-          telefone: novoTelefone.trim() || undefined,
-          chavePix: novaChavePix.trim() || undefined,
-        },
-      ],
-    });
+  const limparFormulario = () => {
     setNovoNome("");
+    setNovoTipo("corretor");
     setNovoDocumento("");
     setNovoCreci("");
     setNovoEmail("");
     setNovoTelefone("");
     setNovaChavePix("");
-    toast.success("Recebedor cadastrado.");
+    setEditandoNomeOriginal(null);
+  };
+
+  const salvarRecebedor = () => {
+    const nome = novoNome.trim();
+    if (!nome) {
+      toast.error("Informe o nome do recebedor.");
+      return;
+    }
+
+    const jaExiste = state.config.recebedores.some(
+      (r) =>
+        r.nome.toLowerCase() === nome.toLowerCase()
+        && r.nome !== editandoNomeOriginal,
+    );
+    if (jaExiste) {
+      toast.error("Já existe um recebedor com esse nome.");
+      return;
+    }
+
+    const dados = {
+      nome,
+      tipo: novoTipo,
+      documento: novoDocumento.trim() || undefined,
+      creci: novoTipo === "corretor" ? novoCreci.trim() || undefined : undefined,
+      email: novoEmail.trim() || undefined,
+      telefone: novoTelefone.trim() || undefined,
+      chavePix: novaChavePix.trim() || undefined,
+    };
+
+    if (editandoNomeOriginal) {
+      setState((atual) => ({
+        ...atual,
+        config: {
+          ...atual.config,
+          recebedores: atual.config.recebedores.map((r) =>
+            r.nome === editandoNomeOriginal ? dados : r,
+          ),
+        },
+        vendas:
+          editandoNomeOriginal !== nome
+            ? atual.vendas.map((v) =>
+                v.corretorNome === editandoNomeOriginal
+                  ? { ...v, corretorNome: nome }
+                  : v,
+              )
+            : atual.vendas,
+      }));
+      toast.success("Recebedor atualizado.");
+    } else {
+      updateConfig({
+        recebedores: [...state.config.recebedores, dados],
+      });
+      toast.success("Recebedor cadastrado.");
+    }
+
+    limparFormulario();
+  };
+
+  const editarRecebedor = (nome: string) => {
+    const recebedor = state.config.recebedores.find((r) => r.nome === nome);
+    if (!recebedor) return;
+
+    setEditandoNomeOriginal(recebedor.nome);
+    setNovoNome(recebedor.nome);
+    setNovoTipo(recebedor.tipo);
+    setNovoDocumento(recebedor.documento ?? "");
+    setNovoCreci(recebedor.creci ?? "");
+    setNovoEmail(recebedor.email ?? "");
+    setNovoTelefone(recebedor.telefone ?? "");
+    setNovaChavePix(recebedor.chavePix ?? "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const removerRecebedor = (nome: string) => {
@@ -139,9 +186,11 @@ function RecebedoresPage() {
 
       <Card className="border-border/70">
         <CardHeader>
-          <CardTitle className="text-base">Cadastro de recebedores</CardTitle>
+          <CardTitle className="text-base">{editandoNomeOriginal ? "Editar recebedor" : "Cadastro de recebedores"}</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Sócios, empresa e corretores usados nas vendas e na distribuição financeira.
+            {editandoNomeOriginal
+              ? "Altere os dados cadastrais e salve. Vínculos existentes serão preservados."
+              : "Sócios, empresa e corretores usados nas vendas e na distribuição financeira."}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -208,9 +257,22 @@ function RecebedoresPage() {
                 placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
               />
             </div>
-            <div className="flex items-end">
-              <Button className="w-full" onClick={adicionarRecebedor}>
-                <Plus className="mr-2 h-4 w-4" /> Adicionar recebedor
+            <div className="flex items-end gap-2">
+              {editandoNomeOriginal && (
+                <Button className="flex-1" variant="outline" onClick={limparFormulario}>
+                  <X className="mr-2 h-4 w-4" /> Cancelar
+                </Button>
+              )}
+              <Button className="flex-1" onClick={salvarRecebedor}>
+                {editandoNomeOriginal ? (
+                  <>
+                    <Pencil className="mr-2 h-4 w-4" /> Salvar alterações
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" /> Adicionar recebedor
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -254,16 +316,27 @@ function RecebedoresPage() {
                         {r.chavePix || "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removerRecebedor(r.nome)}
-                          aria-label={`Remover ${r.nome}`}
-                        >
-                          <Trash2 className="mr-1 h-3.5 w-3.5" />
-                          Remover
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => editarRecebedor(r.nome)}
+                          >
+                            <Pencil className="mr-1 h-3.5 w-3.5" />
+                            Editar
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removerRecebedor(r.nome)}
+                            aria-label={`Remover ${r.nome}`}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                            Remover
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
