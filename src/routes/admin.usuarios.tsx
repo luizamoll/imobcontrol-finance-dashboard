@@ -139,7 +139,7 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
   });
   const [carregando, setCarregando] = useState(false);
   const [busca, setBusca] = useState("");
-  const [empresaFiltro, setEmpresaFiltro] = useState("todas");
+  const [empresaFiltro, setEmpresaFiltro] = useState(() => empresas[0] ? String(empresas[0].id) : "");
   const [perfilFiltro, setPerfilFiltro] = useState("todos");
   const [statusFiltro, setStatusFiltro] = useState("todos");
 
@@ -152,11 +152,21 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
   const [novaSenha, setNovaSenha] = useState("");
   const [salvandoSenha, setSalvandoSenha] = useState(false);
 
+  useEffect(() => {
+    if (empresas.length === 0) {
+      setEmpresaFiltro("");
+      return;
+    }
+    if (!empresas.some((empresa) => String(empresa.id) === empresaFiltro)) {
+      setEmpresaFiltro(String(empresas[0].id));
+    }
+  }, [empresas, empresaFiltro]);
+
   const query = useMemo(() => {
     const params = new URLSearchParams();
     params.set("pagina", "0");
     params.set("tamanho", "200");
-    if (empresaFiltro !== "todas") params.set("empresaId", empresaFiltro);
+    if (empresaFiltro) params.set("empresaId", empresaFiltro);
     if (perfilFiltro !== "todos") params.set("perfil", perfilFiltro);
     if (statusFiltro !== "todos") params.set("ativo", statusFiltro === "ativos" ? "true" : "false");
     if (busca.trim()) params.set("busca", busca.trim());
@@ -186,7 +196,7 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
 
   const abrirNovo = () => {
     setEditando(null);
-    setForm(vazio(empresas[0]?.id));
+    setForm(vazio(empresaFiltro ? Number(empresaFiltro) : empresas[0]?.id));
     setDialogAberto(true);
   };
 
@@ -286,7 +296,7 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
       <PageHeader
         eyebrow="Administração geral"
         title="Usuários e acessos"
-        description="Crie contas por convite, vincule usuários às empresas, defina papéis, status e acessos."
+        description="Escolha uma empresa e gerencie apenas os usuários vinculados a ela, sem misturar equipes de clientes diferentes."
         actions={
           <Button size="sm" onClick={abrirNovo} disabled={empresas.length === 0}>
             <Plus className="mr-2 h-4 w-4" /> Novo usuário
@@ -340,7 +350,6 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
             <Select value={empresaFiltro} onValueChange={setEmpresaFiltro}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="todas">Todas</SelectItem>
                 {empresas.map((empresa) => (
                   <SelectItem key={empresa.id} value={String(empresa.id)}>
                     {empresa.nome}
@@ -376,6 +385,16 @@ function PainelUsuarios({ empresas }: { empresas: EmpresaResumo[] }) {
       </Card>
 
       <Card className="border-border/70">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">
+            {empresas.find((empresa) => String(empresa.id) === empresaFiltro)
+              ? `Usuários da ${empresas.find((empresa) => String(empresa.id) === empresaFiltro)?.nome}`
+              : "Usuários da empresa"}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            A lista abaixo mostra somente os acessos da empresa selecionada.
+          </p>
+        </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
