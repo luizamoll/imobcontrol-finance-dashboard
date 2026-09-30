@@ -239,6 +239,16 @@ export interface Movimento {
   saldoComissaoApos?: number;
 }
 
+export interface Recebedor {
+  nome: string;
+  tipo: "socio" | "empresa" | "corretor";
+  documento?: string;
+  creci?: string;
+  email?: string;
+  telefone?: string;
+  chavePix?: string;
+}
+
 /** Compatibilidade com dados locais antigos e cadastros auxiliares. */
 export interface Config extends RegrasInadimplencia {
   corretorPctPadrao: number;
@@ -247,7 +257,7 @@ export interface Config extends RegrasInadimplencia {
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
   aliquotaPadrao: number;
-  recebedores: { nome: string; tipo: "socio" | "empresa" | "corretor" }[];
+  recebedores: Recebedor[];
   statusVenda: string[];
   formasPagamento: string[];
   aliquotasPorSpe: Record<string, number>;
