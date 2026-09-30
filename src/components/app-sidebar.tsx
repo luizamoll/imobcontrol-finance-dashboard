@@ -63,7 +63,7 @@ const gestao: Array<{
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const { empresaAtual } = useTenant();
+  const { empresaAtual, modoCliente } = useTenant();
   const { usuario } = useAuth();
   const collapsed = state === "collapsed";
   const currentPath = useRouterState({
@@ -134,7 +134,11 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              {usuario?.perfil === "ADMIN" && (
+              {(
+                usuario?.perfil === "ADMIN"
+                || (usuario?.perfil === "USUARIO" && temPermissao(usuario, "EQUIPE_GERENCIAR"))
+                || (usuario?.perfil === "SUPER_ADMIN" && modoCliente)
+              ) && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
