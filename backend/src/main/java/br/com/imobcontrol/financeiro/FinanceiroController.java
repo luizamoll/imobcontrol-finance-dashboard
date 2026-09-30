@@ -83,6 +83,17 @@ public class FinanceiroController {
         return service.atualizarVenda(auth, empresaId, id, body);
     }
 
+    @DeleteMapping("/vendas/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void excluirVenda(
+            Authentication auth,
+            @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
+            @PathVariable Long id
+    ) {
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_GERENCIAR);
+        service.excluirVenda(auth, empresaId, id);
+    }
+
     @GetMapping("/parcelas")
     public List<ParcelaResponse> listarParcelas(
             Authentication auth,
