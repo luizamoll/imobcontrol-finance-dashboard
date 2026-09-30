@@ -78,58 +78,79 @@ export async function apiJson<T>(
     headers.set(token.headerName, token.token);
   }
 
-  const executar = () =>
-    fetch(url, {
-      ...options,
-      method,
-      headers,
-      credentials: "include",
-    });
+  const executarUmaVez = async (): Promise<T> => {
+    let response: Response;
 
-  let response: Response;
-  try {
-    response = await executar();
-  } catch (error) {
-    if (method === "GET") {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      try {
-        response = await executar();
-      } catch {
-        throw new Error("Conexão temporariamente indisponível. Tente novamente.");
-      }
-    } else {
-      throw new Error(
-        error instanceof TypeError
-          ? "Não foi possível conectar ao servidor. Tente novamente."
-          : error instanceof Error
-            ? error.message
-            : "Não foi possível concluir a operação.",
-      );
-    }
-  }
-
-  if (!response.ok) {
-    let mensagem = `Erro ${response.status}`;
     try {
-      const body = await response.json();
-      mensagem =
-        body?.detail ||
-        body?.message ||
-        body?.erro ||
-        mensagem;
+      response = await fetch(url, {
+        ...options,
+        method,
+        headers,
+        credentials: "include",
+      });
     } catch {
-      const texto = await response.text().catch(() => "");
-      if (texto.trim()) mensagem = texto.trim();
+      throw new Error("Conexão temporariamente indisponível. Tente novamente.");
     }
 
-    const erro = new Error(mensagem) as Error & { status?: number };
-    erro.status = response.status;
-    throw erro;
+    if (!response.ok) {
+      let mensagem = `Erro ${response.status}`;
+
+      try {
+        const body = await response.json();
+        mensagem = body?.detail || body?.message || body?.erro || mensagem;
+      } catch {
+        try {
+          const texto = await response.text();
+          if (texto.trim()) mensagem = texto.trim();
+        } catch {
+          // Mantém a mensagem baseada no status HTTP.
+        }
+      }
+
+      const erro = new Error(mensagem) as Error & { status?: number };
+      erro.status = response.status;
+      throw erro;
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    try {
+      return (await response.json()) as T;
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error("A resposta do servidor foi interrompida. Tente novamente.");
+      }
+      throw error;
+    }
+  };
+
+  const tentativas = method === "GET" ? 2 : 1;
+  let ultimaFalha: unknown;
+
+  for (let tentativa = 0; tentativa < tentativas; tentativa += 1) {
+    try {
+      return await executarUmaVez();
+    } catch (error) {
+      ultimaFalha = error;
+
+      if ((error as Error & { status?: number })?.status != null) {
+        throw error;
+      }
+
+      if (tentativa < tentativas - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+    }
   }
 
-  if (response.status === 204) {
-    return undefined as T;
+  if (ultimaFalha instanceof Error) {
+    if (ultimaFalha.message === "Failed to fetch") {
+      throw new Error("Conexão temporariamente indisponível. Tente novamente.");
+    }
+    return Promise.reject(ultimaFalha);
   }
 
-  return (await response.json()) as T;
+  throw new Error("Não foi possível concluir a operação.");
 }
