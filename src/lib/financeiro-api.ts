@@ -303,6 +303,16 @@ export async function atualizarVendaRemota(
   return vendaFromApi(salva);
 }
 
+export async function excluirVendaRemota(
+  empresaId: number,
+  vendaId: string,
+) {
+  await apiJson<void>(`/api/vendas/${vendaId}`, {
+    method: "DELETE",
+    empresaId,
+  });
+}
+
 export async function receberParcelaRemota(
   empresaId: number,
   parcelaId: string,
