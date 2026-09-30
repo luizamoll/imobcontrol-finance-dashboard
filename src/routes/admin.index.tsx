@@ -198,7 +198,7 @@ function AdminDashboard() {
                       void navigate({ to: "/equipe" });
                     }}
                   >
-                    Funcionários
+                    Colaboradores
                   </Button>
                   <Button
                     size="sm"
