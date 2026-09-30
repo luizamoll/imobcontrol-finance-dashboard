@@ -398,14 +398,11 @@ export function AppHeader() {
           || usuario?.perfil === "ADMIN"
           || (usuario?.perfil === "USUARIO" && temPermissao(usuario, "EQUIPE_GERENCIAR"))
         ) && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => void navigate({ to: "/equipe" })}
-          >
-            <UserCog className="mr-1.5 h-4 w-4" />
-            Equipe e acessos
+          <Button asChild variant="outline" size="sm" className="shrink-0">
+            <a href="/equipe">
+              <UserCog className="mr-1.5 h-4 w-4" />
+              Equipe e acessos
+            </a>
           </Button>
         )}
 
