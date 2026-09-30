@@ -6,6 +6,9 @@ export type PermissaoUsuario =
   | "EMPREENDIMENTOS_VISUALIZAR"
   | "EMPREENDIMENTOS_GERENCIAR"
   | "VENDAS_VISUALIZAR"
+  | "VENDAS_CRIAR"
+  | "VENDAS_EDITAR"
+  | "VENDAS_EXCLUIR"
   | "VENDAS_GERENCIAR"
   | "RECEBIMENTOS_VISUALIZAR"
   | "RECEBIMENTOS_REGISTRAR"
@@ -21,7 +24,9 @@ export const TODAS_PERMISSOES: PermissaoUsuario[] = [
   "EMPREENDIMENTOS_VISUALIZAR",
   "EMPREENDIMENTOS_GERENCIAR",
   "VENDAS_VISUALIZAR",
-  "VENDAS_GERENCIAR",
+  "VENDAS_CRIAR",
+  "VENDAS_EDITAR",
+  "VENDAS_EXCLUIR",
   "RECEBIMENTOS_VISUALIZAR",
   "RECEBIMENTOS_REGISTRAR",
   "RECEBIMENTOS_ESTORNAR",
@@ -57,7 +62,9 @@ export const GRUPOS_PERMISSOES: Array<{
     descricao: "Contratos, compradores e composição das vendas.",
     itens: [
       { id: "VENDAS_VISUALIZAR", label: "Visualizar vendas" },
-      { id: "VENDAS_GERENCIAR", label: "Criar e editar vendas" },
+      { id: "VENDAS_CRIAR", label: "Cadastrar novas vendas" },
+      { id: "VENDAS_EDITAR", label: "Editar vendas" },
+      { id: "VENDAS_EXCLUIR", label: "Excluir vendas" },
     ],
   },
   {
@@ -93,7 +100,9 @@ export const PRESETS_PERMISSOES: Record<string, PermissaoUsuario[]> = {
     "CLIENTES_GERENCIAR",
     "EMPREENDIMENTOS_VISUALIZAR",
     "VENDAS_VISUALIZAR",
-    "VENDAS_GERENCIAR",
+    "VENDAS_CRIAR",
+    "VENDAS_EDITAR",
+    "VENDAS_EXCLUIR",
   ],
   financeiro: [
     "CLIENTES_VISUALIZAR",
@@ -122,7 +131,20 @@ export function temPermissao(
 ) {
   if (!usuario) return false;
   if (usuario.perfil === "SUPER_ADMIN" || usuario.perfil === "ADMIN") return true;
-  return usuario.permissoes?.includes(permissao) ?? false;
+
+  const permissoes = usuario.permissoes ?? [];
+  if (permissoes.includes(permissao)) return true;
+
+  // Compatibilidade temporária com sessões antigas que ainda carregam
+  // a permissão ampla anterior à separação entre criar/editar/excluir.
+  if (
+    permissoes.includes("VENDAS_GERENCIAR")
+    && ["VENDAS_CRIAR", "VENDAS_EDITAR", "VENDAS_EXCLUIR"].includes(permissao)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 export function temAlgumaPermissao(
