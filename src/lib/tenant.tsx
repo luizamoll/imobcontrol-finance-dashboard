@@ -26,7 +26,7 @@ const STORAGE_KEY = "imobcontrol.superadmin.empresa";
 const CLIENT_MODE_KEY = "imobcontrol.superadmin.client-mode";
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const { usuario } = useAuth();
+  const { usuarioReal: usuario } = useAuth();
   const [empresas, setEmpresas] = useState<EmpresaResumo[]>([]);
   const [empresaAtualId, setEmpresaAtualId] = useState<number | null>(
     usuario?.empresa?.id ?? null,
