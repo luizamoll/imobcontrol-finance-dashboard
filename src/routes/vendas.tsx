@@ -5,6 +5,8 @@ import { toast } from "sonner";
 
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { apiJson } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { temPermissao } from "@/lib/permissoes";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/currency-input";
 import { RegrasInadimplenciaForm } from "@/components/regras-inadimplencia-form";
@@ -56,6 +58,8 @@ export const Route = createFileRoute("/vendas")({
 
 function VendasPage() {
   const { state } = useStore();
+  const { usuario } = useAuth();
+  const podeCriarVenda = temPermissao(usuario, "VENDAS_CRIAR");
   const [open, setOpen] = useState(false);
 
   return (
@@ -65,14 +69,16 @@ function VendasPage() {
         title="Vendas"
         description="Registre o valor negociado, a composição real do pagamento e as regras aplicáveis ao contrato."
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" /> Nova venda
-              </Button>
-            </DialogTrigger>
-            <NewVendaDialog onClose={() => setOpen(false)} />
-          </Dialog>
+          podeCriarVenda ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" /> Nova venda
+                </Button>
+              </DialogTrigger>
+              <NewVendaDialog onClose={() => setOpen(false)} />
+            </Dialog>
+          ) : null
         }
       />
 
