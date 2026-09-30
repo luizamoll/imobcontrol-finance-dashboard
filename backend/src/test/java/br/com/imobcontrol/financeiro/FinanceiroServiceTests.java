@@ -20,6 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -182,6 +184,103 @@ class FinanceiroServiceTests {
         assertEquals(2, geradas.size());
         assertDinheiro("60.00", geradas.get(0).valor());
         assertDinheiro("60.00", geradas.get(1).valor());
+    }
+
+    @Test
+    void excluiVendaSemRecebimentosELiberaUnidade() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        null,
+                        BigDecimal.ZERO,
+                        new BigDecimal("50"),
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcelas", new BigDecimal("50.00"),
+                                        2, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        assertEquals("vendido", unidades.findById(unidade.getId()).orElseThrow().getStatus());
+
+        service.excluirVenda(autenticacao(usuario), null, venda.id());
+
+        assertEquals("disponivel", unidades.findById(unidade.getId()).orElseThrow().getStatus());
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.detalharVenda(autenticacao(usuario), null, venda.id())
+        );
+    }
+
+    @Test
+    void naoExcluiVendaQueJaPossuiHistoricoDeRecebimento() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        null,
+                        BigDecimal.ZERO,
+                        new BigDecimal("50"),
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcela única", new BigDecimal("100.00"),
+                                        1, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        ParcelaResponse parcela = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .findFirst()
+                .orElseThrow();
+
+        service.receber(
+                autenticacao(usuario),
+                null,
+                parcela.id(),
+                new RecebimentoRequest(new BigDecimal("100.00"), parcela.vencimento())
+        );
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.excluirVenda(autenticacao(usuario), null, venda.id())
+        );
+        assertEquals("vendido", unidades.findById(unidade.getId()).orElseThrow().getStatus());
     }
 
     @Test
