@@ -15,6 +15,7 @@ import {
   atualizarVendaRemota,
   carregarFinanceiro,
   criarVendaRemota,
+  excluirVendaRemota,
   receberParcelaRemota,
   reverterParcelaRemota,
   type VendaInput,
@@ -469,6 +470,7 @@ interface Ctx {
   updateMatricula: (id: string, patch: Partial<Matricula>) => void;
   addVenda: (v: VendaInput) => Promise<Venda>;
   updateVenda: (id: string, patch: VendaUpdatePatch) => Promise<void>;
+  deleteVenda: (id: string) => Promise<void>;
   receberParcela: (id: string, valorRecebido?: number, data?: string) => Promise<void>;
   reverterParcela: (id: string) => Promise<void>;
   marcarParcelaPaga: (id: string, dataPagamento?: string) => Promise<void>;
@@ -701,6 +703,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           movimentos: financeiro.movimentos,
         }));
         void salva;
+      },
+      deleteVenda: async (id) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const atual = state.vendas.find((v) => v.id === id);
+        if (!atual) throw new Error("Venda não encontrada");
+
+        await excluirVendaRemota(empresaAtualId, id);
+        const financeiro = await carregarFinanceiro(empresaAtualId);
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+          matriculas: s.matriculas.map((m) =>
+            m.id === atual.matriculaId ? { ...m, status: "disponivel" } : m,
+          ),
+        }));
       },
       receberParcela: async (id, valorRecebido, data) => {
         if (empresaAtualId == null) throw new Error("Selecione uma empresa");
