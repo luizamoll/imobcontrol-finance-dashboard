@@ -567,7 +567,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     "EMPREENDIMENTOS_VISUALIZAR",
     "EMPREENDIMENTOS_GERENCIAR",
     "VENDAS_VISUALIZAR",
-    "VENDAS_GERENCIAR",
+    "VENDAS_CRIAR",
+    "VENDAS_EDITAR",
+    "VENDAS_EXCLUIR",
     "RECEBIMENTOS_VISUALIZAR",
     "RECEBIMENTOS_REGISTRAR",
     "RECEBIMENTOS_ESTORNAR",
@@ -576,7 +578,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   ]);
   const podeCarregarFinanceiro = temAlgumaPermissao(usuario, [
     "VENDAS_VISUALIZAR",
-    "VENDAS_GERENCIAR",
+    "VENDAS_CRIAR",
+    "VENDAS_EDITAR",
+    "VENDAS_EXCLUIR",
     "RECEBIMENTOS_VISUALIZAR",
     "RECEBIMENTOS_REGISTRAR",
     "RECEBIMENTOS_ESTORNAR",
