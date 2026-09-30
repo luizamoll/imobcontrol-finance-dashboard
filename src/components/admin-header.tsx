@@ -1,5 +1,6 @@
 import { Building2, LogOut, ShieldCheck } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -21,7 +22,11 @@ function iniciais(nome: string) {
 export function AdminHeader() {
   const navigate = useNavigate();
   const { usuario, sair } = useAuth();
-  const { empresaAtual } = useTenant();
+  const { empresaAtual, entrarModoCliente, sairModoCliente } = useTenant();
+
+  useEffect(() => {
+    sairModoCliente();
+  }, []);
 
   async function handleLogout() {
     await sair();
@@ -50,10 +55,13 @@ export function AdminHeader() {
             variant="outline"
             size="sm"
             className="hidden md:flex"
-            onClick={() => void navigate({ to: "/" })}
+            onClick={() => {
+              entrarModoCliente(empresaAtual.id);
+              void navigate({ to: "/" });
+            }}
           >
             <Building2 className="mr-2 h-4 w-4" />
-            Abrir {empresaAtual.nome}
+            Ver como ADMIN · {empresaAtual.nome}
           </Button>
         )}
 
