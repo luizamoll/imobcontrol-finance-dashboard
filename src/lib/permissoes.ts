@@ -82,7 +82,7 @@ export const GRUPOS_PERMISSOES: Array<{
     titulo: "Equipe e acessos",
     descricao: "Usuários, convites e permissões da empresa.",
     itens: [
-      { id: "EQUIPE_GERENCIAR", label: "Gerenciar funcionários e permissões" },
+      { id: "EQUIPE_GERENCIAR", label: "Gerenciar colaboradores e permissões" },
     ],
   },
 ];
