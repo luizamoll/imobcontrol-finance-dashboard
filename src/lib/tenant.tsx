@@ -33,6 +33,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   );
   const [carregando, setCarregando] = useState(usuario?.perfil === "SUPER_ADMIN");
   const [modoCliente, setModoCliente] = useState(() => {
+    if (typeof window === "undefined") return false;
     try {
       return window.sessionStorage.getItem(CLIENT_MODE_KEY) === "1";
     } catch {
