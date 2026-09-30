@@ -11,5 +11,4 @@ ALTER TABLE empresas
     ADD COLUMN telefone VARCHAR(30) NULL;
 
 CREATE UNIQUE INDEX uq_empresas_cnpj
-    ON empresas(cnpj)
-    WHERE cnpj IS NOT NULL;
+    ON empresas(cnpj);
