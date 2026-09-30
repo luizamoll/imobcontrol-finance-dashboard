@@ -7,6 +7,7 @@ import java.util.Optional;
 
 public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     Optional<Empresa> findBySlug(String slug);
+    Optional<Empresa> findByCnpj(String cnpj);
     List<Empresa> findAllByAtivaTrueOrderByNomeAsc();
     List<Empresa> findAllByOrderByNomeAsc();
 }
