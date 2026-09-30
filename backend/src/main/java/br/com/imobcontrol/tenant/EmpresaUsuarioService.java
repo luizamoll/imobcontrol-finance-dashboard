@@ -222,6 +222,9 @@ public class EmpresaUsuarioService {
 
         usuario.setSenhaHash(passwordEncoder.encode(body.senha()));
         usuario.setSenhaDefinida(true);
+        // A senha definida pelo gestor funciona como ativação administrativa do acesso.
+        // Isso permite bootstrap/testes mesmo quando o SMTP ainda não está configurado.
+        usuario.setEmailVerificado(true);
         Usuario salvo = salvar(usuario);
         acessoConta.invalidarTokensDoUsuario(salvo.getId());
         acessoConta.encerrarSessoes(salvo.getEmail());
