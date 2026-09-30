@@ -3,6 +3,7 @@ package br.com.imobcontrol.tenant;
 import br.com.imobcontrol.cliente.AuditoriaOperacional;
 import br.com.imobcontrol.cliente.AuditoriaOperacionalRepository;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
@@ -64,6 +65,10 @@ public class SuperAdminEmpresaController {
         Empresa empresa = new Empresa();
         empresa.setNome(body.nome().trim());
         empresa.setSlug(slugUnico(body.nome()));
+        empresa.setRazaoSocial(textoOpcional(body.razaoSocial()));
+        empresa.setCnpj(cnpjDisponivel(null, body.cnpj()));
+        empresa.setEmail(emailOpcional(body.email()));
+        empresa.setTelefone(textoOpcional(body.telefone()));
         empresa.setAtiva(true);
 
         Empresa salva = empresas.saveAndFlush(empresa);
@@ -89,6 +94,18 @@ public class SuperAdminEmpresaController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada"));
 
         empresa.setNome(body.nome().trim());
+        if (body.razaoSocial() != null) {
+            empresa.setRazaoSocial(textoOpcional(body.razaoSocial()));
+        }
+        if (body.cnpj() != null) {
+            empresa.setCnpj(cnpjDisponivel(empresa.getId(), body.cnpj()));
+        }
+        if (body.email() != null) {
+            empresa.setEmail(emailOpcional(body.email()));
+        }
+        if (body.telefone() != null) {
+            empresa.setTelefone(textoOpcional(body.telefone()));
+        }
         if (body.ativa() != null) {
             empresa.setAtiva(body.ativa());
         }
@@ -101,6 +118,33 @@ public class SuperAdminEmpresaController {
                 "EMPRESA_ATUALIZADA"
         ));
         return resumo(salva);
+    }
+
+    private String textoOpcional(String valor) {
+        if (valor == null || valor.isBlank()) return null;
+        return valor.trim();
+    }
+
+    private String emailOpcional(String valor) {
+        String email = textoOpcional(valor);
+        return email == null ? null : email.toLowerCase(Locale.ROOT);
+    }
+
+    private String cnpjDisponivel(Long empresaIdAtual, String valor) {
+        String cnpj = textoOpcional(valor);
+        if (cnpj == null) return null;
+
+        cnpj = cnpj.replaceAll("[^0-9]", "");
+        if (cnpj.length() != 14) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CNPJ deve conter 14 dígitos");
+        }
+
+        empresas.findByCnpj(cnpj).ifPresent(existente -> {
+            if (empresaIdAtual == null || !existente.getId().equals(empresaIdAtual)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "CNPJ já cadastrado");
+            }
+        });
+        return cnpj;
     }
 
     private String slugUnico(String nome) {
@@ -120,12 +164,20 @@ public class SuperAdminEmpresaController {
     }
 
     public record CriarEmpresa(
-            @NotBlank @Size(max = 160) String nome
+            @NotBlank @Size(max = 160) String nome,
+            @Size(max = 200) String razaoSocial,
+            @Size(max = 18) String cnpj,
+            @Email @Size(max = 200) String email,
+            @Size(max = 30) String telefone
     ) {
     }
 
     public record AtualizarEmpresa(
             @NotBlank @Size(max = 160) String nome,
+            @Size(max = 200) String razaoSocial,
+            @Size(max = 18) String cnpj,
+            @Email @Size(max = 200) String email,
+            @Size(max = 30) String telefone,
             Boolean ativa
     ) {
     }
@@ -144,6 +196,10 @@ public class SuperAdminEmpresaController {
                 empresa.getId(),
                 empresa.getNome(),
                 empresa.getSlug(),
+                empresa.getRazaoSocial(),
+                empresa.getCnpj(),
+                empresa.getEmail(),
+                empresa.getTelefone(),
                 empresa.isAtiva(),
                 administradoresAtivos,
                 administradoresPendentes,
@@ -156,6 +212,10 @@ public class SuperAdminEmpresaController {
             Long id,
             String nome,
             String slug,
+            String razaoSocial,
+            String cnpj,
+            String email,
+            String telefone,
             boolean ativa,
             long administradoresAtivos,
             long administradoresPendentes,
