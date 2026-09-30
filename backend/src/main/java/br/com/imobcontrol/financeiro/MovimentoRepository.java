@@ -10,5 +10,6 @@ public interface MovimentoRepository extends JpaRepository<Movimento, Long> {
     List<Movimento> findAllByEmpresaIdAndVendaIdAndEstornadoFalseOrderByDataMovimentoAscIdAsc(Long empresaId, Long vendaId);
     List<Movimento> findAllByEmpresaIdAndParcelaIdAndEstornadoFalseOrderByIdDesc(Long empresaId, Long parcelaId);
     boolean existsByEmpresaIdAndVendaIdAndEstornadoFalse(Long empresaId, Long vendaId);
+    boolean existsByEmpresaIdAndVendaId(Long empresaId, Long vendaId);
     Optional<Movimento> findFirstByEmpresaIdAndParcelaIdAndEstornadoFalseOrderByIdDesc(Long empresaId, Long parcelaId);
 }
