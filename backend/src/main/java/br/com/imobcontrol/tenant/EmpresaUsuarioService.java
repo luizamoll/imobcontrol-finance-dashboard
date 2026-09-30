@@ -52,6 +52,51 @@ public class EmpresaUsuarioService {
     @Transactional(readOnly = true)
     public Page<UsuarioAdminResponse> listar(
             Authentication autenticacao,
+            Boolean ativo,
+            String busca,
+            int pagina,
+            int tamanho
+    ) {
+        return listar(autenticacao, null, ativo, busca, pagina, tamanho);
+    }
+
+    @Transactional
+    public UsuarioAdminResponse criar(
+            Authentication autenticacao,
+            EmpresaUsuarioCreateRequest body
+    ) {
+        return criar(autenticacao, null, body);
+    }
+
+    @Transactional
+    public UsuarioAdminResponse atualizar(
+            Authentication autenticacao,
+            Long id,
+            EmpresaUsuarioUpdateRequest body
+    ) {
+        return atualizar(autenticacao, null, id, body);
+    }
+
+    @Transactional
+    public void redefinirSenha(
+            Authentication autenticacao,
+            Long id,
+            UsuarioAdminPasswordRequest body
+    ) {
+        redefinirSenha(autenticacao, null, id, body);
+    }
+
+    @Transactional
+    public boolean reenviarConvite(
+            Authentication autenticacao,
+            Long id
+    ) {
+        return reenviarConvite(autenticacao, null, id);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UsuarioAdminResponse> listar(
+            Authentication autenticacao,
             Long empresaSolicitada,
             Boolean ativo,
             String busca,
