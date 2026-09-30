@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiJson } from "@/lib/api";
+import { formatCNPJ } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 
@@ -24,7 +25,16 @@ export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Administração · ImobControl" }] }),
 });
 
-type EmpresaResumo = { id: number; nome: string; slug: string; ativa?: boolean };
+type EmpresaResumo = {
+  id: number;
+  nome: string;
+  slug: string;
+  razaoSocial?: string | null;
+  cnpj?: string | null;
+  email?: string | null;
+  telefone?: string | null;
+  ativa?: boolean;
+};
 type Resumo = {
   total: number;
   ativos: number;
@@ -42,6 +52,10 @@ function AdminDashboard() {
   const [saude, setSaude] = useState<"UP" | "DOWN" | "CHECKING">("CHECKING");
   const [carregando, setCarregando] = useState(true);
   const [novaEmpresaNome, setNovaEmpresaNome] = useState("");
+  const [novaEmpresaRazao, setNovaEmpresaRazao] = useState("");
+  const [novaEmpresaCnpj, setNovaEmpresaCnpj] = useState("");
+  const [novaEmpresaEmail, setNovaEmpresaEmail] = useState("");
+  const [novaEmpresaTelefone, setNovaEmpresaTelefone] = useState("");
   const [criandoEmpresa, setCriandoEmpresa] = useState(false);
 
   async function criarPrimeiraEmpresa() {
@@ -55,7 +69,13 @@ function AdminDashboard() {
     try {
       const criada = await apiJson<EmpresaResumo>("/api/super-admin/empresas", {
         method: "POST",
-        body: JSON.stringify({ nome }),
+        body: JSON.stringify({
+          nome,
+          razaoSocial: novaEmpresaRazao.trim() || null,
+          cnpj: novaEmpresaCnpj.trim() || null,
+          email: novaEmpresaEmail.trim() || null,
+          telefone: novaEmpresaTelefone.trim() || null,
+        }),
       });
 
       setEmpresas((atuais) => {
@@ -63,6 +83,10 @@ function AdminDashboard() {
         return [...semDuplicar, criada].sort((a, b) => a.nome.localeCompare(b.nome));
       });
       setNovaEmpresaNome("");
+      setNovaEmpresaRazao("");
+      setNovaEmpresaCnpj("");
+      setNovaEmpresaEmail("");
+      setNovaEmpresaTelefone("");
       toast.success(`Empresa ${criada.nome} criada com sucesso`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível criar a empresa");
@@ -185,9 +209,9 @@ function AdminDashboard() {
                   </p>
                 </div>
 
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <div className="flex-1 text-left">
-                    <Label htmlFor="primeira-empresa">Nome da empresa</Label>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="text-left">
+                    <Label htmlFor="primeira-empresa">Nome fantasia</Label>
                     <Input
                       id="primeira-empresa"
                       value={novaEmpresaNome}
@@ -196,13 +220,48 @@ function AdminDashboard() {
                       autoComplete="organization"
                     />
                   </div>
-                  <button
-                    type="submit"
-                    disabled={criandoEmpresa || !novaEmpresaNome.trim()}
-                    className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    {criandoEmpresa ? "Criando..." : "Criar empresa"}
-                  </button>
+                  <div className="text-left">
+                    <Label>Razão social</Label>
+                    <Input
+                      value={novaEmpresaRazao}
+                      onChange={(event) => setNovaEmpresaRazao(event.target.value)}
+                      placeholder="Razão social da empresa"
+                    />
+                  </div>
+                  <div className="text-left">
+                    <Label>CNPJ</Label>
+                    <Input
+                      value={novaEmpresaCnpj}
+                      onChange={(event) => setNovaEmpresaCnpj(formatCNPJ(event.target.value))}
+                      placeholder="00.000.000/0000-00"
+                    />
+                  </div>
+                  <div className="text-left">
+                    <Label>Telefone</Label>
+                    <Input
+                      value={novaEmpresaTelefone}
+                      onChange={(event) => setNovaEmpresaTelefone(event.target.value)}
+                      placeholder="Contato comercial"
+                    />
+                  </div>
+                  <div className="text-left md:col-span-2">
+                    <Label>E-mail da empresa</Label>
+                    <Input
+                      type="email"
+                      value={novaEmpresaEmail}
+                      onChange={(event) => setNovaEmpresaEmail(event.target.value)}
+                      placeholder="contato@empresa.com.br"
+                    />
+                  </div>
+                  <div className="md:col-span-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={criandoEmpresa || !novaEmpresaNome.trim()}
+                      className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      {criandoEmpresa ? "Criando..." : "Criar empresa"}
+                    </button>
+                  </div>
                 </div>
               </form>
             )}
