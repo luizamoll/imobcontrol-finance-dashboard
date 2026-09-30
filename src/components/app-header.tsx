@@ -42,7 +42,7 @@ function perfilLegivel(perfil: string) {
     case "ADMIN":
       return "Admin";
     default:
-      return "Funcionário";
+      return "Colaborador";
   }
 }
 
@@ -83,13 +83,13 @@ export function AppHeader() {
     && !simulandoFuncionario;
 
   const nome = simulandoFuncionario
-    ? usuario?.nome ?? "Funcionário"
+    ? usuario?.nome ?? "Colaborador"
     : simulandoCliente
       ? `ADMIN · ${empresaAtual?.nome ?? "Empresa"}`
       : usuario?.nome ?? "Usuário";
 
   const perfil = simulandoFuncionario
-    ? "Funcionário"
+    ? "Colaborador"
     : simulandoCliente
       ? "ADMIN"
       : usuario?.perfil
@@ -247,7 +247,7 @@ export function AppHeader() {
           <Eye className="h-4 w-4 shrink-0 text-primary" />
           <div className="min-w-0">
             <div className="truncate text-xs font-semibold text-foreground">
-              Visualizando como funcionário
+              Visualizando como colaborador
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
               {usuario?.nome} · {usuario?.empresa?.nome ?? empresaAtual?.nome}
