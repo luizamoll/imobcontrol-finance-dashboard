@@ -42,7 +42,7 @@ function perfilLegivel(perfil: string) {
     case "ADMIN":
       return "Admin";
     default:
-      return "Usuário";
+      return "Funcionário";
   }
 }
 
