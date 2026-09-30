@@ -95,7 +95,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="mt-2">
-        {usuarioReal?.perfil === "SUPER_ADMIN" && !simulacaoFuncionario && (
+        {usuarioReal?.perfil === "SUPER_ADMIN" && !simulacaoFuncionario && !modoCliente && (
           <SidebarGroup>
             <SidebarGroupLabel>Super Admin</SidebarGroupLabel>
             <SidebarGroupContent>
