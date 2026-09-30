@@ -180,16 +180,28 @@ function AdminDashboard() {
                   <div className="truncate text-sm font-medium">{empresa.nome}</div>
                   <div className="truncate text-xs text-muted-foreground">{empresa.slug}</div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    entrarModoCliente(empresa.id);
-                    void navigate({ to: "/" });
-                  }}
-                >
-                  Ver como ADMIN
-                </Button>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      entrarModoCliente(empresa.id);
+                      void navigate({ to: "/equipe" });
+                    }}
+                  >
+                    Funcionários
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      entrarModoCliente(empresa.id);
+                      void navigate({ to: "/" });
+                    }}
+                  >
+                    Ver como ADMIN
+                  </Button>
+                </div>
               </div>
             ))}
             {!carregando && empresas.length === 0 && (
