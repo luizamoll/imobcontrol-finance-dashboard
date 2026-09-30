@@ -32,7 +32,9 @@ public class FinanceiroController {
         acesso.exigirQualquer(
                 auth,
                 PermissaoUsuario.VENDAS_VISUALIZAR,
-                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.VENDAS_CRIAR,
+                PermissaoUsuario.VENDAS_EDITAR,
+                PermissaoUsuario.VENDAS_EXCLUIR,
                 PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
                 PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
                 PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
@@ -51,7 +53,9 @@ public class FinanceiroController {
         acesso.exigirQualquer(
                 auth,
                 PermissaoUsuario.VENDAS_VISUALIZAR,
-                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.VENDAS_CRIAR,
+                PermissaoUsuario.VENDAS_EDITAR,
+                PermissaoUsuario.VENDAS_EXCLUIR,
                 PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
                 PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
                 PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
@@ -68,7 +72,7 @@ public class FinanceiroController {
             @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
             @Valid @RequestBody VendaRequest body
     ) {
-        acesso.exigir(auth, PermissaoUsuario.VENDAS_GERENCIAR);
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_CRIAR);
         return service.criarVenda(auth, empresaId, body);
     }
 
@@ -79,7 +83,7 @@ public class FinanceiroController {
             @PathVariable Long id,
             @Valid @RequestBody VendaRequest body
     ) {
-        acesso.exigir(auth, PermissaoUsuario.VENDAS_GERENCIAR);
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_EDITAR);
         return service.atualizarVenda(auth, empresaId, id, body);
     }
 
@@ -90,7 +94,7 @@ public class FinanceiroController {
             @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
             @PathVariable Long id
     ) {
-        acesso.exigir(auth, PermissaoUsuario.VENDAS_GERENCIAR);
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_EXCLUIR);
         service.excluirVenda(auth, empresaId, id);
     }
 
@@ -102,7 +106,9 @@ public class FinanceiroController {
         acesso.exigirQualquer(
                 auth,
                 PermissaoUsuario.VENDAS_VISUALIZAR,
-                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.VENDAS_CRIAR,
+                PermissaoUsuario.VENDAS_EDITAR,
+                PermissaoUsuario.VENDAS_EXCLUIR,
                 PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
                 PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
                 PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
@@ -120,7 +126,9 @@ public class FinanceiroController {
         acesso.exigirQualquer(
                 auth,
                 PermissaoUsuario.VENDAS_VISUALIZAR,
-                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.VENDAS_CRIAR,
+                PermissaoUsuario.VENDAS_EDITAR,
+                PermissaoUsuario.VENDAS_EXCLUIR,
                 PermissaoUsuario.RECEBIMENTOS_VISUALIZAR,
                 PermissaoUsuario.RECEBIMENTOS_REGISTRAR,
                 PermissaoUsuario.RECEBIMENTOS_ESTORNAR,
