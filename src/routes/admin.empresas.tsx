@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiJson } from "@/lib/api";
+import { formatCNPJ } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 
@@ -33,6 +34,10 @@ type Empresa = {
   id: number;
   nome: string;
   slug: string;
+  razaoSocial: string | null;
+  cnpj: string | null;
+  email: string | null;
+  telefone: string | null;
   ativa: boolean;
   administradoresAtivos: number;
   administradoresPendentes: number;
@@ -55,13 +60,21 @@ function AdminEmpresasPage() {
   const navigate = useNavigate();
   const { nova } = Route.useSearch();
   const { usuario } = useAuth();
-  const { selecionarEmpresa, entrarModoCliente } = useTenant();
+  const { entrarModoCliente } = useTenant();
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [busca, setBusca] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [novoNome, setNovoNome] = useState("");
+  const [novaRazaoSocial, setNovaRazaoSocial] = useState("");
+  const [novoCnpj, setNovoCnpj] = useState("");
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novoTelefone, setNovoTelefone] = useState("");
   const [editando, setEditando] = useState<Empresa | null>(null);
   const [nomeEdicao, setNomeEdicao] = useState("");
+  const [razaoEdicao, setRazaoEdicao] = useState("");
+  const [cnpjEdicao, setCnpjEdicao] = useState("");
+  const [emailEdicao, setEmailEdicao] = useState("");
+  const [telefoneEdicao, setTelefoneEdicao] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [empresaOnboarding, setEmpresaOnboarding] = useState<Empresa | null>(null);
   const [adminNome, setAdminNome] = useState("");
@@ -110,7 +123,13 @@ function AdminEmpresasPage() {
     try {
       const criada = await apiJson<Empresa>("/api/super-admin/empresas", {
         method: "POST",
-        body: JSON.stringify({ nome }),
+        body: JSON.stringify({
+          nome,
+          razaoSocial: novaRazaoSocial.trim() || null,
+          cnpj: novoCnpj.trim() || null,
+          email: novoEmail.trim() || null,
+          telefone: novoTelefone.trim() || null,
+        }),
       });
       setEmpresas((atuais) => {
         const semDuplicar = atuais.filter((empresa) => empresa.id !== criada.id);
@@ -118,6 +137,10 @@ function AdminEmpresasPage() {
       });
       toast.success("Empresa criada. Agora crie o primeiro administrador.");
       setNovoNome("");
+      setNovaRazaoSocial("");
+      setNovoCnpj("");
+      setNovoEmail("");
+      setNovoTelefone("");
       iniciarAdmin(criada);
       await carregar();
     } catch (error) {
@@ -195,9 +218,15 @@ function AdminEmpresasPage() {
 
       <Card id="cadastro-empresa" className="scroll-mt-24 border-primary/20 bg-primary/[0.03]">
         <CardContent className="p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <Label htmlFor="nova-empresa-inline">Cadastrar empresa</Label>
+          <div className="mb-4">
+            <div className="text-sm font-semibold">Dados da empresa</div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Estes dados pertencem à empresa cliente. O administrador responsável é cadastrado separadamente na etapa seguinte.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label htmlFor="nova-empresa-inline">Nome fantasia</Label>
               <Input
                 id="nova-empresa-inline"
                 value={novoNome}
@@ -205,17 +234,49 @@ function AdminEmpresasPage() {
                 placeholder="Ex.: Líder"
                 autoComplete="organization"
               />
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Cria o ambiente da empresa primeiro. O administrador pode ser vinculado logo em seguida.
-              </p>
             </div>
+            <div>
+              <Label>Razão social</Label>
+              <Input
+                value={novaRazaoSocial}
+                onChange={(event) => setNovaRazaoSocial(event.target.value)}
+                placeholder="Razão social da empresa"
+              />
+            </div>
+            <div>
+              <Label>CNPJ</Label>
+              <Input
+                value={novoCnpj}
+                onChange={(event) => setNovoCnpj(formatCNPJ(event.target.value))}
+                placeholder="00.000.000/0000-00"
+              />
+            </div>
+            <div>
+              <Label>Telefone da empresa</Label>
+              <Input
+                value={novoTelefone}
+                onChange={(event) => setNovoTelefone(event.target.value)}
+                placeholder="Contato comercial"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label>E-mail da empresa</Label>
+              <Input
+                type="email"
+                value={novoEmail}
+                onChange={(event) => setNovoEmail(event.target.value)}
+                placeholder="contato@empresa.com.br"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end">
             <Button
               type="button"
               disabled={salvando || !novoNome.trim()}
               onClick={() => void criarEmpresa()}
             >
               <Plus className="mr-2 h-4 w-4" />
-              {salvando ? "Criando..." : "Criar empresa"}
+              {salvando ? "Criando..." : "Criar empresa e continuar"}
             </Button>
           </div>
         </CardContent>
@@ -241,7 +302,14 @@ function AdminEmpresasPage() {
                   </div>
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{empresa.nome}</div>
-                    <div className="mt-0.5 truncate text-xs text-muted-foreground">{empresa.slug}</div>
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {empresa.razaoSocial || empresa.slug}
+                    </div>
+                    {empresa.cnpj && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        CNPJ {formatCNPJ(empresa.cnpj)}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
@@ -295,9 +363,13 @@ function AdminEmpresasPage() {
                   onClick={() => {
                     setEditando(empresa);
                     setNomeEdicao(empresa.nome);
+                    setRazaoEdicao(empresa.razaoSocial ?? "");
+                    setCnpjEdicao(empresa.cnpj ? formatCNPJ(empresa.cnpj) : "");
+                    setEmailEdicao(empresa.email ?? "");
+                    setTelefoneEdicao(empresa.telefone ?? "");
                   }}
                 >
-                  <Pencil className="mr-1.5 h-3.5 w-3.5" /> Renomear
+                  <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar cadastro
                 </Button>
                 <Button
                   size="sm"
@@ -460,14 +532,42 @@ function AdminEmpresasPage() {
       </Dialog>
 
       <Dialog open={Boolean(editando)} onOpenChange={(open) => !open && setEditando(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Renomear empresa</DialogTitle>
-            <DialogDescription>Altera o nome exibido no ambiente operacional do cliente.</DialogDescription>
+            <DialogTitle>Editar cadastro da empresa</DialogTitle>
+            <DialogDescription>
+              Altere os dados da empresa cliente. Estes campos são independentes dos dados pessoais do administrador.
+            </DialogDescription>
           </DialogHeader>
-          <div>
-            <Label>Nome da empresa</Label>
-            <Input value={nomeEdicao} onChange={(event) => setNomeEdicao(event.target.value)} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label>Nome fantasia</Label>
+              <Input value={nomeEdicao} onChange={(event) => setNomeEdicao(event.target.value)} />
+            </div>
+            <div>
+              <Label>Razão social</Label>
+              <Input value={razaoEdicao} onChange={(event) => setRazaoEdicao(event.target.value)} />
+            </div>
+            <div>
+              <Label>CNPJ</Label>
+              <Input
+                value={cnpjEdicao}
+                onChange={(event) => setCnpjEdicao(formatCNPJ(event.target.value))}
+                placeholder="00.000.000/0000-00"
+              />
+            </div>
+            <div>
+              <Label>Telefone da empresa</Label>
+              <Input value={telefoneEdicao} onChange={(event) => setTelefoneEdicao(event.target.value)} />
+            </div>
+            <div className="md:col-span-2">
+              <Label>E-mail da empresa</Label>
+              <Input
+                type="email"
+                value={emailEdicao}
+                onChange={(event) => setEmailEdicao(event.target.value)}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditando(null)}>Cancelar</Button>
@@ -479,9 +579,16 @@ function AdminEmpresasPage() {
                 try {
                   await apiJson<Empresa>(`/api/super-admin/empresas/${editando.id}`, {
                     method: "PUT",
-                    body: JSON.stringify({ nome: nomeEdicao.trim(), ativa: editando.ativa }),
+                    body: JSON.stringify({
+                      nome: nomeEdicao.trim(),
+                      razaoSocial: razaoEdicao.trim() || null,
+                      cnpj: cnpjEdicao.trim() || null,
+                      email: emailEdicao.trim() || null,
+                      telefone: telefoneEdicao.trim() || null,
+                      ativa: editando.ativa,
+                    }),
                   });
-                  toast.success("Empresa atualizada");
+                  toast.success("Cadastro da empresa atualizado");
                   setEditando(null);
                   await carregar();
                 } catch (error) {
@@ -491,7 +598,7 @@ function AdminEmpresasPage() {
                 }
               }}
             >
-              {salvando ? "Salvando..." : "Salvar"}
+              {salvando ? "Salvando..." : "Salvar cadastro"}
             </Button>
           </DialogFooter>
         </DialogContent>
