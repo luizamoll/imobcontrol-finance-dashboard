@@ -8,6 +8,7 @@ import {
   Landmark,
   Receipt,
   RotateCcw,
+  Trash2,
   User,
   Users,
   Wallet,
@@ -23,6 +24,17 @@ import { apiJson } from "@/lib/api";
 import type { VendaUpdatePatch } from "@/lib/financeiro-api";
 import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -92,8 +104,10 @@ type PaginaClientesEdicao = {
 function VendaDetail() {
   const { id } = Route.useParams();
   const { empresaAtualId } = useTenant();
-  const { state, receberParcela, reverterParcela, updateVenda } = useStore();
+  const { state, receberParcela, reverterParcela, updateVenda, deleteVenda } = useStore();
+  const navigate = Route.useNavigate();
   const [editarAberta, setEditarAberta] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const [clientes, setClientes] = useState<ClienteEdicao[]>([]);
   useEffect(() => {
     if (!empresaAtualId) {
@@ -176,11 +190,53 @@ function VendaDetail() {
         title={v.compradorNome}
         description={`${emp.nome} · ${mat.unidade} · assinada em ${formatDate(v.dataContrato)}`}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <VendaStatusBadge status={v.status} />
             <Button size="sm" variant="outline" onClick={() => setEditarAberta(true)}>
               <Pencil className="mr-1 h-3.5 w-3.5" /> Editar venda
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="destructive">
+                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir venda
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Tem certeza que deseja excluir esta venda?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    A composição e as parcelas desta venda serão removidas, e a unidade {mat.unidade}
+                    voltará para Disponível. Vendas que já possuem histórico de recebimentos não podem
+                    ser excluídas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={excluindo}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={excluindo}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={async (event) => {
+                      event.preventDefault();
+                      setExcluindo(true);
+                      try {
+                        await deleteVenda(v.id);
+                        toast.success("Venda excluída. A unidade voltou a ficar disponível.");
+                        void navigate({ to: "/vendas" });
+                      } catch (error) {
+                        setExcluindo(false);
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Não foi possível excluir a venda",
+                        );
+                      }
+                    }}
+                  >
+                    {excluindo ? "Excluindo..." : "Sim, excluir venda"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         }
       />
