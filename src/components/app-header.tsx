@@ -1,4 +1,4 @@
-import { Bell, Building2, HelpCircle, LogOut, Search, ShieldCheck } from "lucide-react";
+import { Bell, Building2, HelpCircle, LogOut, Search, ShieldCheck, UserCog } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/lib/auth";
+import { temPermissao } from "@/lib/permissoes";
 import { brl0, formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { useTenant } from "@/lib/tenant";
@@ -392,6 +393,22 @@ export function AppHeader() {
             </Select>
           </div>
         )}
+        {(
+          simulandoCliente
+          || usuario?.perfil === "ADMIN"
+          || (usuario?.perfil === "USUARIO" && temPermissao(usuario, "EQUIPE_GERENCIAR"))
+        ) && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => void navigate({ to: "/equipe" })}
+          >
+            <UserCog className="mr-1.5 h-4 w-4" />
+            Equipe e acessos
+          </Button>
+        )}
+
         {simulandoCliente && (
           <Button
             variant="outline"
