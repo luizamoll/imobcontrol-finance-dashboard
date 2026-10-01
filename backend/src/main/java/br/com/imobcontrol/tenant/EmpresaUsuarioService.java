@@ -318,7 +318,11 @@ public class EmpresaUsuarioService {
         if (resultado.contains(PermissaoUsuario.EMPREENDIMENTOS_GERENCIAR)) {
             resultado.add(PermissaoUsuario.EMPREENDIMENTOS_VISUALIZAR);
         }
-        if (resultado.contains(PermissaoUsuario.VENDAS_GERENCIAR)) {
+        if (resultado.contains(PermissaoUsuario.VENDAS_GERENCIAR)
+                || resultado.contains(PermissaoUsuario.VENDAS_CRIAR)
+                || resultado.contains(PermissaoUsuario.VENDAS_EDITAR)
+                || resultado.contains(PermissaoUsuario.VENDAS_EXCLUIR)
+                || resultado.contains(PermissaoUsuario.VENDAS_HISTORICO_VISUALIZAR)) {
             resultado.add(PermissaoUsuario.VENDAS_VISUALIZAR);
         }
         if (resultado.contains(PermissaoUsuario.RECEBIMENTOS_REGISTRAR)
