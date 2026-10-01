@@ -484,6 +484,65 @@ class FinanceiroServiceTests {
     }
 
     @Test
+    void criaParcelasPersonalizadasComValoresEVencimentosIndependentes() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        null,
+                        BigDecimal.ZERO,
+                        new BigDecimal("50"),
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcela_personalizada", "Parcela especial 1",
+                                        new BigDecimal("10.00"), 1,
+                                        LocalDate.of(2026, 10, 5), "pendente"
+                                ),
+                                new VendaRequest.PagamentoRequest(
+                                        "parcela_personalizada", "Parcela especial 2",
+                                        new BigDecimal("8.50"), 1,
+                                        LocalDate.of(2026, 11, 18), "pendente"
+                                ),
+                                new VendaRequest.PagamentoRequest(
+                                        "parcela_personalizada", "Balão",
+                                        new BigDecimal("81.50"), 1,
+                                        LocalDate.of(2027, 3, 10), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        List<ParcelaResponse> geradas = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .toList();
+
+        assertEquals(3, geradas.size());
+        assertDinheiro("10.00", geradas.get(0).valor());
+        assertEquals(LocalDate.of(2026, 10, 5), geradas.get(0).vencimento());
+        assertDinheiro("8.50", geradas.get(1).valor());
+        assertEquals(LocalDate.of(2026, 11, 18), geradas.get(1).vencimento());
+        assertDinheiro("81.50", geradas.get(2).valor());
+        assertEquals(LocalDate.of(2027, 3, 10), geradas.get(2).vencimento());
+        assertEquals("parcela_personalizada", geradas.get(2).origemTipo());
+    }
+
+    @Test
     void ajustaUltimaParcelaQuandoDivisaoGeraDizimaPeriodica() {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
