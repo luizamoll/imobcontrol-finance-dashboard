@@ -32,6 +32,7 @@ export type PagamentoTipo =
   | "sinal"
   | "sinal_parcelado"
   | "parcelas"
+  | "parcela_personalizada"
   | "bem"
   | "sem_sinal"
   | "outro";
