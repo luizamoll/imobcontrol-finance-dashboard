@@ -159,13 +159,14 @@ function VendasPage() {
 
 function emptyItem(tipo: PagamentoTipo, dataContrato: string): PagamentoItem {
   const parcelado = tipo === "parcelas" || tipo === "sinal_parcelado";
+  const personalizada = tipo === "parcela_personalizada";
   return {
     id: uid(),
     tipo,
     descricao: "",
     valor: 0,
     parcelas: 1,
-    primeiroVencimento: parcelado ? addMonths(dataContrato, 1) : dataContrato,
+    primeiroVencimento: parcelado || personalizada ? addMonths(dataContrato, 1) : dataContrato,
     status: "pendente",
   };
 }
@@ -184,6 +185,8 @@ function descricaoPlaceholder(tipo: PagamentoTipo) {
       return "Ex.: entrada parcelada";
     case "parcelas":
       return "Ex.: parcelas mensais";
+    case "parcela_personalizada":
+      return "Ex.: reforço, balão ou parcela especial";
     case "bem":
       return "Ex.: veículo dado como parte do pagamento";
     default:
@@ -640,7 +643,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             <Button size="sm" variant="outline" onClick={() => adicionar("avista")}>+ À vista</Button>
             <Button size="sm" variant="outline" onClick={() => adicionar("sinal")}>+ Sinal</Button>
             <Button size="sm" variant="outline" onClick={() => adicionar("sinal_parcelado")}>+ Sinal parcelado</Button>
-            <Button size="sm" variant="outline" onClick={() => adicionar("parcelas")}>+ Parcelas</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("parcelas")}>+ Parcelas iguais</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("parcela_personalizada")}>+ Parcela personalizada</Button>
             <Button size="sm" variant="outline" onClick={() => adicionar("bem")}>+ Bem</Button>
             <Button size="sm" variant="outline" onClick={() => adicionar("outro")}>+ Outro</Button>
           </div>
@@ -669,7 +673,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                           <SelectItem value="avista">À vista</SelectItem>
                           <SelectItem value="sinal">Sinal</SelectItem>
                           <SelectItem value="sinal_parcelado">Sinal parcelado</SelectItem>
-                          <SelectItem value="parcelas">Parcelas</SelectItem>
+                          <SelectItem value="parcelas">Parcelas iguais</SelectItem>
+                          <SelectItem value="parcela_personalizada">Parcela personalizada</SelectItem>
                           <SelectItem value="bem">Bem material</SelectItem>
                           <SelectItem value="outro">Outro</SelectItem>
                         </SelectContent>
@@ -745,6 +750,12 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                         <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
                           As próximas parcelas serão geradas mensalmente a partir desta data. Você não precisa
                           configurar uma por uma.
+                        </p>
+                      )}
+                      {item.tipo === "parcela_personalizada" && (
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                          Esta parcela terá valor e vencimento próprios. Adicione outra parcela personalizada
+                          para cada valor/data diferente do contrato.
                         </p>
                       )}
                     </div>
