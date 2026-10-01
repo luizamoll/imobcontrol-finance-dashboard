@@ -49,10 +49,6 @@ public class AuditoriaOperacional {
             Long entidadeId,
             String acao
     ) {
-        this.empresaId = empresaId;
-        this.usuarioId = usuarioId;
-        this.entidade = entidade;
-        this.entidadeId = entidadeId;
         this(empresaId, usuarioId, entidade, entidadeId, acao, null);
     }
 
