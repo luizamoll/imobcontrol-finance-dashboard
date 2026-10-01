@@ -9,6 +9,7 @@ export type PermissaoUsuario =
   | "VENDAS_CRIAR"
   | "VENDAS_EDITAR"
   | "VENDAS_EXCLUIR"
+  | "VENDAS_HISTORICO_VISUALIZAR"
   | "VENDAS_GERENCIAR"
   | "RECEBIMENTOS_VISUALIZAR"
   | "RECEBIMENTOS_REGISTRAR"
@@ -27,6 +28,7 @@ export const TODAS_PERMISSOES: PermissaoUsuario[] = [
   "VENDAS_CRIAR",
   "VENDAS_EDITAR",
   "VENDAS_EXCLUIR",
+  "VENDAS_HISTORICO_VISUALIZAR",
   "RECEBIMENTOS_VISUALIZAR",
   "RECEBIMENTOS_REGISTRAR",
   "RECEBIMENTOS_ESTORNAR",
@@ -65,6 +67,7 @@ export const GRUPOS_PERMISSOES: Array<{
       { id: "VENDAS_CRIAR", label: "Cadastrar novas vendas" },
       { id: "VENDAS_EDITAR", label: "Editar vendas" },
       { id: "VENDAS_EXCLUIR", label: "Excluir vendas" },
+      { id: "VENDAS_HISTORICO_VISUALIZAR", label: "Visualizar histórico de alterações das vendas" },
     ],
   },
   {
@@ -103,6 +106,7 @@ export const PRESETS_PERMISSOES: Record<string, PermissaoUsuario[]> = {
     "VENDAS_CRIAR",
     "VENDAS_EDITAR",
     "VENDAS_EXCLUIR",
+    "VENDAS_HISTORICO_VISUALIZAR",
   ],
   financeiro: [
     "CLIENTES_VISUALIZAR",
