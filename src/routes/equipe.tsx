@@ -108,7 +108,7 @@ function atualizarPermissao(
 
   if (ativa) {
     set.add(permissao);
-    if ((["VENDAS_CRIAR", "VENDAS_EDITAR", "VENDAS_EXCLUIR"] as PermissaoUsuario[]).includes(permissao)) {
+    if ((["VENDAS_CRIAR", "VENDAS_EDITAR", "VENDAS_EXCLUIR", "VENDAS_HISTORICO_VISUALIZAR"] as PermissaoUsuario[]).includes(permissao)) {
       set.add("VENDAS_VISUALIZAR");
     }
   } else {
@@ -117,6 +117,7 @@ function atualizarPermissao(
       set.delete("VENDAS_CRIAR");
       set.delete("VENDAS_EDITAR");
       set.delete("VENDAS_EXCLUIR");
+      set.delete("VENDAS_HISTORICO_VISUALIZAR");
     }
   }
 
