@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface AuditoriaOperacionalRepository
         extends JpaRepository<AuditoriaOperacional, Long> {
 
@@ -20,5 +22,11 @@ public interface AuditoriaOperacionalRepository
             @Param("empresaId") Long empresaId,
             @Param("acao") String acao,
             Pageable pageable
+    );
+
+    List<AuditoriaOperacional> findAllByEmpresaIdAndEntidadeAndEntidadeIdOrderByCriadoEmDescIdDesc(
+            Long empresaId,
+            String entidade,
+            Long entidadeId
     );
 }
