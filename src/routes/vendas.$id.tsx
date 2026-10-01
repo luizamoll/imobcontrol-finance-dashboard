@@ -103,6 +103,16 @@ type PaginaClientesEdicao = {
   content: ClienteEdicao[];
 };
 
+type HistoricoVendaItem = {
+  id: number;
+  usuarioId: number;
+  usuarioNome: string;
+  acao: string;
+  detalhes: string | null;
+  criadoEm: string;
+};
+
+
 function VendaDetail() {
   const { id } = Route.useParams();
   const { empresaAtualId } = useTenant();
@@ -110,10 +120,13 @@ function VendaDetail() {
   const { state, receberParcela, reverterParcela, updateVenda, deleteVenda } = useStore();
   const podeEditarVenda = temPermissao(usuario, "VENDAS_EDITAR");
   const podeExcluirVenda = temPermissao(usuario, "VENDAS_EXCLUIR");
+  const podeVerHistorico = temPermissao(usuario, "VENDAS_HISTORICO_VISUALIZAR");
   const navigate = Route.useNavigate();
   const [editarAberta, setEditarAberta] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [clientes, setClientes] = useState<ClienteEdicao[]>([]);
+  const [historico, setHistorico] = useState<HistoricoVendaItem[]>([]);
+  const [historicoRefresh, setHistoricoRefresh] = useState(0);
   useEffect(() => {
     if (!empresaAtualId) {
       setClientes([]);
@@ -135,6 +148,28 @@ function VendaDetail() {
       cancelado = true;
     };
   }, [empresaAtualId]);
+
+  useEffect(() => {
+    if (!empresaAtualId || !podeVerHistorico) {
+      setHistorico([]);
+      return;
+    }
+
+    let cancelado = false;
+    void apiJson<HistoricoVendaItem[]>(`/api/vendas/${id}/historico`, {
+      empresaId: empresaAtualId,
+    })
+      .then((registros) => {
+        if (!cancelado) setHistorico(registros);
+      })
+      .catch(() => {
+        if (!cancelado) setHistorico([]);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId, id, podeVerHistorico, historicoRefresh]);
 
   const v = state.vendas.find((x) => x.id === id);
   if (!v) throw notFound();
@@ -260,6 +295,7 @@ function VendaDetail() {
               await updateVenda(v.id, patch);
               toast.success("Venda atualizada");
               setEditarAberta(false);
+              setHistoricoRefresh((valor) => valor + 1);
             } catch (error) {
               toast.error(
                 error instanceof Error ? error.message : "Não foi possível atualizar a venda",
@@ -526,6 +562,57 @@ function VendaDetail() {
         </CardContent>
       </Card>
 
+      {podeVerHistorico && (
+        <Card className="border-border/70">
+          <CardHeader>
+            <CardTitle className="text-base">Histórico de alterações</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Registro de criação e edições desta venda, com usuário, data/hora e campos alterados.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {historico.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/80 p-5 text-center text-sm text-muted-foreground">
+                Nenhuma alteração registrada ainda.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {historico.map((registro) => (
+                  <div key={registro.id} className="rounded-lg border border-border/70 p-4">
+                    <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-center">
+                      <div className="font-medium">
+                        {registro.acao === "CRIACAO"
+                          ? "Venda criada"
+                          : registro.acao === "ATUALIZACAO"
+                            ? "Venda alterada"
+                            : registro.acao === "EXCLUSAO"
+                              ? "Venda excluída"
+                              : registro.acao}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(registro.criadoEm).toLocaleString("pt-BR")}
+                      </div>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Por {registro.usuarioNome}
+                    </div>
+                    {registro.detalhes && (
+                      <div className="mt-3 space-y-1 text-sm">
+                        {registro.detalhes.split("\n").map((linha, indice) => (
+                          <div key={indice} className="leading-5">
+                            {linha}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <DistribuicaoFinanceira
         movimentos={movs}
         empreendimentos={state.empreendimentos}
@@ -535,9 +622,9 @@ function VendaDetail() {
 
       <Card className="border-border/70">
         <CardHeader>
-          <CardTitle className="text-base">Histórico de auditoria</CardTitle>
+          <CardTitle className="text-base">Histórico de recebimentos</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Cada linha registra a distribuição efetivamente aplicada no recebimento.
+            Cada linha registra a distribuição financeira efetivamente aplicada em cada recebimento.
           </p>
         </CardHeader>
         <CardContent className="p-0">
