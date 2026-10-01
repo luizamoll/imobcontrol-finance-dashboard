@@ -28,7 +28,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -148,7 +150,15 @@ public class FinanceiroService {
         unidade.setAtualizadoPorUsuarioId(ctx.usuarioId());
         unidades.saveAndFlush(unidade);
 
-        registrar(ctx, "VENDA", salva.getId(), "CRIACAO");
+        registrar(
+                ctx,
+                "VENDA",
+                salva.getId(),
+                "CRIACAO",
+                "Venda criada para " + cliente.getNome()
+                        + " no valor de " + dinheiro(salva.getValorTotal())
+                        + " · contrato em " + dataLegivel(salva.getDataContrato())
+        );
         return toVendaResponse(ctx.empresaId(), salva);
     }
 
@@ -168,18 +178,30 @@ public class FinanceiroService {
             );
         }
 
-        cliente(ctx.empresaId(), body.clienteId());
+        Cliente clienteAtualizado = cliente(ctx.empresaId(), body.clienteId());
         boolean possuiRecebimentos =
                 movimentos.existsByEmpresaIdAndVendaIdAndEstornadoFalse(ctx.empresaId(), atual.getId());
+        JsonNode regrasAtuais = ler(atual.getRegrasJson());
         JsonNode regrasAtualizadas = aplicarInadimplencia(
-                ler(atual.getRegrasJson()),
+                regrasAtuais,
                 body.regrasInadimplencia()
+        );
+        boolean composicaoAlterada =
+                !mesmaComposicao(ctx.empresaId(), atual.getId(), body.composicao());
+        String detalhesAlteracao = descreverAlteracoesVenda(
+                ctx.empresaId(),
+                atual,
+                body,
+                clienteAtualizado,
+                regrasAtuais,
+                regrasAtualizadas,
+                composicaoAlterada
         );
 
         if (possuiRecebimentos) {
             if (!Objects.equals(atual.getClienteId(), body.clienteId())
                     || atual.getValorTotal().compareTo(moeda(body.valorTotal())) != 0
-                    || !mesmaComposicao(ctx.empresaId(), atual.getId(), body.composicao())) {
+                    || composicaoAlterada) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         "A venda já possui recebimentos. Cliente, valor e parcelas não podem ser reescritos."
@@ -210,7 +232,13 @@ public class FinanceiroService {
 
         Venda salva = vendas.saveAndFlush(atual);
         atualizarRegrasParcelasAbertas(ctx.empresaId(), salva.getId(), regrasAtualizadas);
-        registrar(ctx, "VENDA", salva.getId(), "ATUALIZACAO");
+        registrar(
+                ctx,
+                "VENDA",
+                salva.getId(),
+                "ATUALIZACAO",
+                detalhesAlteracao.isBlank() ? "Venda salva sem alteração material identificada." : detalhesAlteracao
+        );
         return toVendaResponse(ctx.empresaId(), salva);
     }
 
@@ -240,7 +268,43 @@ public class FinanceiroService {
         unidade.setAtualizadoPorUsuarioId(ctx.usuarioId());
         unidades.saveAndFlush(unidade);
 
-        registrar(ctx, "VENDA", id, "EXCLUSAO");
+        registrar(
+                ctx,
+                "VENDA",
+                id,
+                "EXCLUSAO",
+                "Venda excluída · valor " + dinheiro(atual.getValorTotal())
+                        + " · unidade devolvida para Disponível"
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<VendaHistoricoResponse> listarHistoricoVenda(
+            Authentication auth,
+            Long empresaSolicitada,
+            Long vendaId
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        venda(ctx.empresaId(), vendaId);
+
+        return auditoria
+                .findAllByEmpresaIdAndEntidadeAndEntidadeIdOrderByCriadoEmDescIdDesc(
+                        ctx.empresaId(),
+                        "VENDA",
+                        vendaId
+                )
+                .stream()
+                .map(registro -> new VendaHistoricoResponse(
+                        registro.getId(),
+                        registro.getUsuarioId(),
+                        usuarios.findById(registro.getUsuarioId())
+                                .map(usuario -> usuario.getNome())
+                                .orElse("Usuário #" + registro.getUsuarioId()),
+                        registro.getAcao(),
+                        registro.getDetalhes(),
+                        registro.getCriadoEm()
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -822,11 +886,163 @@ public class FinanceiroService {
         return n.isMissingNode() || n.isNull() ? padrao : n.asText();
     }
 
+    private String descreverAlteracoesVenda(
+            Long empresaId,
+            Venda atual,
+            VendaRequest body,
+            Cliente clienteAtualizado,
+            JsonNode regrasAtuais,
+            JsonNode regrasAtualizadas,
+            boolean composicaoAlterada
+    ) {
+        List<String> alteracoes = new ArrayList<>();
+
+        if (!Objects.equals(atual.getClienteId(), body.clienteId())) {
+            String clienteAnterior = clientes.findById(atual.getClienteId())
+                    .map(Cliente::getNome)
+                    .orElse("Cliente #" + atual.getClienteId());
+            alteracoes.add("Cliente: " + clienteAnterior + " → " + clienteAtualizado.getNome());
+        }
+
+        BigDecimal novoValor = moeda(body.valorTotal());
+        if (atual.getValorTotal().compareTo(novoValor) != 0) {
+            alteracoes.add("Valor da venda: " + dinheiro(atual.getValorTotal()) + " → " + dinheiro(novoValor));
+        }
+
+        if (!Objects.equals(atual.getDataContrato(), body.dataContrato())) {
+            alteracoes.add(
+                    "Data do contrato: " + dataLegivel(atual.getDataContrato())
+                            + " → " + dataLegivel(body.dataContrato())
+            );
+        }
+
+        String corretorAnterior = texto(atual.getCorretorNome());
+        String corretorNovo = texto(body.corretorNome());
+        if (!Objects.equals(corretorAnterior, corretorNovo)) {
+            alteracoes.add("Corretor: " + textoLegivel(corretorAnterior) + " → " + textoLegivel(corretorNovo));
+        }
+
+        BigDecimal comissaoNova = percentual(body.corretorPct());
+        if (atual.getCorretorPct().compareTo(comissaoNova) != 0) {
+            alteracoes.add("Comissão total: " + percentualLegivel(atual.getCorretorPct())
+                    + " → " + percentualLegivel(comissaoNova));
+        }
+
+        BigDecimal repasseNovo = percentual(body.repasseComissaoPct());
+        if (atual.getRepasseComissaoPct().compareTo(repasseNovo) != 0) {
+            alteracoes.add("Repasse por recebimento: " + percentualLegivel(atual.getRepasseComissaoPct())
+                    + " → " + percentualLegivel(repasseNovo));
+        }
+
+        if (atual.isComissaoSobreAcrescimos() != body.comissaoSobreAcrescimos()) {
+            alteracoes.add(
+                    "Comissão sobre acréscimos: "
+                            + simNao(atual.isComissaoSobreAcrescimos())
+                            + " → " + simNao(body.comissaoSobreAcrescimos())
+            );
+        }
+
+        String observacaoAnterior = texto(atual.getObservacoes());
+        String observacaoNova = texto(body.observacoes());
+        if (!Objects.equals(observacaoAnterior, observacaoNova)) {
+            alteracoes.add("Observações: " + textoLegivel(observacaoAnterior) + " → " + textoLegivel(observacaoNova));
+        }
+
+        if (!Objects.equals(
+                regrasAtuais.path("inadimplencia"),
+                regrasAtualizadas.path("inadimplencia")
+        )) {
+            alteracoes.add("Regras de juros, correção, multa ou tolerância foram alteradas.");
+        }
+
+        if (composicaoAlterada) {
+            alteracoes.add(
+                    "Composição do pagamento: "
+                            + resumoComposicaoAtual(empresaId, atual.getId())
+                            + " → " + resumoComposicaoNova(body.composicao())
+            );
+        }
+
+        return String.join("\n", alteracoes);
+    }
+
+    private String resumoComposicaoAtual(Long empresaId, Long vendaId) {
+        return pagamentos.findAllByEmpresaIdAndVendaIdOrderByIdAsc(empresaId, vendaId)
+                .stream()
+                .map(item -> resumoPagamento(
+                        item.getTipo(),
+                        item.getDescricao(),
+                        item.getValor(),
+                        item.getParcelas(),
+                        item.getPrimeiroVencimento()
+                ))
+                .reduce((a, b) -> a + "; " + b)
+                .orElse("sem composição");
+    }
+
+    private String resumoComposicaoNova(List<VendaRequest.PagamentoRequest> itens) {
+        return itens.stream()
+                .map(item -> resumoPagamento(
+                        item.tipo(),
+                        item.descricao(),
+                        moeda(item.valor()),
+                        item.parcelas(),
+                        item.primeiroVencimento()
+                ))
+                .reduce((a, b) -> a + "; " + b)
+                .orElse("sem composição");
+    }
+
+    private String resumoPagamento(
+            String tipo,
+            String descricao,
+            BigDecimal valor,
+            Integer parcelasQuantidade,
+            LocalDate vencimento
+    ) {
+        int quantidade = parcelado(tipo) ? Math.max(1, parcelasQuantidade == null ? 1 : parcelasQuantidade) : 1;
+        String nome = texto(descricao) == null ? tipo : descricao.trim();
+        return nome + " · " + quantidade + "x " + dinheiro(valor)
+                + " · início " + dataLegivel(vencimento);
+    }
+
+    private String dinheiro(BigDecimal valor) {
+        if (valor == null) return "—";
+        return "R$ " + moeda(valor).toPlainString().replace('.', ',');
+    }
+
+    private String percentualLegivel(BigDecimal valor) {
+        if (valor == null) return "0%";
+        return valor.stripTrailingZeros().toPlainString().replace('.', ',') + "%";
+    }
+
+    private String dataLegivel(LocalDate data) {
+        return data == null ? "—" : data.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    }
+
+    private String textoLegivel(String valor) {
+        return texto(valor) == null ? "—" : valor.trim();
+    }
+
+    private String simNao(boolean valor) {
+        return valor ? "Sim" : "Não";
+    }
+
     private void registrar(
             TenantContextService.Contexto ctx, String entidade, Long entidadeId, String acao
     ) {
+        registrar(ctx, entidade, entidadeId, acao, null);
+    }
+
+    private void registrar(
+            TenantContextService.Contexto ctx,
+            String entidade,
+            Long entidadeId,
+            String acao,
+            String detalhes
+    ) {
         auditoria.save(new AuditoriaOperacional(
-                ctx.empresaId(), ctx.usuarioId(), entidade, entidadeId, acao
+                ctx.empresaId(), ctx.usuarioId(), entidade, entidadeId, acao, detalhes
         ));
     }
 }
