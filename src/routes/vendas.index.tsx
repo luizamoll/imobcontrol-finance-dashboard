@@ -1,0 +1,874 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Calculator, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+
+import { PageHeader, PageShell } from "@/components/page-shell";
+import { apiJson } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { temPermissao } from "@/lib/permissoes";
+import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/currency-input";
+import { RegrasInadimplenciaForm } from "@/components/regras-inadimplencia-form";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { VendaStatusBadge } from "@/components/status-badges";
+import {
+  regrasEfetivasUnidade,
+  useStore,
+  vendaTotais,
+  type PagamentoItem,
+  type PagamentoTipo,
+  type RegrasInadimplencia,
+} from "@/lib/store";
+import { addMonths, brl, formatDate, todayISO, uid } from "@/lib/format";
+import { useTenant } from "@/lib/tenant";
+
+export const Route = createFileRoute("/vendas/")({
+  component: VendasPage,
+});
+
+function VendasPage() {
+  const { state } = useStore();
+  const { usuario } = useAuth();
+  const podeCriarVenda = temPermissao(usuario, "VENDAS_CRIAR");
+  const [open, setOpen] = useState(false);
+
+  return (
+    <PageShell>
+      <PageHeader
+        eyebrow="Comercial"
+        title="Vendas"
+        description="Registre o valor negociado, a composição real do pagamento e as regras aplicáveis ao contrato."
+        actions={
+          podeCriarVenda ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" /> Nova venda
+                </Button>
+              </DialogTrigger>
+              <NewVendaDialog onClose={() => setOpen(false)} />
+            </Dialog>
+          ) : null
+        }
+      />
+
+      <Card className="border-border/70">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Contrato</TableHead>
+                <TableHead>Comprador</TableHead>
+                <TableHead>Empreendimento</TableHead>
+                <TableHead>Corretor</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead className="text-right">Valor total</TableHead>
+                <TableHead className="text-right">Recebido</TableHead>
+                <TableHead className="text-right">Saldo financeiro</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {state.vendas.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                    Nenhuma venda registrada.
+                  </TableCell>
+                </TableRow>
+              )}
+              {state.vendas.map((v) => {
+                const emp = state.empreendimentos.find((e) => e.id === v.empreendimentoId);
+                const mat = state.matriculas.find((m) => m.id === v.matriculaId);
+                const t = vendaTotais(v, state.parcelas);
+                return (
+                  <TableRow key={v.id}>
+                    <TableCell>
+                      <Link
+                        to="/vendas/$id"
+                        params={{ id: v.id }}
+                        className="flex items-center gap-2 hover:text-primary"
+                      >
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+                          <ShoppingCart className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium">{mat?.numero || "—"}</div>
+                          <div className="text-xs text-muted-foreground">{mat?.unidade}</div>
+                        </div>
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-sm">{v.compradorNome}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {emp ? (
+                        <Link
+                          to="/empreendimentos/$id"
+                          params={{ id: emp.id }}
+                          className="hover:text-primary"
+                        >
+                          {emp.nome}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">{v.corretorNome || "—"}</TableCell>
+                    <TableCell className="text-sm">{formatDate(v.dataContrato)}</TableCell>
+                    <TableCell className="text-right font-medium">{brl(v.valorTotal)}</TableCell>
+                    <TableCell className="text-right text-success">{brl(t.recebido)}</TableCell>
+                    <TableCell className="text-right">{brl(t.saldo)}</TableCell>
+                    <TableCell><VendaStatusBadge status={v.status} /></TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </PageShell>
+  );
+}
+
+function emptyItem(tipo: PagamentoTipo, dataContrato: string): PagamentoItem {
+  const parcelado = tipo === "parcelas" || tipo === "sinal_parcelado";
+  return {
+    id: uid(),
+    tipo,
+    descricao: "",
+    valor: 0,
+    parcelas: 1,
+    primeiroVencimento: parcelado ? addMonths(dataContrato, 1) : dataContrato,
+    status: "pendente",
+  };
+}
+
+function itemParcelado(tipo: PagamentoTipo) {
+  return tipo === "parcelas" || tipo === "sinal_parcelado";
+}
+
+function descricaoPlaceholder(tipo: PagamentoTipo) {
+  switch (tipo) {
+    case "avista":
+      return "Ex.: pagamento integral na assinatura";
+    case "sinal":
+      return "Ex.: entrada na assinatura";
+    case "sinal_parcelado":
+      return "Ex.: entrada parcelada";
+    case "parcelas":
+      return "Ex.: parcelas mensais";
+    case "bem":
+      return "Ex.: veículo dado como parte do pagamento";
+    default:
+      return "Descreva esta parte do pagamento";
+  }
+}
+
+type ClienteVenda = {
+  id: number;
+  nome: string;
+  cpf: string | null;
+};
+
+type PaginaClientes = {
+  content: ClienteVenda[];
+};
+
+function NewVendaDialog({ onClose }: { onClose: () => void }) {
+  const { state, addVenda } = useStore();
+  const { empresaAtualId } = useTenant();
+  const [empId, setEmpId] = useState("");
+  const [matId, setMatId] = useState("");
+  const [clienteId, setClienteId] = useState("");
+  const [clientes, setClientes] = useState<ClienteVenda[]>([]);
+  const [carregandoClientes, setCarregandoClientes] = useState(false);
+  const [valorNegociado, setValorNegociado] = useState(0);
+  const [dataContrato, setDataContrato] = useState(todayISO());
+  const [corretor, setCorretor] = useState("");
+  const [corretorPct, setCorretorPct] = useState("0");
+  const [repasseComissaoPct, setRepasseComissaoPct] = useState("50");
+  const [comissaoSobreAcrescimos, setComissaoSobreAcrescimos] = useState("nao");
+  const [regrasInadimplencia, setRegrasInadimplencia] =
+    useState<RegrasInadimplencia | null>(null);
+  const [obs, setObs] = useState("");
+  const [items, setItems] = useState<PagamentoItem[]>([]);
+
+  useEffect(() => {
+    if (!empresaAtualId) {
+      setClientes([]);
+      return;
+    }
+
+    let cancelado = false;
+    setCarregandoClientes(true);
+    void apiJson<PaginaClientes>("/api/clientes?pagina=0&tamanho=100", {
+      empresaId: empresaAtualId,
+    })
+      .then((pagina) => {
+        if (!cancelado) setClientes(pagina.content);
+      })
+      .catch((error) => {
+        if (!cancelado) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível carregar os clientes",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setCarregandoClientes(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId]);
+
+  const clienteSelecionado = clientes.find(
+    (cliente) => String(cliente.id) === clienteId,
+  );
+
+  const empreendimento = state.empreendimentos.find((e) => e.id === empId);
+  const matricula = state.matriculas.find((m) => m.id === matId);
+  const quadra = matricula?.quadraId
+    ? state.quadras.find((q) => q.id === matricula.quadraId)
+    : undefined;
+  const regraSelecionada =
+    empreendimento && matricula
+      ? regrasEfetivasUnidade(empreendimento, matricula, quadra, state.config)
+      : null;
+
+  const matriculas = useMemo(
+    () =>
+      state.matriculas.filter(
+        (m) => m.empreendimentoId === empId && m.status === "disponivel",
+      ),
+    [state.matriculas, empId],
+  );
+
+  const valorContrato = valorNegociado;
+  const valorContratoCentavos = Math.round(valorContrato * 100);
+  const totalComposicaoCentavos = items.reduce((total, item) => {
+    const quantidade = itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1;
+    return total + Math.round(item.valor * 100) * quantidade;
+  }, 0);
+  const totalComposicao = totalComposicaoCentavos / 100;
+  const diferencaCentavos = valorContratoCentavos - totalComposicaoCentavos;
+  const diferenca = diferencaCentavos / 100;
+  const parcelasAjustaveis = items.reduce(
+    (total, item) =>
+      total + (itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 0),
+    0,
+  );
+  const limiteArredondamentoCentavos = Math.max(1, Math.ceil(parcelasAjustaveis / 2));
+  const ajusteAutomatico =
+    valorContrato > 0 &&
+    parcelasAjustaveis > 0 &&
+    diferencaCentavos !== 0 &&
+    Math.abs(diferencaCentavos) <= limiteArredondamentoCentavos;
+  const composicaoConfere =
+    valorContrato > 0 && (diferencaCentavos === 0 || ajusteAutomatico);
+
+  const adicionar = (tipo: PagamentoTipo) => {
+    setItems((atuais) => [...atuais, emptyItem(tipo, dataContrato)]);
+  };
+
+  const alterarTipo = (idx: number, tipo: PagamentoTipo) => {
+    setItems((atuais) =>
+      atuais.map((item, i) =>
+        i === idx
+          ? {
+              ...item,
+              tipo,
+              descricao: "",
+              parcelas: itemParcelado(tipo) ? Math.max(1, item.parcelas || 1) : 1,
+            }
+          : item,
+      ),
+    );
+  };
+
+  const dividirSaldoAutomaticamente = (idx: number) => {
+    const item = items[idx];
+    if (!item || !itemParcelado(item.tipo) || valorContratoCentavos <= 0) return;
+
+    const quantidade = Math.max(1, item.parcelas);
+    const outrosCentavos = items.reduce((total, atual, i) => {
+      if (i === idx) return total;
+      const qtd = itemParcelado(atual.tipo) ? Math.max(1, atual.parcelas) : 1;
+      return total + Math.round(atual.valor * 100) * qtd;
+    }, 0);
+    const saldoCentavos = valorContratoCentavos - outrosCentavos;
+
+    if (saldoCentavos <= 0) {
+      toast.error("Não há saldo positivo para dividir nesta linha.");
+      return;
+    }
+
+    const valorBaseCentavos = Math.round(saldoCentavos / quantidade);
+    setItems((atuais) =>
+      atuais.map((atual, i) =>
+        i === idx ? { ...atual, valor: valorBaseCentavos / 100 } : atual,
+      ),
+    );
+  };
+
+  const submit = async () => {
+    if (!empId || !matId || !clienteId || !clienteSelecionado) {
+      toast.error("Preencha empreendimento, unidade e cliente");
+      return;
+    }
+    if (valorContrato <= 0) {
+      toast.error("Informe o valor negociado do contrato");
+      return;
+    }
+    if (items.length === 0 || items.some((item) => item.valor <= 0)) {
+      toast.error("Informe a composição real do pagamento");
+      return;
+    }
+    if (!composicaoConfere) {
+      toast.error("A composição do pagamento não fecha com o valor negociado", {
+        description: `Valor negociado: ${brl(valorContrato)} · composição: ${brl(totalComposicao)}.`,
+      });
+      return;
+    }
+    const pctCorretor = Number(corretorPct) || 0;
+    const pctRepasse = Number(repasseComissaoPct) || 0;
+    if (pctCorretor < 0 || pctCorretor > 100 || pctRepasse < 0 || pctRepasse > 100) {
+      toast.error("Os percentuais da comissão devem ficar entre 0% e 100%");
+      return;
+    }
+    if (pctCorretor > 0 && !corretor) {
+      toast.error("Selecione o corretor responsável ou informe comissão de 0%");
+      return;
+    }
+
+    try {
+      await addVenda({
+        empreendimentoId: empId,
+        matriculaId: matId,
+        clienteId,
+        compradorNome: clienteSelecionado.nome,
+        valorTotal: valorContrato,
+        dataContrato,
+        corretorNome: corretor,
+        corretorPct: pctCorretor,
+        repasseComissaoPct: pctRepasse,
+        comissaoSobreAcrescimos: comissaoSobreAcrescimos === "sim",
+        regrasInadimplencia:
+          regrasInadimplencia ?? regraSelecionada?.regras.inadimplencia,
+        observacoes: obs,
+        composicao: items,
+      });
+      toast.success("Venda registrada");
+      onClose();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível registrar a venda",
+      );
+    }
+  };
+
+  return (
+    <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>Nova venda</DialogTitle>
+        <DialogDescription>
+          Selecione primeiro o empreendimento e a unidade. O sistema identifica a regra financeira
+          mais específica disponível e congela essa regra no contrato.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Empreendimento</Label>
+          <Select
+            value={empId}
+            onValueChange={(value) => {
+              setEmpId(value);
+              setMatId("");
+              setValorNegociado(0);
+              setCorretorPct("0");
+              setRepasseComissaoPct("50");
+              setComissaoSobreAcrescimos("nao");
+              setRegrasInadimplencia(null);
+              setItems([]);
+            }}
+          >
+            <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+            <SelectContent>
+              {state.empreendimentos.map((e) => (
+                <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>Matrícula / Unidade</Label>
+          <Select
+            value={matId}
+            onValueChange={(value) => {
+              setMatId(value);
+              const selecionada = state.matriculas.find((m) => m.id === value);
+              setValorNegociado(selecionada?.valorVenda ?? 0);
+              setItems([]);
+              if (empreendimento && selecionada) {
+                const q = selecionada.quadraId
+                  ? state.quadras.find((item) => item.id === selecionada.quadraId)
+                  : undefined;
+                const efetiva = regrasEfetivasUnidade(
+                  empreendimento,
+                  selecionada,
+                  q,
+                  state.config,
+                );
+                setCorretorPct(String(efetiva.regras.corretorPct));
+                setRepasseComissaoPct(String(efetiva.regras.repasseComissaoPct ?? 50));
+                setComissaoSobreAcrescimos(
+                  efetiva.regras.comissaoSobreAcrescimos ? "sim" : "nao",
+                );
+                setRegrasInadimplencia({ ...efetiva.regras.inadimplencia });
+              }
+            }}
+            disabled={!empId || matriculas.length === 0}
+          >
+            <SelectTrigger>
+              <SelectValue
+                placeholder={
+                  !empId
+                    ? "Escolha o empreendimento"
+                    : matriculas.length === 0
+                      ? "Nenhuma unidade disponível"
+                      : "Selecione"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {matriculas.map((m) => (
+                <SelectItem key={m.id} value={m.id}>{m.numero} · {m.unidade}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {regraSelecionada && empreendimento && (
+          <div className="sm:col-span-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
+            <span className="text-muted-foreground">Regra financeira identificada: </span>
+            <strong>{descricaoOrigemRegra(regraSelecionada.origem, empreendimento.nome, quadra?.nome)}</strong>
+            <span className="text-muted-foreground">
+              {` · tributação ${regraSelecionada.regras.aliquotaTributaria}% · corretor ${regraSelecionada.regras.corretorPct}% · sócio ${regraSelecionada.regras.socioPct}% · empresa ${regraSelecionada.regras.empresaPct}%`}
+            </span>
+          </div>
+        )}
+
+        <div className="sm:col-span-2">
+          <Label>Cliente / Comprador</Label>
+          <Select value={clienteId} onValueChange={setClienteId}>
+            <SelectTrigger>
+              <SelectValue
+                placeholder={
+                  carregandoClientes
+                    ? "Carregando clientes..."
+                    : clientes.length === 0
+                      ? "Cadastre um cliente antes de registrar a venda"
+                      : "Selecione o cliente"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {clientes.map((cliente) => (
+                <SelectItem key={cliente.id} value={String(cliente.id)}>
+                  {cliente.nome}
+                  {cliente.cpf ? ` · CPF ${cliente.cpf}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O comprador é vinculado ao cadastro de Clientes, evitando duplicidade de CPF e endereço.
+          </p>
+        </div>
+
+        <div>
+          <Label>Valor negociado do contrato (R$)</Label>
+          <CurrencyInput
+            value={valorNegociado}
+            onValueChange={setValorNegociado}
+            placeholder="Ex.: 100.000,00"
+          />
+          {matricula && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Valor cadastrado da unidade: {brl(matricula.valorVenda)}. Altere apenas se a venda tiver
+              negociação diferente.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <Label>Data do contrato</Label>
+          <Input type="date" value={dataContrato} onChange={(e) => setDataContrato(e.target.value)} />
+        </div>
+
+        <div>
+          <Label>Corretor responsável</Label>
+          <Select value={corretor} onValueChange={setCorretor}>
+            <SelectTrigger><SelectValue placeholder="Selecione, se houver" /></SelectTrigger>
+            <SelectContent>
+              {state.config.recebedores
+                .filter((r) => r.tipo === "corretor")
+                .map((r) => <SelectItem key={r.nome} value={r.nome}>{r.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>% Comissão total sobre a venda</Label>
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            value={corretorPct}
+            onChange={(e) => setCorretorPct(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            É o teto total devido ao corretor sobre o valor do contrato. Ex.: 5% da venda.
+          </p>
+        </div>
+
+        <div>
+          <Label>% de cada recebimento para quitar a comissão</Label>
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            value={repasseComissaoPct}
+            onChange={(e) => setRepasseComissaoPct(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Ex.: 50% da entrada e de cada parcela, até atingir o teto da comissão total.
+          </p>
+        </div>
+
+        <div>
+          <Label>Aplicar o repasse também sobre multa/juros/correção?</Label>
+          <Select value={comissaoSobreAcrescimos} onValueChange={setComissaoSobreAcrescimos}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nao">Não — somente sobre o principal</SelectItem>
+              <SelectItem value="sim">Sim — sobre o valor total recebido</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Esta escolha fica registrada no contrato e controla a base de cálculo dos repasses.
+          </p>
+        </div>
+      </div>
+
+      {regrasInadimplencia && (
+        <div className="rounded-lg border border-border/70 bg-muted/10 p-4">
+          <div className="mb-4 flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+            <div>
+              <h3 className="text-sm font-semibold">Juros, correção e multa desta venda</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                A venda começa com a regra do empreendimento/unidade, mas você pode alterar somente este
+                contrato. Essas condições continuam editáveis depois e recalculam as parcelas ainda abertas.
+              </p>
+            </div>
+            {regraSelecionada && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setRegrasInadimplencia({ ...regraSelecionada.regras.inadimplencia })
+                }
+              >
+                Restaurar padrão
+              </Button>
+            )}
+          </div>
+          <RegrasInadimplenciaForm
+            value={regrasInadimplencia}
+            onChange={setRegrasInadimplencia}
+          />
+        </div>
+      )}
+
+      <Separator className="my-2" />
+
+      <div>
+        <div className="mb-3 flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
+          <div>
+            <h3 className="text-sm font-semibold">Composição do pagamento</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Adicione somente o que existe no contrato. “Sem sinal” não é forma de pagamento: se não
+              houver entrada, simplesmente não adicione um sinal.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <Button size="sm" variant="outline" onClick={() => adicionar("avista")}>+ À vista</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("sinal")}>+ Sinal</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("sinal_parcelado")}>+ Sinal parcelado</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("parcelas")}>+ Parcelas</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("bem")}>+ Bem</Button>
+            <Button size="sm" variant="outline" onClick={() => adicionar("outro")}>+ Outro</Button>
+          </div>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/80 px-5 py-8 text-center text-sm text-muted-foreground">
+            Nenhuma forma de pagamento adicionada.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item, idx) => {
+              const parcelado = itemParcelado(item.tipo);
+              const subtotal = item.valor * (parcelado ? Math.max(1, item.parcelas) : 1);
+              return (
+                <div key={item.id} className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Tipo</Label>
+                      <Select
+                        value={item.tipo}
+                        onValueChange={(value) => alterarTipo(idx, value as PagamentoTipo)}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="avista">À vista</SelectItem>
+                          <SelectItem value="sinal">Sinal</SelectItem>
+                          <SelectItem value="sinal_parcelado">Sinal parcelado</SelectItem>
+                          <SelectItem value="parcelas">Parcelas</SelectItem>
+                          <SelectItem value="bem">Bem material</SelectItem>
+                          <SelectItem value="outro">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Descrição</Label>
+                      <Input
+                        value={item.descricao}
+                        onChange={(e) =>
+                          setItems((atuais) =>
+                            atuais.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x),
+                          )
+                        }
+                        placeholder={descricaoPlaceholder(item.tipo)}
+                      />
+                    </div>
+
+                    <div className={parcelado ? "" : "sm:col-span-2"}>
+                      <Label className="text-xs">{parcelado ? "Valor por parcela" : "Valor"}</Label>
+                      <CurrencyInput
+                        value={item.valor}
+                        onValueChange={(valor) =>
+                          setItems((atuais) =>
+                            atuais.map((x, i) => i === idx ? { ...x, valor } : x),
+                          )
+                        }
+                        placeholder="0,00"
+                      />
+                    </div>
+
+                    {parcelado && (
+                      <div>
+                        <Label className="text-xs">Nº de parcelas</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.parcelas}
+                          onChange={(e) =>
+                            setItems((atuais) =>
+                              atuais.map((x, i) =>
+                                i === idx
+                                  ? { ...x, parcelas: Math.max(1, Number(e.target.value) || 1) }
+                                  : x,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                    )}
+
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">
+                        {item.tipo === "parcelas"
+                          ? "Primeira parcela"
+                          : item.tipo === "sinal_parcelado"
+                            ? "1º vencimento do sinal"
+                            : item.tipo === "bem"
+                              ? "Data prevista"
+                              : "Vencimento"}
+                      </Label>
+                      <Input
+                        type="date"
+                        value={item.primeiroVencimento}
+                        onChange={(e) =>
+                          setItems((atuais) =>
+                            atuais.map((x, i) => i === idx ? { ...x, primeiroVencimento: e.target.value } : x),
+                          )
+                        }
+                      />
+                      {parcelado && (
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                          As próximas parcelas serão geradas mensalmente a partir desta data. Você não precisa
+                          configurar uma por uma.
+                        </p>
+                      )}
+                    </div>
+
+                    {item.tipo === "bem" && (
+                      <div className="sm:col-span-3">
+                        <Label className="text-xs">Detalhes do bem</Label>
+                        <Input
+                          value={item.observacoes || ""}
+                          placeholder="Ex.: veículo, modelo, placa ou outra identificação"
+                          onChange={(e) =>
+                            setItems((atuais) =>
+                              atuais.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x),
+                            )
+                          }
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-end justify-end sm:col-span-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setItems((atuais) => atuais.filter((_, i) => i !== idx))}
+                        aria-label="Remover item"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                    {parcelado ? (
+                      <div className="flex flex-col items-start gap-1.5">
+                        <span className="text-muted-foreground">
+                          Agenda: {item.parcelas} {item.parcelas === 1 ? "parcela" : "parcelas"} mensais ·{" "}
+                          {formatDate(item.primeiroVencimento)}
+                          {item.parcelas > 1
+                            ? ` até ${formatDate(addMonths(item.primeiroVencimento, item.parcelas - 1))}`
+                            : ""}
+                        </span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
+                          onClick={() => dividirSaldoAutomaticamente(idx)}
+                        >
+                          <Calculator className="h-3.5 w-3.5" />
+                          Dividir saldo automaticamente
+                        </button>
+                      </div>
+                    ) : (
+                      <span />
+                    )}
+                    <span>
+                      <span className="text-muted-foreground">Subtotal: </span>
+                      <strong>{brl(subtotal)}</strong>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="mt-3 grid gap-2 rounded-lg border border-border/70 bg-muted/40 px-4 py-3 text-sm sm:grid-cols-3">
+          <ResumoValor label="Valor negociado" value={valorContrato} />
+          <ResumoValor label="Composição informada" value={totalComposicao} />
+          <div className="sm:text-right">
+            <div className="text-xs text-muted-foreground">Diferença</div>
+            <div
+              className={`font-semibold ${
+                valorContrato > 0 && !composicaoConfere
+                  ? "text-destructive"
+                  : ajusteAutomatico
+                    ? "text-amber-600"
+                    : "text-success"
+              }`}
+            >
+              {brl(Math.abs(diferenca))}
+            </div>
+          </div>
+        </div>
+        {valorContrato > 0 && ajusteAutomatico && (
+          <p className="mt-2 text-xs leading-5 text-amber-700">
+            Essa diferença é compatível com arredondamento de centavos. Ao registrar a venda, o
+            ImobControl distribuirá {brl(Math.abs(diferenca))} entre as últimas parcelas para que a
+            soma final fique exatamente em {brl(valorContrato)}.
+          </p>
+        )}
+        {valorContrato > 0 && !composicaoConfere && (
+          <p className="mt-2 text-xs text-destructive">
+            A diferença é maior do que um arredondamento normal de parcelamento. Revise os valores
+            antes de registrar a venda.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <Label>Observações</Label>
+        <Textarea value={obs} onChange={(e) => setObs(e.target.value)} />
+      </div>
+
+      <DialogFooter>
+        <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+        <Button onClick={submit}>Registrar venda</Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+function descricaoOrigemRegra(
+  origem: "empreendimento" | "quadra" | "unidade",
+  empreendimento: string,
+  quadra?: string,
+) {
+  if (origem === "unidade") return "regra própria da unidade";
+  if (origem === "quadra") return `regra da ${quadra || "quadra"}`;
+  return `regra do empreendimento ${empreendimento}`;
+}
+
+function ResumoValor({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-semibold">{brl(value)}</div>
+    </div>
+  );
+}
