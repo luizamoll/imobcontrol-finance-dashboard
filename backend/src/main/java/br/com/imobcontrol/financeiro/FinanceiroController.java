@@ -65,6 +65,16 @@ public class FinanceiroController {
         return service.detalharVenda(auth, empresaId, id);
     }
 
+    @GetMapping("/vendas/{id}/historico")
+    public List<VendaHistoricoResponse> listarHistoricoVenda(
+            Authentication auth,
+            @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
+            @PathVariable Long id
+    ) {
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_HISTORICO_VISUALIZAR);
+        return service.listarHistoricoVenda(auth, empresaId, id);
+    }
+
     @PostMapping("/vendas")
     @ResponseStatus(HttpStatus.CREATED)
     public VendaResponse criarVenda(
