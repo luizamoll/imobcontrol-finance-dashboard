@@ -663,7 +663,7 @@ function EditarVendaDialog({
         valor: 0,
         parcelas: 1,
         primeiroVencimento:
-          tipo === "parcelas" || tipo === "sinal_parcelado"
+          tipo === "parcelas" || tipo === "sinal_parcelado" || tipo === "parcela_personalizada"
             ? addMonths(dataContrato, 1)
             : dataContrato,
         status: "pendente",
@@ -822,7 +822,8 @@ function EditarVendaDialog({
           {!possuiRecebimentos && (
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => adicionar("sinal")}>+ Entrada</Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => adicionar("parcelas")}>+ Parcelas</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => adicionar("parcelas")}>+ Parcelas iguais</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => adicionar("parcela_personalizada")}>+ Parcela personalizada</Button>
               <Button type="button" size="sm" variant="outline" onClick={() => adicionar("outro")}>+ Outro</Button>
             </div>
           )}
@@ -851,7 +852,8 @@ function EditarVendaDialog({
                       <SelectItem value="avista">À vista</SelectItem>
                       <SelectItem value="sinal">Entrada</SelectItem>
                       <SelectItem value="sinal_parcelado">Entrada parcelada</SelectItem>
-                      <SelectItem value="parcelas">Parcelas</SelectItem>
+                      <SelectItem value="parcelas">Parcelas iguais</SelectItem>
+                      <SelectItem value="parcela_personalizada">Parcela personalizada</SelectItem>
                       <SelectItem value="bem">Bem material</SelectItem>
                       <SelectItem value="outro">Outro</SelectItem>
                     </SelectContent>
@@ -948,7 +950,8 @@ function pagamentoLegivel(tipo: PagamentoTipo) {
     avista: "À vista",
     sinal: "Sinal",
     sinal_parcelado: "Sinal parcelado",
-    parcelas: "Parcelas",
+    parcelas: "Parcelas iguais",
+    parcela_personalizada: "Parcela personalizada",
     bem: "Bem material",
     sem_sinal: "Sem sinal (legado)",
     outro: "Outro",
