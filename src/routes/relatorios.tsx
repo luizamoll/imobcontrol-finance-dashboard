@@ -24,7 +24,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useStore, comissaoDaVenda } from "@/lib/store";
-import { brl0, formatDate } from "@/lib/format";
+import { brl, brl0, formatDate } from "@/lib/format";
+import { useTenant } from "@/lib/tenant";
+import {
+  exportReportExcel,
+  exportReportPdf,
+  type ReportExportData,
+} from "@/lib/report-export";
 
 export const Route = createFileRoute("/relatorios")({
   component: RelatoriosPage,
@@ -35,6 +41,7 @@ type ReportType = "vendas" | "recebimentos" | "comissoes" | "carteira";
 
 function RelatoriosPage() {
   const { state } = useStore();
+  const { empresaAtual } = useTenant();
   const [tipo, setTipo] = useState<ReportType>("recebimentos");
   const [empId, setEmpId] = useState("todos");
   const [inicio, setInicio] = useState("");
@@ -55,15 +62,188 @@ function RelatoriosPage() {
         .filter((p) => (fim && p.dataPagamento ? p.dataPagamento <= fim : true));
     }
     if (tipo === "comissoes") {
-      return state.vendas.map((v) => ({ v, c: comissaoDaVenda(v, state.parcelas, state.config) }));
+      return state.vendas
+        .filter((v) => (empId === "todos" ? true : v.empreendimentoId === empId))
+        .filter((v) => (inicio ? v.dataContrato >= inicio : true))
+        .filter((v) => (fim ? v.dataContrato <= fim : true))
+        .map((v) => ({ v, c: comissaoDaVenda(v, state.parcelas, state.config) }));
     }
-    return state.empreendimentos;
+    return state.empreendimentos.filter((e) => (empId === "todos" ? true : e.id === empId));
   }, [tipo, empId, inicio, fim, state]);
 
-  const doExport = (fmt: string) => {
-    toast.success(`Exportação em ${fmt} preparada`, {
-      description: "Demonstração visual — nenhum arquivo é gerado.",
+  const montarExportacao = (): ReportExportData => {
+    const empreendimentoNome =
+      empId === "todos"
+        ? "Todos os empreendimentos"
+        : state.empreendimentos.find((e) => e.id === empId)?.nome ?? "Empreendimento selecionado";
+
+    const periodo =
+      tipo === "carteira"
+        ? "Posição atual da carteira"
+        : inicio || fim
+          ? `Período: ${inicio ? formatDate(inicio) : "início"} até ${fim ? formatDate(fim) : "hoje"}`
+          : "Período: todos";
+
+    const filtros = `Empreendimento: ${empreendimentoNome} · ${periodo}`;
+    const generatedAt = new Date().toLocaleString("pt-BR");
+
+    if (tipo === "recebimentos") {
+      const itens = rows as typeof state.parcelas;
+      const total = itens.reduce((soma, item) => soma + item.valorPago, 0);
+      return {
+        title: "Relatório de Recebimentos",
+        company: empresaAtual?.nome,
+        filters: filtros,
+        generatedAt,
+        fileBaseName: "relatorio-recebimentos",
+        summary: [
+          `Registros: ${itens.length}`,
+          `Total recebido: ${brl(total)}`,
+        ],
+        columns: [
+          { key: "data", label: "Data", width: 0.9 },
+          { key: "cliente", label: "Cliente", width: 1.8 },
+          { key: "empreendimento", label: "Empreendimento", width: 1.7 },
+          { key: "origem", label: "Origem", width: 1.6 },
+          { key: "valor", label: "Valor recebido", width: 1.2, align: "right", kind: "currency" },
+        ],
+        rows: itens.map((p) => ({
+          data: formatDate(p.dataPagamento),
+          cliente: p.compradorNome,
+          empreendimento:
+            state.empreendimentos.find((e) => e.id === p.empreendimentoId)?.nome ?? "—",
+          origem: p.origemDescricao,
+          valor: p.valorPago,
+        })),
+      };
+    }
+
+    if (tipo === "vendas") {
+      const itens = rows as typeof state.vendas;
+      const total = itens.reduce((soma, item) => soma + item.valorTotal, 0);
+      return {
+        title: "Relatório de Vendas",
+        company: empresaAtual?.nome,
+        filters: filtros,
+        generatedAt,
+        fileBaseName: "relatorio-vendas",
+        summary: [
+          `Vendas: ${itens.length}`,
+          `Valor total vendido: ${brl(total)}`,
+        ],
+        columns: [
+          { key: "data", label: "Data", width: 0.9 },
+          { key: "comprador", label: "Comprador", width: 1.8 },
+          { key: "empreendimento", label: "Empreendimento", width: 1.7 },
+          { key: "unidade", label: "Unidade", width: 1.1 },
+          { key: "corretor", label: "Corretor", width: 1.5 },
+          { key: "valor", label: "Valor da venda", width: 1.2, align: "right", kind: "currency" },
+        ],
+        rows: itens.map((v) => {
+          const unidade = state.matriculas.find((m) => m.id === v.matriculaId);
+          return {
+            data: formatDate(v.dataContrato),
+            comprador: v.compradorNome,
+            empreendimento:
+              state.empreendimentos.find((e) => e.id === v.empreendimentoId)?.nome ?? "—",
+            unidade: unidade ? `${unidade.numero} · ${unidade.unidade}` : "—",
+            corretor: v.corretorNome || "—",
+            valor: v.valorTotal,
+          };
+        }),
+      };
+    }
+
+    if (tipo === "comissoes") {
+      const itens = rows as {
+        v: (typeof state.vendas)[number];
+        c: ReturnType<typeof comissaoDaVenda>;
+      }[];
+      const total = itens.reduce((soma, item) => soma + item.c.total, 0);
+      const pago = itens.reduce((soma, item) => soma + item.c.pago, 0);
+      const saldo = itens.reduce((soma, item) => soma + item.c.saldo, 0);
+      return {
+        title: "Relatório de Comissões de Corretores",
+        company: empresaAtual?.nome,
+        filters: filtros,
+        generatedAt,
+        fileBaseName: "relatorio-comissoes",
+        summary: [
+          `Comissão total: ${brl(total)}`,
+          `Repassado: ${brl(pago)} · Saldo: ${brl(saldo)}`,
+        ],
+        columns: [
+          { key: "corretor", label: "Corretor", width: 1.6 },
+          { key: "contrato", label: "Comprador / contrato", width: 1.9 },
+          { key: "empreendimento", label: "Empreendimento", width: 1.7 },
+          { key: "comissao", label: "Comissão", width: 1.1, align: "right", kind: "currency" },
+          { key: "repassado", label: "Repassado", width: 1.1, align: "right", kind: "currency" },
+          { key: "saldo", label: "Saldo", width: 1.1, align: "right", kind: "currency" },
+        ],
+        rows: itens.map(({ v, c: comissao }) => ({
+          corretor: v.corretorNome || "—",
+          contrato: v.compradorNome,
+          empreendimento:
+            state.empreendimentos.find((e) => e.id === v.empreendimentoId)?.nome ?? "—",
+          comissao: comissao.total,
+          repassado: comissao.pago,
+          saldo: comissao.saldo,
+        })),
+      };
+    }
+
+    const itens = rows as typeof state.empreendimentos;
+    const dados = itens.map((e) => {
+      const vendido = state.vendas
+        .filter((v) => v.empreendimentoId === e.id)
+        .reduce((soma, venda) => soma + venda.valorTotal, 0);
+      const recebido = state.parcelas
+        .filter((p) => p.empreendimentoId === e.id)
+        .reduce((soma, parcela) => soma + parcela.valorPago, 0);
+      return {
+        empreendimento: e.nome,
+        vgv: e.valorTotal,
+        vendido,
+        recebido,
+        saldo: Math.max(0, vendido - recebido),
+      };
     });
+
+    return {
+      title: "Relatório de Carteira por Empreendimento",
+      company: empresaAtual?.nome,
+      filters: filtros,
+      generatedAt,
+      fileBaseName: "relatorio-carteira",
+      summary: [
+        `VGV: ${brl(dados.reduce((soma, item) => soma + item.vgv, 0))}`,
+        `Vendido: ${brl(dados.reduce((soma, item) => soma + item.vendido, 0))} · Recebido: ${brl(dados.reduce((soma, item) => soma + item.recebido, 0))}`,
+      ],
+      columns: [
+        { key: "empreendimento", label: "Empreendimento", width: 2.2 },
+        { key: "vgv", label: "VGV", width: 1.2, align: "right", kind: "currency" },
+        { key: "vendido", label: "Vendas", width: 1.2, align: "right", kind: "currency" },
+        { key: "recebido", label: "Recebido", width: 1.2, align: "right", kind: "currency" },
+        { key: "saldo", label: "Saldo", width: 1.2, align: "right", kind: "currency" },
+      ],
+      rows: dados,
+    };
+  };
+
+  const doExport = (fmt: "PDF" | "Excel") => {
+    try {
+      const dados = montarExportacao();
+      if (fmt === "PDF") exportReportPdf(dados);
+      else exportReportExcel(dados);
+
+      toast.success(`${fmt} gerado com sucesso`, {
+        description: `${dados.rows.length} registro(s) exportado(s) com os filtros atuais.`,
+      });
+    } catch (error) {
+      toast.error(`Não foi possível gerar o ${fmt}`, {
+        description: error instanceof Error ? error.message : "Tente novamente.",
+      });
+    }
   };
 
   return (
@@ -109,11 +289,11 @@ function RelatoriosPage() {
           </div>
           <div>
             <Label>Data inicial</Label>
-            <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} />
+            <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} disabled={tipo === "carteira"} />
           </div>
           <div>
             <Label>Data final</Label>
-            <Input type="date" value={fim} onChange={(e) => setFim(e.target.value)} />
+            <Input type="date" value={fim} onChange={(e) => setFim(e.target.value)} disabled={tipo === "carteira"} />
           </div>
         </CardContent>
       </Card>
