@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useStore, inadimplenciaCalc } from "@/lib/store";
 import { brl0, formatDate } from "@/lib/format";
+import { useLiveNow } from "@/lib/use-live-now";
 
 export const Route = createFileRoute("/inadimplencia")({
   component: InadimplenciaPage,
@@ -36,7 +37,7 @@ function InadimplenciaPage() {
   const { state, receberParcela } = useStore();
   const [empFilter, setEmpFilter] = useState("todos");
   const [busca, setBusca] = useState("");
-  const hoje = new Date();
+  const hoje = useLiveNow();
 
   const rows = useMemo(() => {
     return state.parcelas
@@ -48,7 +49,7 @@ function InadimplenciaPage() {
         busca ? p.compradorNome.toLowerCase().includes(busca.toLowerCase()) : true,
       )
       .sort((a, b) => b.calc.diasAtraso - a.calc.diasAtraso);
-  }, [state, empFilter, busca]);
+  }, [state, empFilter, busca, hoje]);
 
   const totOriginal = rows.reduce((a, r) => a + r.p.valor, 0);
   const totAtualizado = rows.reduce((a, r) => a + r.calc.atualizado, 0);
@@ -184,9 +185,17 @@ function InadimplenciaPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          receberParcela(p.id, calc.atualizado);
-                          toast.success("Recebimento com acréscimos contratuais registrado");
+                        onClick={async () => {
+                          try {
+                            await receberParcela(p.id, calc.atualizado);
+                            toast.success("Recebimento com acréscimos contratuais registrado");
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : "Não foi possível registrar o recebimento",
+                            );
+                          }
                         }}
                       >
                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber

@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Building2, Plus, Upload } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { CurrencyInput } from "@/components/currency-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { EmpStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { brl0, formatCNPJ, num, pct } from "@/lib/format";
+import { criarEmpreendimentoRemoto } from "@/lib/catalogo-api";
+import { carregarConfiguracaoEmpresa } from "@/lib/empresa-config-api";
+import { useAuth } from "@/lib/auth";
+import { brl, formatCNPJ, num, pct } from "@/lib/format";
 import {
   DEFAULT_REGRAS_INADIMPLENCIA,
   empTotais,
@@ -46,13 +50,22 @@ import {
   type JurosTipo,
   type RegrasInadimplencia,
 } from "@/lib/store";
+import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/empreendimentos/")({
   component: EmpreendimentosList,
 });
 
 function EmpreendimentosList() {
-  const { state, addEmpreendimento } = useStore();
+  const { state, setState } = useStore();
+  const { usuario } = useAuth();
+  const {
+    empresas,
+    empresaAtual,
+    empresaAtualId,
+    carregando: carregandoEmpresas,
+    selecionarEmpresa,
+  } = useTenant();
   const [open, setOpen] = useState(false);
   const hasEmpreendimentos = state.empreendimentos.length > 0;
 
@@ -85,10 +98,35 @@ function EmpreendimentosList() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <NewEmpreendimentoDialog
-          onSave={(e) => {
-            addEmpreendimento(e);
-            toast.success(`Empreendimento "${e.nome}" cadastrado`);
-            setOpen(false);
+          superAdmin={usuario?.perfil === "SUPER_ADMIN"}
+          empresas={empresas}
+          empresaAtualId={empresaAtualId}
+          empresaAtualNome={empresaAtual?.nome ?? null}
+          carregandoEmpresas={carregandoEmpresas}
+          onSelecionarEmpresa={selecionarEmpresa}
+          onSave={async (e) => {
+            if (!empresaAtualId) {
+              toast.error("Escolha a empresa cliente antes de cadastrar o empreendimento", {
+                description:
+                  "Este campo define em qual ambiente do ImobControl o empreendimento será salvo.",
+              });
+              return;
+            }
+            try {
+              const criado = await criarEmpreendimentoRemoto(empresaAtualId, e);
+              setState((s) => ({
+                ...s,
+                empreendimentos: [...s.empreendimentos, criado],
+              }));
+              toast.success(`Empreendimento "${e.nome}" cadastrado`);
+              setOpen(false);
+            } catch (error) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Não foi possível cadastrar o empreendimento",
+              );
+            }
           }}
         />
       </Dialog>
@@ -173,10 +211,10 @@ function EmpreendimentosList() {
                           cadastradas / previstas
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{brl0(e.valorTotal)}</TableCell>
-                      <TableCell className="text-right">{brl0(t.vendido)}</TableCell>
-                      <TableCell className="text-right text-success">{brl0(t.recebido)}</TableCell>
-                      <TableCell className="text-right">{brl0(t.saldo)}</TableCell>
+                      <TableCell className="text-right font-medium">{brl(e.valorTotal)}</TableCell>
+                      <TableCell className="text-right">{brl(t.vendido)}</TableCell>
+                      <TableCell className="text-right text-success">{brl(t.recebido)}</TableCell>
+                      <TableCell className="text-right">{brl(t.saldo)}</TableCell>
                       <TableCell className="w-40">
                         <div className="flex items-center gap-2">
                           <Progress value={vendidoPct} className="h-1.5" />
@@ -214,22 +252,42 @@ type NovoEmpreendimento = {
   aliquotaTributaria: number;
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
+  repasseComissaoPct: number;
+  comissaoSobreAcrescimos: boolean;
   inadimplencia: RegrasInadimplencia;
   observacoes?: string;
   status: EmpStatus;
 };
 
-function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) => void }) {
+function NewEmpreendimentoDialog({
+  onSave,
+  superAdmin,
+  empresas,
+  empresaAtualId,
+  empresaAtualNome,
+  carregandoEmpresas,
+  onSelecionarEmpresa,
+}: {
+  onSave: (e: NovoEmpreendimento) => void;
+  superAdmin: boolean;
+  empresas: Array<{ id: number; nome: string }>;
+  empresaAtualId: number | null;
+  empresaAtualNome: string | null;
+  carregandoEmpresas: boolean;
+  onSelecionarEmpresa: (id: number) => void;
+}) {
   const [nome, setNome] = useState("");
   const [spe, setSpe] = useState("");
   const [cnpj, setCnpj] = useState("");
   const [areaTotal, setAreaTotal] = useState("");
   const [tipo, setTipo] = useState<EmpreendimentoTipo>("loteamento");
   const [matriculasCount, setMatriculasCount] = useState("");
-  const [valorTotal, setValorTotal] = useState("");
+  const [valorTotal, setValorTotal] = useState(0);
   const [socioPct, setSocioPct] = useState("");
   const [empresaPct, setEmpresaPct] = useState("");
   const [corretorPct, setCorretorPct] = useState("");
+  const [repasseComissaoPct, setRepasseComissaoPct] = useState("50");
+  const [comissaoSobreAcrescimos, setComissaoSobreAcrescimos] = useState(false);
   const [aliq, setAliq] = useState("");
   const [obs, setObs] = useState("");
   const [status, setStatus] = useState<EmpStatus>("planejamento");
@@ -246,6 +304,45 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
   const [moraPct, setMoraPct] = useState("");
   const [toleranciaAtiva, setToleranciaAtiva] = useState(false);
   const [diasTolerancia, setDiasTolerancia] = useState("");
+
+  useEffect(() => {
+    if (empresaAtualId == null) return;
+
+    let cancelado = false;
+    void carregarConfiguracaoEmpresa(empresaAtualId)
+      .then(({ config }) => {
+        if (cancelado) return;
+        const regra = config.padroesEmpreendimento;
+        const inad = regra.inadimplencia;
+
+        setSocioPct(String(regra.socioPct ?? 0));
+        setEmpresaPct(String(regra.empresaPct ?? 100));
+        setCorretorPct(String(regra.corretorPct ?? 5));
+        setRepasseComissaoPct(String(regra.repasseComissaoPct ?? 50));
+        setComissaoSobreAcrescimos(regra.comissaoSobreAcrescimos ?? false);
+        setAliq(String(regra.aliquotaTributaria ?? 0));
+
+        setCorrecaoAtiva(inad.correcaoAtiva);
+        setCorrecaoIndice(inad.correcaoIndice ?? "");
+        setCorrecaoPct(String(inad.correcaoPctMes ?? 0));
+        setJurosAtivo(inad.jurosAtivo);
+        setJurosTipo(inad.jurosTipo);
+        setJurosPctMes(String(inad.jurosPctMes ?? 0));
+        setJurosPctDia(String(inad.jurosPctDia ?? 0));
+        setInicioJuros(inad.inicioJuros);
+        setMoraAtiva(inad.moraAtiva);
+        setMoraPct(String(inad.moraPct ?? 0));
+        setToleranciaAtiva(inad.toleranciaAtiva);
+        setDiasTolerancia(String(inad.diasTolerancia ?? 0));
+      })
+      .catch(() => {
+        // O formulário mantém os padrões locais caso a configuração ainda não exista.
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId]);
 
   const salvar = () => {
     const socio = Number(socioPct) || 0;
@@ -284,13 +381,15 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
       areaTotal: Number(areaTotal) || 0,
       tipo,
       matriculasCount: Number(matriculasCount) || 0,
-      valorTotal: Number(valorTotal) || 0,
+      valorTotal,
       socioPct: socio,
       empresaPct: empresa,
       corretorPct: Number(corretorPct) || 0,
       aliquotaTributaria: Number(aliq) || 0,
       entradaPctCorretor: Number(corretorPct) || 0,
       parcelasPctCorretor: Number(corretorPct) || 0,
+      repasseComissaoPct: Number(repasseComissaoPct) || 0,
+      comissaoSobreAcrescimos,
       inadimplencia,
       observacoes: obs.trim(),
       status,
@@ -306,6 +405,53 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
           aplicado silenciosamente aos demais projetos.
         </DialogDescription>
       </DialogHeader>
+
+      <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
+        <p className="text-sm font-semibold">Empresa cliente</p>
+        {superAdmin ? (
+          <>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Escolha em qual ambiente do ImobControl este empreendimento deve ser salvo. Isso é diferente
+              da SPE responsável informada abaixo.
+            </p>
+            <div className="mt-3">
+              <Select
+                value={empresaAtualId != null ? String(empresaAtualId) : ""}
+                onValueChange={(value) => onSelecionarEmpresa(Number(value))}
+                disabled={carregandoEmpresas || empresas.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      carregandoEmpresas
+                        ? "Carregando empresas..."
+                        : empresas.length === 0
+                          ? "Nenhuma empresa cliente cadastrada"
+                          : "Selecione a empresa cliente"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {empresas.map((empresa) => (
+                    <SelectItem key={empresa.id} value={String(empresa.id)}>
+                      {empresa.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {empresas.length === 0 && !carregandoEmpresas && (
+              <p className="mt-2 text-xs text-destructive">
+                Primeiro crie a empresa cliente em Administração → Empresas.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Este empreendimento será salvo em <strong className="text-foreground">{empresaAtualNome ?? "sua empresa"}</strong>.
+          </p>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -374,11 +520,10 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
         </div>
         <div className="sm:col-span-2">
           <Label>VGV / valor total estimado (R$)</Label>
-          <Input
-            type="number"
-            min="0"
+          <CurrencyInput
             value={valorTotal}
-            onChange={(e) => setValorTotal(e.target.value)}
+            onValueChange={setValorTotal}
+            placeholder="Ex.: 2.000.000,00"
           />
         </div>
 
@@ -421,9 +566,21 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
               <Input
                 type="number"
                 min="0"
+                max="100"
                 step="0.01"
                 value={corretorPct}
                 onChange={(e) => setCorretorPct(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Repasse de cada recebimento para a comissão (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={repasseComissaoPct}
+                onChange={(e) => setRepasseComissaoPct(e.target.value)}
               />
             </div>
             <div>
@@ -431,23 +588,37 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
               <Input
                 type="number"
                 min="0"
+                max="100"
                 step="0.01"
                 value={aliq}
                 onChange={(e) => setAliq(e.target.value)}
               />
             </div>
+            <div className="rounded-lg border border-border/70 bg-background/70 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Comissão sobre acréscimos</p>
+                  <p className="text-xs text-muted-foreground">
+                    Inclui juros, multa e correção na base do repasse.
+                  </p>
+                </div>
+                <Switch
+                  checked={comissaoSobreAcrescimos}
+                  onCheckedChange={setComissaoSobreAcrescimos}
+                />
+              </div>
+            </div>
             <div className="sm:col-span-2 rounded-md border border-border/60 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">
               <strong className="text-foreground">Repasse da comissão:</strong>{" "}
-              o mesmo percentual da comissão do corretor é aplicado a cada valor efetivamente recebido,
-              seja entrada, pagamento à vista ou parcela, até que o total da comissão do contrato seja
-              quitado. Depois disso, os recebimentos seguintes não geram nova comissão.
+              a comissão total define o teto do corretor e o percentual de repasse define quanto de
+              cada recebimento é usado para quitar esse teto. Ex.: 5% de comissão total e 50% de
+              repasse significa usar metade de cada entrada/parcela até completar os 5% do contrato.
             </div>
           </div>
           <div className="mt-4 rounded-md border border-border/60 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">
-            <strong className="text-foreground">Como funciona a comissão:</strong>{" "}
-            a comissão total é calculada sobre o valor do contrato e o mesmo percentual é aplicado a
-            cada recebimento financeiro até atingir esse total. O sistema limita automaticamente o último
-            repasse e zera a comissão dos recebimentos seguintes.
+            <strong className="text-foreground">Origem dos valores:</strong>{" "}
+            estes campos começam com os padrões da empresa selecionada. Eles são apenas uma sugestão:
+            ao salvar, passam a pertencer a este empreendimento e podem ser diferentes dos demais.
           </div>
         </div>
 
@@ -571,7 +742,14 @@ function NewEmpreendimentoDialog({ onSave }: { onSave: (e: NovoEmpreendimento) =
       </div>
 
       <DialogFooter>
-        <Button onClick={salvar} disabled={!nome.trim() || !spe.trim()}>
+        <Button
+          onClick={salvar}
+          disabled={
+            !nome.trim() ||
+            !spe.trim() ||
+            (superAdmin && (carregandoEmpresas || empresaAtualId == null))
+          }
+        >
           Cadastrar empreendimento
         </Button>
       </DialogFooter>

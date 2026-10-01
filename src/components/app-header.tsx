@@ -1,4 +1,4 @@
-import { Bell, HelpCircle, LogOut, Search } from "lucide-react";
+import { Bell, Building2, Eye, HelpCircle, LogOut, Search, ShieldCheck, UserCog } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -12,10 +12,19 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/lib/auth";
+import { temPermissao } from "@/lib/permissoes";
 import { brl0, formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
+import { useTenant } from "@/lib/tenant";
 
 function iniciais(nome: string) {
   return nome
@@ -29,18 +38,33 @@ function iniciais(nome: string) {
 function perfilLegivel(perfil: string) {
   switch (perfil) {
     case "SUPER_ADMIN":
-      return "Super administradora";
+      return "Super Admin";
     case "ADMIN":
-      return "Administradora";
+      return "Admin";
     default:
-      return "Usuária";
+      return "Colaborador";
   }
 }
 
 export function AppHeader() {
   const navigate = useNavigate();
-  const { usuario, sair } = useAuth();
+  const {
+    usuario,
+    usuarioReal,
+    simulacaoFuncionario,
+    encerrarSimulacaoFuncionario,
+    sair,
+  } = useAuth();
   const { state } = useStore();
+  const {
+    empresas,
+    empresaAtual,
+    empresaAtualId,
+    carregando: carregandoEmpresas,
+    selecionarEmpresa,
+    modoCliente,
+    sairModoCliente,
+  } = useTenant();
   const [busca, setBusca] = useState("");
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [notificacoesLidas, setNotificacoesLidas] = useState<Set<string>>(() => new Set());
@@ -51,8 +75,26 @@ export function AppHeader() {
     await navigate({ to: "/login", replace: true });
   }
 
-  const nome = usuario?.nome ?? "Usuário";
-  const perfil = usuario?.perfil ? perfilLegivel(usuario.perfil) : "";
+  const simulandoFuncionario = Boolean(simulacaoFuncionario);
+  const simulandoCliente =
+    usuarioReal?.perfil === "SUPER_ADMIN"
+    && modoCliente
+    && Boolean(empresaAtual)
+    && !simulandoFuncionario;
+
+  const nome = simulandoFuncionario
+    ? usuario?.nome ?? "Colaborador"
+    : simulandoCliente
+      ? `ADMIN · ${empresaAtual?.nome ?? "Empresa"}`
+      : usuario?.nome ?? "Usuário";
+
+  const perfil = simulandoFuncionario
+    ? "Colaborador"
+    : simulandoCliente
+      ? "ADMIN"
+      : usuario?.perfil
+        ? perfilLegivel(usuario.perfil)
+        : "";
   const termo = busca.trim().toLowerCase();
 
   const resultados = useMemo(() => {
@@ -200,6 +242,34 @@ export function AppHeader() {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-6" />
 
+      {simulandoFuncionario && (
+        <div className="flex min-w-0 max-w-[230px] items-center gap-2 rounded-lg border border-primary/25 bg-primary/[0.07] px-3 py-1.5">
+          <Eye className="h-4 w-4 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <div className="truncate text-xs font-semibold text-foreground">
+              Visualizando como colaborador
+            </div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {usuario?.nome} · {usuario?.empresa?.nome ?? empresaAtual?.nome}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {simulandoCliente && (
+        <div className="flex min-w-0 max-w-[230px] items-center gap-2 rounded-lg border border-primary/25 bg-primary/[0.07] px-3 py-1.5">
+          <Building2 className="h-4 w-4 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <div className="truncate text-xs font-semibold text-foreground">
+              Visualizando como ADMIN
+            </div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {empresaAtual?.nome}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative hidden max-w-md flex-1 md:block">
         <Search className="absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -244,6 +314,161 @@ export function AppHeader() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        {usuarioReal?.perfil === "SUPER_ADMIN" && !simulandoCliente && !simulandoFuncionario && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden md:flex"
+              onClick={() => void navigate({ to: "/admin" })}
+            >
+              <ShieldCheck className="mr-1.5 h-4 w-4" />
+              Administração
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 md:hidden"
+              title="Administração"
+              aria-label="Administração"
+              onClick={() => void navigate({ to: "/admin" })}
+            >
+              <ShieldCheck className="h-4 w-4" />
+            </Button>
+          </>
+        )}
+        {usuarioReal?.perfil === "SUPER_ADMIN" && !simulandoCliente && !simulandoFuncionario && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 lg:hidden"
+                title={empresaAtual ? `Empresa: ${empresaAtual.nome}` : "Selecionar empresa cliente"}
+                aria-label={empresaAtual ? `Empresa: ${empresaAtual.nome}` : "Selecionar empresa cliente"}
+              >
+                <Building2 className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[300px] max-w-[calc(100vw-1.5rem)] space-y-3">
+              <div>
+                <p className="text-sm font-semibold">Empresa cliente</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Escolha em qual ambiente você está operando. Cadastros de clientes, empreendimentos,
+                  vendas e recebimentos ficam vinculados a esta empresa.
+                </p>
+              </div>
+              <Select
+                value={empresaAtualId != null ? String(empresaAtualId) : ""}
+                onValueChange={(value) => selecionarEmpresa(Number(value))}
+                disabled={carregandoEmpresas || empresas.length === 0}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder={
+                      carregandoEmpresas
+                        ? "Carregando empresas..."
+                        : empresas.length === 0
+                          ? "Nenhuma empresa cadastrada"
+                          : "Selecionar empresa"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {empresas.map((empresa) => (
+                    <SelectItem key={empresa.id} value={String(empresa.id)}>
+                      {empresa.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => void navigate({ to: "/admin/empresas" })}
+              >
+                Gerenciar empresas
+              </Button>
+            </PopoverContent>
+          </Popover>
+        )}
+        {usuarioReal?.perfil === "SUPER_ADMIN" && !simulandoCliente && !simulandoFuncionario && (
+          <div className="hidden min-w-48 lg:block">
+            <Select
+              value={empresaAtualId != null ? String(empresaAtualId) : ""}
+              onValueChange={(value) => selecionarEmpresa(Number(value))}
+              disabled={carregandoEmpresas || empresas.length === 0}
+            >
+              <SelectTrigger className="h-9 border-border/70 bg-background">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <SelectValue
+                    placeholder={
+                      carregandoEmpresas
+                        ? "Carregando empresas..."
+                        : empresas.length === 0
+                          ? "Nenhuma empresa"
+                          : "Selecionar empresa"
+                    }
+                  />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {empresas.map((empresa) => (
+                  <SelectItem key={empresa.id} value={String(empresa.id)}>
+                    {empresa.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {(
+          simulandoCliente
+          || usuario?.perfil === "ADMIN"
+          || (usuario?.perfil === "USUARIO" && temPermissao(usuario, "EQUIPE_GERENCIAR"))
+        ) && (
+          <Button asChild variant="outline" size="sm" className="shrink-0">
+            <a href="/equipe">
+              <UserCog className="mr-1.5 h-4 w-4" />
+              Equipe e acessos
+            </a>
+          </Button>
+        )}
+
+        {simulandoFuncionario && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              encerrarSimulacaoFuncionario();
+              void navigate({ to: "/" });
+            }}
+          >
+            <ShieldCheck className="mr-1.5 h-4 w-4" />
+            {usuarioReal?.perfil === "SUPER_ADMIN" && !modoCliente
+              ? "Voltar ao Super Admin"
+              : "Voltar ao ADMIN"}
+          </Button>
+        )}
+
+        {simulandoCliente && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              sairModoCliente();
+              void navigate({ to: "/admin" });
+            }}
+          >
+            <ShieldCheck className="mr-1.5 h-4 w-4" />
+            Voltar ao Super Admin
+          </Button>
+        )}
+
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="h-9 w-9" title="Ajuda" aria-label="Ajuda">
@@ -361,20 +586,28 @@ export function AppHeader() {
         </Popover>
 
         <Separator orientation="vertical" className="mx-1 h-6" />
-        <div className="flex items-center gap-2 pr-1">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-primary text-xs text-primary-foreground">
+        <div className="flex items-center gap-2.5 rounded-xl px-1.5 py-1">
+          <Avatar className="h-9 w-9 border border-border/70 shadow-sm">
+            <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
               {iniciais(nome)}
             </AvatarFallback>
           </Avatar>
-          <div className="hidden text-left leading-tight sm:block">
-            <div className="max-w-40 truncate text-sm font-medium">{nome}</div>
-            <div className="text-xs text-muted-foreground">{perfil}</div>
+
+          <div className="hidden min-w-0 items-center gap-2 sm:flex">
+            <span className="max-w-36 truncate text-sm font-medium text-foreground">
+              {nome}
+            </span>
+            {perfil && (
+              <span className="shrink-0 rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                {perfil}
+              </span>
+            )}
           </div>
+
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9"
+            className="h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground"
             title="Sair"
             aria-label="Sair"
             onClick={() => void handleLogout()}

@@ -3,6 +3,7 @@ import { ArrowLeft, Building2, Layers3, Pencil, Plus, Trash2 } from "lucide-reac
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { CurrencyInput } from "@/components/currency-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { RegrasOperacaoForm } from "@/components/regras-operacao-form";
 import { EmpStatusBadge, MatriculaStatusBadge } from "@/components/status-badges";
@@ -37,20 +38,30 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { brl0, formatCNPJ, num, pct } from "@/lib/format";
+import {
+  atualizarEmpreendimentoRemoto,
+  atualizarQuadraRemota,
+  atualizarUnidadeRemota,
+  criarQuadraRemota,
+  criarUnidadeRemota,
+} from "@/lib/catalogo-api";
+import { brl, formatCNPJ, num, pct } from "@/lib/format";
 import {
   empTotais,
   regrasEfetivasEmpreendimento,
   regrasEfetivasUnidade,
   useStore,
+  type AgrupamentoTipo,
   type Empreendimento,
   type EmpreendimentoTipo,
   type EmpStatus,
   type Matricula,
   type MatriculaStatus,
+  type UnidadeTipo,
   type Quadra,
   type RegrasOperacao,
 } from "@/lib/store";
+import { useTenant } from "@/lib/tenant";
 
 export const Route = createFileRoute("/empreendimentos/$id")({
   component: EmpreendimentoDetail,
@@ -65,15 +76,8 @@ export const Route = createFileRoute("/empreendimentos/$id")({
 function EmpreendimentoDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const {
-    state,
-    setState,
-    addQuadra,
-    updateQuadra,
-    addMatricula,
-    updateMatricula,
-    updateEmpreendimento,
-  } = useStore();
+  const { state, setState } = useStore();
+  const { empresaAtualId } = useTenant();
   const emp = state.empreendimentos.find((e) => e.id === id);
 
   const [unitOpen, setUnitOpen] = useState(false);
@@ -105,15 +109,11 @@ function EmpreendimentoDetail() {
       return;
     }
 
-    setState((s) => ({
-      ...s,
-      empreendimentos: s.empreendimentos.filter((e) => e.id !== emp.id),
-      quadras: s.quadras.filter((q) => q.empreendimentoId !== emp.id),
-      matriculas: s.matriculas.filter((m) => m.empreendimentoId !== emp.id),
-    }));
-    toast.success(`Empreendimento "${emp.nome}" excluído`);
+    toast.info("Exclusão temporariamente bloqueada nesta atualização", {
+      description:
+        "Agora o catálogo usa o banco compartilhado. A exclusão será liberada com a regra de auditoria financeira para evitar apagar dados do cliente por engano.",
+    });
     setDeleteOpen(false);
-    navigate({ to: "/empreendimentos" });
   };
 
   return (
@@ -147,10 +147,29 @@ function EmpreendimentoDetail() {
         <EditEmpreendimentoDialog
           emp={emp}
           regrasAtuais={regrasEmp}
-          onSave={(patch) => {
-            updateEmpreendimento(emp.id, patch);
-            toast.success("Empreendimento atualizado");
-            setEditOpen(false);
+          onSave={async (patch) => {
+            if (!empresaAtualId) return;
+            try {
+              const salvo = await atualizarEmpreendimentoRemoto(
+                empresaAtualId,
+                emp,
+                patch,
+              );
+              setState((s) => ({
+                ...s,
+                empreendimentos: s.empreendimentos.map((item) =>
+                  item.id === emp.id ? salvo : item,
+                ),
+              }));
+              toast.success("Empreendimento atualizado");
+              setEditOpen(false);
+            } catch (error) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Não foi possível atualizar o empreendimento",
+              );
+            }
           }}
         />
       </Dialog>
@@ -160,8 +179,8 @@ function EmpreendimentoDetail() {
           <DialogHeader>
             <DialogTitle>Excluir empreendimento?</DialogTitle>
             <DialogDescription>
-              Esta ação remove o empreendimento, suas quadras e unidades. Vendas e recebimentos nunca
-              são apagados por esta ação.
+              Esta ação remove o empreendimento, seus agrupamentos e unidades. Vendas e recebimentos
+              nunca são apagados por esta ação.
             </DialogDescription>
           </DialogHeader>
           {possuiHistoricoFinanceiro ? (
@@ -174,7 +193,7 @@ function EmpreendimentoDetail() {
             </div>
           ) : (
             <div className="rounded-lg border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
-              {quadras.length} quadra(s) e {matriculas.length} unidade(s) também serão removidas.
+              {quadras.length} agrupamento(s) e {matriculas.length} unidade(s) também serão removidos.
             </div>
           )}
           <DialogFooter>
@@ -193,10 +212,10 @@ function EmpreendimentoDetail() {
       </Dialog>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatBox label="VGV" value={brl0(emp.valorTotal)} />
-        <StatBox label="Vendido" value={brl0(t.vendido)} sub={pct(vendidoPct)} />
-        <StatBox label="Recebido" value={brl0(t.recebido)} />
-        <StatBox label="Saldo a receber" value={brl0(t.saldo)} />
+        <StatBox label="VGV" value={brl(emp.valorTotal)} />
+        <StatBox label="Vendido" value={brl(t.vendido)} sub={pct(vendidoPct)} />
+        <StatBox label="Recebido" value={brl(t.recebido)} />
+        <StatBox label="Saldo a receber" value={brl(t.saldo)} />
       </div>
 
       <Card className="border-border/70">
@@ -211,7 +230,7 @@ function EmpreendimentoDetail() {
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <Info label="Tipo" value={tipoLegivel(emp.tipo)} />
             <Info label="Área total" value={`${num(emp.areaTotal)} m²`} />
-            <Info label="Quadras" value={String(quadras.length)} />
+            <Info label="Agrupamentos" value={String(quadras.length)} />
             <Info label="Unidades cadastradas" value={String(matriculas.length)} />
           </div>
         </CardContent>
@@ -222,8 +241,8 @@ function EmpreendimentoDetail() {
           <div>
             <CardTitle className="text-base">Regras financeiras — {emp.nome}</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Aplicado a: <strong>Empreendimento · {emp.nome}</strong>. Quadras e unidades herdam estas
-              regras quando não possuem exceção própria.
+              Aplicado a: <strong>Empreendimento · {emp.nome}</strong>. Agrupamentos e unidades herdam
+              estas regras quando não possuem exceção própria.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
@@ -239,25 +258,37 @@ function EmpreendimentoDetail() {
         <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Layers3 className="h-4 w-4 text-primary" /> Quadras
+              <Layers3 className="h-4 w-4 text-primary" /> Quadras, blocos e setores
             </CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Uma quadra pode herdar as regras de {emp.nome} ou ter uma exceção própria.
+              Use somente quando o projeto tiver subdivisões. Cada agrupamento herda de {emp.nome}
+              ou pode ter uma exceção própria.
             </p>
           </div>
           <Dialog open={quadraOpen} onOpenChange={setQuadraOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline">
-                <Plus className="mr-2 h-4 w-4" /> Nova quadra
+                <Plus className="mr-2 h-4 w-4" /> Novo agrupamento
               </Button>
             </DialogTrigger>
             <QuadraDialog
               empreendimento={emp}
               regrasBase={regrasEmp}
-              onSave={(q) => {
-                addQuadra({ ...q, empreendimentoId: emp.id });
-                toast.success("Quadra cadastrada");
-                setQuadraOpen(false);
+              onSave={async (q) => {
+                if (!empresaAtualId) return;
+                try {
+                  const criada = await criarQuadraRemota(empresaAtualId, {
+                    ...q,
+                    empreendimentoId: emp.id,
+                  });
+                  setState((s) => ({ ...s, quadras: [...s.quadras, criada] }));
+                  toast.success("Agrupamento cadastrado");
+                  setQuadraOpen(false);
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error ? error.message : "Não foi possível cadastrar o agrupamento",
+                  );
+                }
               }}
             />
           </Dialog>
@@ -266,7 +297,7 @@ function EmpreendimentoDetail() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Quadra</TableHead>
+                <TableHead>Agrupamento</TableHead>
                 <TableHead>Descrição</TableHead>
                 <TableHead className="text-right">Unidades</TableHead>
                 <TableHead>Regra financeira</TableHead>
@@ -277,13 +308,18 @@ function EmpreendimentoDetail() {
               {quadras.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                    Nenhuma quadra cadastrada. Unidades também podem ficar diretamente no empreendimento.
+                    Nenhum agrupamento cadastrado. As unidades também podem ficar diretamente no empreendimento.
                   </TableCell>
                 </TableRow>
               )}
               {quadras.map((q) => (
                 <TableRow key={q.id}>
-                  <TableCell className="font-medium">{q.nome}</TableCell>
+                  <TableCell className="font-medium">
+                    <div>{q.nome}</div>
+                    <div className="text-[11px] capitalize text-muted-foreground">
+                      {agrupamentoTipoLegivel(q.tipoAgrupamento)}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {q.descricao || "—"}
                   </TableCell>
@@ -291,7 +327,9 @@ function EmpreendimentoDetail() {
                     {matriculas.filter((m) => m.quadraId === q.id).length}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {q.regras ? "Regra própria da quadra" : `Herda de ${emp.nome}`}
+                    {q.regras
+                      ? `Regra própria do ${agrupamentoTipoLegivel(q.tipoAgrupamento).toLowerCase()}`
+                      : `Herda de ${emp.nome}`}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="ghost" onClick={() => setEditQuadra(q)}>
@@ -311,10 +349,27 @@ function EmpreendimentoDetail() {
             empreendimento={emp}
             regrasBase={regrasEmp}
             quadra={editQuadra}
-            onSave={(patch) => {
-              updateQuadra(editQuadra.id, patch);
-              toast.success("Quadra atualizada");
-              setEditQuadra(null);
+            onSave={async (patch) => {
+              if (!empresaAtualId) return;
+              try {
+                const salva = await atualizarQuadraRemota(
+                  empresaAtualId,
+                  editQuadra,
+                  patch,
+                );
+                setState((s) => ({
+                  ...s,
+                  quadras: s.quadras.map((q) =>
+                    q.id === editQuadra.id ? salva : q,
+                  ),
+                }));
+                toast.success("Agrupamento atualizado");
+                setEditQuadra(null);
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : "Não foi possível atualizar o agrupamento",
+                );
+              }
             }}
           />
         )}
@@ -327,7 +382,7 @@ function EmpreendimentoDetail() {
               <Building2 className="h-4 w-4 text-primary" /> Unidades / Matrículas
             </CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Cada unidade pode herdar do empreendimento, da quadra ou possuir uma regra própria.
+              Cada unidade pode herdar do empreendimento, do agrupamento escolhido ou possuir uma regra própria.
             </p>
           </div>
           <Dialog open={unitOpen} onOpenChange={setUnitOpen}>
@@ -340,10 +395,24 @@ function EmpreendimentoDetail() {
               empreendimento={emp}
               quadras={quadras}
               regrasEmpreendimento={regrasEmp}
-              onSave={(m) => {
-                addMatricula({ ...m, empreendimentoId: emp.id });
-                toast.success("Unidade cadastrada");
-                setUnitOpen(false);
+              onSave={async (m) => {
+                if (!empresaAtualId) return;
+                try {
+                  const criada = await criarUnidadeRemota(empresaAtualId, {
+                    ...m,
+                    empreendimentoId: emp.id,
+                  });
+                  setState((s) => ({
+                    ...s,
+                    matriculas: [...s.matriculas, criada],
+                  }));
+                  toast.success("Unidade cadastrada");
+                  setUnitOpen(false);
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error ? error.message : "Não foi possível cadastrar a unidade",
+                  );
+                }
               }}
             />
           </Dialog>
@@ -354,7 +423,7 @@ function EmpreendimentoDetail() {
               <TableRow>
                 <TableHead>Matrícula</TableHead>
                 <TableHead>Unidade</TableHead>
-                <TableHead>Quadra</TableHead>
+                <TableHead>Agrupamento</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead>Regra financeira</TableHead>
                 <TableHead>Status</TableHead>
@@ -380,16 +449,18 @@ function EmpreendimentoDetail() {
                       <div className="text-[11px] text-muted-foreground">{num(m.area)} m²</div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {quadra?.nome || "Sem quadra"}
+                      {quadra
+                        ? `${agrupamentoTipoLegivel(quadra.tipoAgrupamento)} · ${quadra.nome}`
+                        : "Direto no empreendimento"}
                     </TableCell>
-                    <TableCell className="text-right">{brl0(m.valorVenda)}</TableCell>
+                    <TableCell className="text-right">{brl(m.valorVenda)}</TableCell>
                     <TableCell className="text-sm">{origemRegra(efetiva.origem, quadra, emp)}</TableCell>
                     <TableCell>
                       <MatriculaStatusBadge status={m.status} />
                     </TableCell>
                     <TableCell className="text-right">
                       <Button size="sm" variant="ghost" onClick={() => setEditUnidade(m)}>
-                        <Pencil className="mr-1 h-3.5 w-3.5" /> Regra / vínculo
+                        <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -407,10 +478,27 @@ function EmpreendimentoDetail() {
             unidade={editUnidade}
             quadras={quadras}
             regrasEmpreendimento={regrasEmp}
-            onSave={(patch) => {
-              updateMatricula(editUnidade.id, patch);
-              toast.success("Unidade atualizada");
-              setEditUnidade(null);
+            onSave={async (patch) => {
+              if (!empresaAtualId) return;
+              try {
+                const salva = await atualizarUnidadeRemota(
+                  empresaAtualId,
+                  editUnidade,
+                  patch,
+                );
+                setState((s) => ({
+                  ...s,
+                  matriculas: s.matriculas.map((m) =>
+                    m.id === editUnidade.id ? salva : m,
+                  ),
+                }));
+                toast.success("Unidade atualizada");
+                setEditUnidade(null);
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : "Não foi possível atualizar a unidade",
+                );
+              }
             }}
           />
         )}
@@ -447,7 +535,11 @@ function ResumoRegras({ regras }: { regras: RegrasOperacao }) {
         <Info label="Corretor" value={`${regras.corretorPct}%`} />
         <Info label="Sócio · saldo líquido" value={`${regras.socioPct}%`} />
         <Info label="Empresa · saldo líquido" value={`${regras.empresaPct}%`} />
-        <Info label="Repasse por recebimento" value={`${regras.corretorPct}%`} />
+        <Info label="Repasse por recebimento" value={`${regras.repasseComissaoPct ?? 50}%`} />
+        <Info
+          label="Comissão sobre acréscimos"
+          value={regras.comissaoSobreAcrescimos ? "Sim" : "Não"}
+        />
       </div>
       <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm">
         <span className="text-muted-foreground">Inadimplência: </span>
@@ -469,6 +561,9 @@ function QuadraDialog({
   onSave: (quadra: Omit<Quadra, "id" | "empreendimentoId">) => void;
 }) {
   const [nome, setNome] = useState(quadra?.nome || "");
+  const [tipoAgrupamento, setTipoAgrupamento] = useState<AgrupamentoTipo>(
+    quadra?.tipoAgrupamento ?? "quadra",
+  );
   const [descricao, setDescricao] = useState(quadra?.descricao || "");
   const [regraPropria, setRegraPropria] = useState(Boolean(quadra?.regras));
   const [regras, setRegras] = useState<RegrasOperacao>(
@@ -477,30 +572,60 @@ function QuadraDialog({
 
   const salvar = () => {
     if (!nome.trim()) {
-      toast.error("Informe o nome da quadra");
+      toast.error("Informe o nome do agrupamento");
       return;
     }
     if (regraPropria && !validaRegras(regras)) {
       toast.error("Sócio + Empresa precisam totalizar 100% do saldo líquido");
       return;
     }
-    onSave({ nome: nome.trim(), descricao: descricao.trim(), regras: regraPropria ? regras : undefined });
+    onSave({
+      nome: nome.trim(),
+      tipoAgrupamento,
+      descricao: descricao.trim(),
+      regras: regraPropria ? regras : undefined,
+    });
   };
 
   return (
     <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>{quadra ? `Editar ${quadra.nome}` : "Nova quadra"}</DialogTitle>
+        <DialogTitle>{quadra ? `Editar ${quadra.nome}` : "Novo agrupamento"}</DialogTitle>
         <DialogDescription>
-          Esta quadra pertence a {empreendimento.nome}. Por padrão ela herda as regras do empreendimento.
+          Crie uma quadra, bloco ou setor dentro de {empreendimento.nome}. Sem exceção financeira,
+          este nível acompanha automaticamente as regras atuais do empreendimento.
         </DialogDescription>
       </DialogHeader>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label>Nome da quadra</Label>
-          <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Quadra A" />
+          <Label>Tipo</Label>
+          <Select
+            value={tipoAgrupamento}
+            onValueChange={(value) => setTipoAgrupamento(value as AgrupamentoTipo)}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="quadra">Quadra</SelectItem>
+              <SelectItem value="bloco">Bloco</SelectItem>
+              <SelectItem value="setor">Setor</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
+          <Label>Nome</Label>
+          <Input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder={
+              tipoAgrupamento === "bloco"
+                ? "Ex.: Bloco A"
+                : tipoAgrupamento === "setor"
+                  ? "Ex.: Setor Norte"
+                  : "Ex.: Quadra A"
+            }
+          />
+        </div>
+        <div className="sm:col-span-2">
           <Label>Descrição</Label>
           <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} />
         </div>
@@ -508,7 +633,9 @@ function QuadraDialog({
       <div className="rounded-lg border border-border/70 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">Regra financeira própria desta quadra</p>
+            <p className="text-sm font-medium">
+              Regra financeira própria deste {agrupamentoTipoLegivel(tipoAgrupamento).toLowerCase()}
+            </p>
             <p className="text-xs text-muted-foreground">
               Desligado: herda automaticamente de {empreendimento.nome}.
             </p>
@@ -526,13 +653,13 @@ function QuadraDialog({
             <RegrasOperacaoForm
               value={regras}
               onChange={setRegras}
-              scopeLabel={`Quadra · ${nome || "nova quadra"} · ${empreendimento.nome}`}
+              scopeLabel={`${agrupamentoTipoLegivel(tipoAgrupamento)} · ${nome || "novo agrupamento"} · ${empreendimento.nome}`}
             />
           </div>
         )}
       </div>
       <DialogFooter>
-        <Button onClick={salvar}>Salvar quadra</Button>
+        <Button onClick={salvar}>Salvar agrupamento</Button>
       </DialogFooter>
     </DialogContent>
   );
@@ -551,8 +678,10 @@ function NewUnidadeDialog({
 }) {
   const [numero, setNumero] = useState("");
   const [unidade, setUnidade] = useState("");
+  const [unidadeTipo, setUnidadeTipo] = useState<UnidadeTipo>("lote");
+  const [descricao, setDescricao] = useState("");
   const [area, setArea] = useState("");
-  const [valor, setValor] = useState("");
+  const [valor, setValor] = useState(0);
   const [status, setStatus] = useState<MatriculaStatus>("disponivel");
   const [quadraId, setQuadraId] = useState("sem_quadra");
   const [regraPropria, setRegraPropria] = useState(false);
@@ -574,8 +703,10 @@ function NewUnidadeDialog({
     onSave({
       numero: numero.trim(),
       unidade: unidade.trim(),
+      unidadeTipo,
+      descricao: descricao.trim() || undefined,
       area: Number(area) || 0,
-      valorVenda: Number(valor) || 0,
+      valorVenda: valor,
       status,
       quadraId: quadraId === "sem_quadra" ? undefined : quadraId,
       regras: regraPropria ? regras : undefined,
@@ -587,7 +718,7 @@ function NewUnidadeDialog({
       <DialogHeader>
         <DialogTitle>Nova unidade</DialogTitle>
         <DialogDescription>
-          A unidade pode ficar diretamente em {empreendimento.nome} ou pertencer a uma quadra.
+          A unidade pode ficar diretamente em {empreendimento.nome} ou pertencer a uma quadra, bloco ou setor.
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -600,21 +731,43 @@ function NewUnidadeDialog({
           <Input value={unidade} onChange={(e) => setUnidade(e.target.value)} />
         </div>
         <div>
-          <Label>Quadra</Label>
+          <Label>Tipo de unidade</Label>
+          <Select value={unidadeTipo} onValueChange={(value) => setUnidadeTipo(value as UnidadeTipo)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lote">Lote</SelectItem>
+              <SelectItem value="apartamento">Apartamento</SelectItem>
+              <SelectItem value="sala">Sala</SelectItem>
+              <SelectItem value="casa">Casa</SelectItem>
+              <SelectItem value="loja">Loja</SelectItem>
+              <SelectItem value="outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Agrupamento</Label>
           <Select
             value={quadraId}
-            onValueChange={(value) => {
-              setQuadraId(value);
-              const q = quadras.find((item) => item.id === value);
-              if (regraPropria) setRegras(cloneRegras(q?.regras ?? regrasEmpreendimento));
-            }}
+            onValueChange={setQuadraId}
           >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="sem_quadra">Sem quadra</SelectItem>
-              {quadras.map((q) => <SelectItem key={q.id} value={q.id}>{q.nome}</SelectItem>)}
+              <SelectItem value="sem_quadra">Direto no empreendimento</SelectItem>
+              {quadras.map((q) => (
+                <SelectItem key={q.id} value={q.id}>
+                  {agrupamentoTipoLegivel(q.tipoAgrupamento)} · {q.nome}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Descrição</Label>
+          <Input
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            placeholder="Opcional"
+          />
         </div>
         <div>
           <Label>Status</Label>
@@ -634,7 +787,7 @@ function NewUnidadeDialog({
         </div>
         <div>
           <Label>Valor de venda (R$)</Label>
-          <Input type="number" min="0" value={valor} onChange={(e) => setValor(e.target.value)} />
+          <CurrencyInput value={valor} onValueChange={setValor} placeholder="Ex.: 100.000,00" />
         </div>
       </div>
       <div className="rounded-lg border border-border/70 p-4">
@@ -642,7 +795,14 @@ function NewUnidadeDialog({
           <div>
             <p className="text-sm font-medium">Regra própria desta unidade</p>
             <p className="text-xs text-muted-foreground">
-              Desligado: {quadraId === "sem_quadra" ? `herda de ${empreendimento.nome}` : "herda da quadra quando ela tiver regra própria; caso contrário, do empreendimento"}.
+              Desligado: {quadraId === "sem_quadra"
+                ? `herda diretamente de ${empreendimento.nome}`
+                : (() => {
+                    const grupo = quadras.find((item) => item.id === quadraId);
+                    return grupo?.regras
+                      ? `herda de ${agrupamentoTipoLegivel(grupo.tipoAgrupamento).toLowerCase()} ${grupo.nome}`
+                      : `o agrupamento não tem exceção; herda de ${empreendimento.nome}`;
+                  })()}.
             </p>
           </div>
           <Switch
@@ -683,6 +843,13 @@ function EditUnidadeDialog({
   regrasEmpreendimento: RegrasOperacao;
   onSave: (patch: Partial<Matricula>) => void;
 }) {
+  const [numero, setNumero] = useState(unidade.numero);
+  const [nomeUnidade, setNomeUnidade] = useState(unidade.unidade);
+  const [unidadeTipo, setUnidadeTipo] = useState<UnidadeTipo>(unidade.unidadeTipo ?? "lote");
+  const [descricao, setDescricao] = useState(unidade.descricao ?? "");
+  const [area, setArea] = useState(String(unidade.area || ""));
+  const [valor, setValor] = useState(unidade.valorVenda || 0);
+  const [status, setStatus] = useState<MatriculaStatus>(unidade.status);
   const [quadraId, setQuadraId] = useState(unidade.quadraId || "sem_quadra");
   const [regraPropria, setRegraPropria] = useState(Boolean(unidade.regras));
   const quadraInicial = quadras.find((q) => q.id === unidade.quadraId);
@@ -696,11 +863,22 @@ function EditUnidadeDialog({
   };
 
   const salvar = () => {
+    if (!numero.trim() || !nomeUnidade.trim()) {
+      toast.error("Informe matrícula e unidade");
+      return;
+    }
     if (regraPropria && !validaRegras(regras)) {
       toast.error("Sócio + Empresa precisam totalizar 100% do saldo líquido");
       return;
     }
     onSave({
+      numero: numero.trim(),
+      unidade: nomeUnidade.trim(),
+      unidadeTipo,
+      descricao: descricao.trim() || undefined,
+      area: Number(area) || 0,
+      valorVenda: valor,
+      status,
       quadraId: quadraId === "sem_quadra" ? undefined : quadraId,
       regras: regraPropria ? regras : undefined,
     });
@@ -709,36 +887,79 @@ function EditUnidadeDialog({
   return (
     <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Regra e vínculo — {unidade.unidade}</DialogTitle>
+        <DialogTitle>Editar unidade — {unidade.unidade}</DialogTitle>
         <DialogDescription>
-          Defina a quadra e, somente se necessário, uma exceção financeira específica desta unidade.
+          Atualize os dados da unidade, o agrupamento e, somente se necessário, uma exceção financeira própria.
         </DialogDescription>
       </DialogHeader>
-      <div>
-        <Label>Quadra</Label>
-        <Select
-          value={quadraId}
-          onValueChange={(value) => {
-            setQuadraId(value);
-            if (regraPropria) {
-              const q = quadras.find((item) => item.id === value);
-              setRegras(cloneRegras(q?.regras ?? regrasEmpreendimento));
-            }
-          }}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="sem_quadra">Sem quadra</SelectItem>
-            {quadras.map((q) => <SelectItem key={q.id} value={q.id}>{q.nome}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Número da matrícula</Label>
+          <Input value={numero} onChange={(e) => setNumero(e.target.value)} />
+        </div>
+        <div>
+          <Label>Unidade / Lote</Label>
+          <Input value={nomeUnidade} onChange={(e) => setNomeUnidade(e.target.value)} />
+        </div>
+        <div>
+          <Label>Tipo de unidade</Label>
+          <Select value={unidadeTipo} onValueChange={(value) => setUnidadeTipo(value as UnidadeTipo)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lote">Lote</SelectItem>
+              <SelectItem value="apartamento">Apartamento</SelectItem>
+              <SelectItem value="sala">Sala</SelectItem>
+              <SelectItem value="casa">Casa</SelectItem>
+              <SelectItem value="loja">Loja</SelectItem>
+              <SelectItem value="outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Agrupamento</Label>
+          <Select value={quadraId} onValueChange={setQuadraId}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sem_quadra">Direto no empreendimento</SelectItem>
+              {quadras.map((q) => (
+                <SelectItem key={q.id} value={q.id}>
+                  {agrupamentoTipoLegivel(q.tipoAgrupamento)} · {q.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Descrição</Label>
+          <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Opcional" />
+        </div>
+        <div>
+          <Label>Área (m²)</Label>
+          <Input type="number" min="0" value={area} onChange={(e) => setArea(e.target.value)} />
+        </div>
+        <div>
+          <Label>Valor de venda (R$)</Label>
+          <CurrencyInput value={valor} onValueChange={setValor} />
+        </div>
+        <div>
+          <Label>Status</Label>
+          <Select value={status} onValueChange={(value) => setStatus(value as MatriculaStatus)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="disponivel">Disponível</SelectItem>
+              <SelectItem value="reservado">Reservado</SelectItem>
+              <SelectItem value="vendido">Vendido</SelectItem>
+              <SelectItem value="cancelado">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <div className="rounded-lg border border-border/70 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium">Regra própria desta unidade</p>
             <p className="text-xs text-muted-foreground">
-              Desligue para voltar a herdar da quadra/empreendimento.
+              Desligue para voltar a herdar automaticamente do agrupamento escolhido ou do empreendimento.
             </p>
           </div>
           <Switch
@@ -754,7 +975,7 @@ function EditUnidadeDialog({
             <RegrasOperacaoForm
               value={regras}
               onChange={setRegras}
-              scopeLabel={`Unidade · ${unidade.unidade} · ${empreendimento.nome}`}
+              scopeLabel={`Unidade · ${nomeUnidade || unidade.unidade} · ${empreendimento.nome}`}
             />
           </div>
         )}
@@ -781,7 +1002,7 @@ function EditEmpreendimentoDialog({
   const [areaTotal, setAreaTotal] = useState(String(emp.areaTotal || ""));
   const [tipo, setTipo] = useState<EmpreendimentoTipo>(emp.tipo);
   const [matriculasCount, setMatriculasCount] = useState(String(emp.matriculasCount || ""));
-  const [valorTotal, setValorTotal] = useState(String(emp.valorTotal || ""));
+  const [valorTotal, setValorTotal] = useState(emp.valorTotal || 0);
   const [observacoes, setObservacoes] = useState(emp.observacoes || "");
   const [status, setStatus] = useState<EmpStatus>(emp.status);
   const [regras, setRegras] = useState<RegrasOperacao>(cloneRegras(regrasAtuais));
@@ -802,13 +1023,15 @@ function EditEmpreendimentoDialog({
       areaTotal: Number(areaTotal) || 0,
       tipo,
       matriculasCount: Number(matriculasCount) || 0,
-      valorTotal: Number(valorTotal) || 0,
+      valorTotal,
       socioPct: regras.socioPct,
       empresaPct: regras.empresaPct,
       corretorPct: regras.corretorPct,
       aliquotaTributaria: regras.aliquotaTributaria,
       entradaPctCorretor: regras.corretorPct,
       parcelasPctCorretor: regras.corretorPct,
+      repasseComissaoPct: regras.repasseComissaoPct ?? 50,
+      comissaoSobreAcrescimos: regras.comissaoSobreAcrescimos ?? false,
       inadimplencia: cloneRegras(regras).inadimplencia,
       observacoes: observacoes.trim(),
       status,
@@ -820,8 +1043,9 @@ function EditEmpreendimentoDialog({
       <DialogHeader>
         <DialogTitle>Editar {emp.nome}</DialogTitle>
         <DialogDescription>
-          Regras alteradas aqui afetam somente novas vendas que herdarem do empreendimento. Contratos
-          já registrados preservam o snapshot original.
+          Estas regras servem como padrão para novas vendas deste empreendimento. Vendas já criadas
+          mantêm suas próprias regras até serem editadas individualmente, e recebimentos históricos
+          nunca são reescritos.
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -873,7 +1097,7 @@ function EditEmpreendimentoDialog({
         </div>
         <div className="sm:col-span-2">
           <Label>VGV / valor total estimado (R$)</Label>
-          <Input type="number" min="0" value={valorTotal} onChange={(e) => setValorTotal(e.target.value)} />
+          <CurrencyInput value={valorTotal} onValueChange={setValorTotal} placeholder="Ex.: 2.000.000,00" />
         </div>
       </div>
       <RegrasOperacaoForm
@@ -898,8 +1122,16 @@ function origemRegra(
   emp: Empreendimento,
 ) {
   if (origem === "unidade") return "Regra própria da unidade";
-  if (origem === "quadra") return `Herda de ${quadra?.nome || "quadra"}`;
+  if (origem === "quadra") {
+    return `Herda de ${agrupamentoTipoLegivel(quadra?.tipoAgrupamento).toLowerCase()} ${quadra?.nome || ""}`.trim();
+  }
   return `Herda de ${emp.nome}`;
+}
+
+function agrupamentoTipoLegivel(tipo?: AgrupamentoTipo) {
+  if (tipo === "bloco") return "Bloco";
+  if (tipo === "setor") return "Setor";
+  return "Quadra";
 }
 
 function tipoLegivel(tipo: EmpreendimentoTipo) {

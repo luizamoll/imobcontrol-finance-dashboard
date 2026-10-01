@@ -15,8 +15,11 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
+import { AdminSidebar } from "@/components/admin-sidebar";
+import { AdminHeader } from "@/components/admin-header";
 import { StoreProvider } from "@/lib/store";
 import { AuthGate, AuthProvider } from "@/lib/auth";
+import { TenantProvider } from "@/lib/tenant";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -102,7 +105,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/imobcontrol-mark.svg", type: "image/svg+xml" },
     ],
   }),
   shellComponent: RootShell,
@@ -130,32 +133,56 @@ function RootComponent() {
   const currentPath = useRouterState({
     select: (routerState) => routerState.location.pathname,
   });
-  const isLoginPage = currentPath === "/login";
+  const isPublicAuthPage = [
+    "/login",
+    "/recuperar-senha",
+    "/redefinir-senha",
+    "/ativar-conta",
+    "/verificar-email",
+  ].includes(currentPath);
+  const isAdminPage = currentPath === "/admin" || currentPath.startsWith("/admin/");
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {isLoginPage ? (
+        {isPublicAuthPage ? (
           <>
             <Outlet />
             <Toaster position="top-right" />
           </>
         ) : (
           <AuthGate>
-            <StoreProvider>
-              <SidebarProvider>
-                <div className="flex min-h-screen w-full bg-background">
-                  <AppSidebar />
-                  <SidebarInset className="flex flex-1 flex-col">
-                    <AppHeader />
-                    <main className="flex-1">
-                      <Outlet />
-                    </main>
-                  </SidebarInset>
-                </div>
-                <Toaster position="top-right" />
-              </SidebarProvider>
-            </StoreProvider>
+            <TenantProvider>
+              {isAdminPage ? (
+                <SidebarProvider>
+                  <div className="flex min-h-screen w-full bg-background">
+                    <AdminSidebar />
+                    <SidebarInset className="flex flex-1 flex-col">
+                      <AdminHeader />
+                      <main className="flex-1">
+                        <Outlet />
+                      </main>
+                    </SidebarInset>
+                  </div>
+                  <Toaster position="top-right" />
+                </SidebarProvider>
+              ) : (
+                <StoreProvider>
+                  <SidebarProvider>
+                    <div className="flex min-h-screen w-full bg-background">
+                      <AppSidebar />
+                      <SidebarInset className="flex flex-1 flex-col">
+                        <AppHeader />
+                        <main className="flex-1">
+                          <Outlet />
+                        </main>
+                      </SidebarInset>
+                    </div>
+                    <Toaster position="top-right" />
+                  </SidebarProvider>
+                </StoreProvider>
+              )}
+            </TenantProvider>
           </AuthGate>
         )}
       </AuthProvider>

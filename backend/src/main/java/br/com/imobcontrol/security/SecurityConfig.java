@@ -30,7 +30,13 @@ public class SecurityConfig {
                 .map(usuario -> User.withUsername(usuario.getEmail())
                         .password(usuario.getSenhaHash())
                         .authorities("ROLE_" + usuario.getPerfil().name())
-                        .disabled(!usuario.isAtivo())
+                        .disabled(
+                                !usuario.isAtivo()
+                                        || !usuario.isSenhaDefinida()
+                                        || !usuario.isEmailVerificado()
+                                        || (usuario.getPerfil() != br.com.imobcontrol.tenant.PerfilUsuario.SUPER_ADMIN
+                                            && (usuario.getEmpresa() == null || !usuario.getEmpresa().isAtiva()))
+                        )
                         .build())
                 .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado"));
     }
@@ -57,10 +63,15 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/csrf",
+                                "/api/auth/recuperar-senha",
+                                "/api/auth/redefinir-senha",
+                                "/api/auth/ativar-conta",
+                                "/api/auth/verificar-email",
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
                         .requestMatchers("/api/super-admin/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers("/api/empresa/usuarios/**").authenticated()
                         .anyRequest().authenticated())
                 .requestCache(cache -> cache.disable())
                 .formLogin(form -> form.disable())

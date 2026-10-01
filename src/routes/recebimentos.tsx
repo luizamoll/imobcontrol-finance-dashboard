@@ -32,6 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { brl0, formatDate, todayISO } from "@/lib/format";
+import { useLiveNow } from "@/lib/use-live-now";
 import {
   inadimplenciaCalc,
   useStore,
@@ -54,7 +55,7 @@ function RecebimentosPage() {
   const [data, setData] = useState(todayISO());
   const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(() => new Set());
 
-  const hoje = useMemo(() => new Date(), []);
+  const hoje = useLiveNow();
 
   const parcelas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -155,13 +156,19 @@ function RecebimentosPage() {
     setData(todayISO());
   };
 
-  const confirmar = () => {
+  const confirmar = async () => {
     if (!selecionada) return;
-    receberParcela(selecionada.id, Number(valor), data);
-    toast.success("Recebimento registrado", {
-      description: "Distribuição financeira executada automaticamente.",
-    });
-    setSelecionada(null);
+    try {
+      await receberParcela(selecionada.id, Number(valor), data);
+      toast.success("Recebimento registrado", {
+        description: "Distribuição financeira executada automaticamente.",
+      });
+      setSelecionada(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível registrar o recebimento",
+      );
+    }
   };
 
   const calcSelecionada = selecionada
@@ -408,7 +415,7 @@ function RecebimentosPage() {
           )}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSelecionada(null)}>Cancelar</Button>
-            <Button onClick={confirmar}>Confirmar recebimento</Button>
+            <Button onClick={() => void confirmar()}>Confirmar recebimento</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

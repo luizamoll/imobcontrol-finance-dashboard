@@ -45,10 +45,52 @@ export const formatCPF = (v: string) => {
 
 export const parseBRLInput = (v: string): number => {
   if (!v) return 0;
-  const clean = v.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
-  const n = parseFloat(clean);
-  return isNaN(n) ? 0 : n;
+
+  const bruto = v.trim().replace(/[^\d,.-]/g, "");
+  if (!bruto) return 0;
+
+  const negativo = bruto.startsWith("-");
+  const valor = bruto.replace(/-/g, "");
+  const ultimaVirgula = valor.lastIndexOf(",");
+  const ultimoPonto = valor.lastIndexOf(".");
+
+  let separadorDecimal: "," | "." | null = null;
+
+  if (ultimaVirgula >= 0 && ultimoPonto >= 0) {
+    separadorDecimal = ultimaVirgula > ultimoPonto ? "," : ".";
+  } else if (ultimaVirgula >= 0) {
+    separadorDecimal = ",";
+  } else if (ultimoPonto >= 0) {
+    const casasDepoisDoUltimoPonto = valor.length - ultimoPonto - 1;
+    const quantidadePontos = (valor.match(/\./g) || []).length;
+
+    // Aceita também entrada no padrão 870.00, sem confundir 100.000 com R$ 100,00.
+    separadorDecimal =
+      casasDepoisDoUltimoPonto <= 2 || (quantidadePontos > 1 && casasDepoisDoUltimoPonto <= 2)
+        ? "."
+        : null;
+  }
+
+  let normalizado: string;
+  if (separadorDecimal) {
+    const indice = valor.lastIndexOf(separadorDecimal);
+    const inteira = valor.slice(0, indice).replace(/[.,]/g, "") || "0";
+    const decimal = valor.slice(indice + 1).replace(/[.,]/g, "");
+    normalizado = decimal ? `${inteira}.${decimal}` : inteira;
+  } else {
+    normalizado = valor.replace(/[.,]/g, "");
+  }
+
+  const numero = Number(normalizado);
+  if (!Number.isFinite(numero)) return 0;
+  return negativo ? -numero : numero;
 };
+
+export const formatBRLInput = (v: number) =>
+  new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(v) ? v : 0);
 
 export const todayISO = () => {
   const d = new Date();

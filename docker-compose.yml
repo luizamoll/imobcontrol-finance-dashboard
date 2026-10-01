@@ -39,6 +39,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3000
+      API_UPSTREAM: http://backend:8081
     depends_on:
       - backend
 

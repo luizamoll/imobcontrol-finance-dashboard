@@ -31,9 +31,17 @@ public class BootstrapAdmin implements ApplicationRunner {
     ) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
-        this.nome = nome;
-        this.email = email;
-        this.senha = senha;
+        this.nome = preferirPropriedadeOuAmbiente(nome, "IMOB_ADMIN_NAME");
+        this.email = preferirPropriedadeOuAmbiente(email, "IMOB_ADMIN_EMAIL");
+        this.senha = preferirPropriedadeOuAmbiente(senha, "IMOB_ADMIN_PASSWORD");
+    }
+
+    private String preferirPropriedadeOuAmbiente(String propriedade, String variavelAmbiente) {
+        if (propriedade != null && !propriedade.isBlank()) {
+            return propriedade;
+        }
+        String valorAmbiente = System.getenv(variavelAmbiente);
+        return valorAmbiente == null ? "" : valorAmbiente;
     }
 
     @Override

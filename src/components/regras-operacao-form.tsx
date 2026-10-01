@@ -50,8 +50,9 @@ export function RegrasOperacaoForm({
           onChange={(n) => patch({ empresaPct: n })}
         />
         <NumberField
-          label="Comissão do corretor (% sobre a venda)"
+          label="Comissão total do corretor (% sobre o contrato)"
           value={value.corretorPct}
+          max={100}
           onChange={(n) =>
             patch({
               corretorPct: n,
@@ -61,14 +62,36 @@ export function RegrasOperacaoForm({
           }
         />
         <NumberField
+          label="Repasse de cada recebimento para a comissão (%)"
+          value={value.repasseComissaoPct ?? 50}
+          max={100}
+          onChange={(n) => patch({ repasseComissaoPct: n })}
+        />
+        <NumberField
           label="Alíquota tributária (%)"
           value={value.aliquotaTributaria}
+          max={100}
           onChange={(n) => patch({ aliquotaTributaria: n })}
         />
+        <div className="rounded-lg border border-border/70 p-3 sm:col-span-1">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Comissão sobre acréscimos</p>
+              <p className="text-xs text-muted-foreground">
+                Inclui juros, multa e correção na base do repasse.
+              </p>
+            </div>
+            <Switch
+              checked={value.comissaoSobreAcrescimos ?? false}
+              onCheckedChange={(checked) => patch({ comissaoSobreAcrescimos: checked })}
+            />
+          </div>
+        </div>
         <div className="sm:col-span-2 rounded-md border border-border/60 bg-muted/20 p-3 text-xs leading-5 text-muted-foreground">
-          O mesmo percentual da comissão é aplicado a cada valor recebido da venda — entrada, pagamento
-          à vista ou parcela — até atingir o total devido ao corretor. Depois da quitação, os próximos
-          recebimentos não geram nova comissão.
+          A comissão total define o teto devido ao corretor. O percentual de repasse define quanto de
+          cada recebimento é usado para quitar esse teto. Ex.: comissão total de 5% e repasse de 50%:
+          metade de cada entrada/parcela é repassada até completar os 5% do contrato; o último repasse é
+          limitado ao saldo restante e, depois da quitação, os recebimentos seguintes geram comissão zero.
         </div>
       </div>
 

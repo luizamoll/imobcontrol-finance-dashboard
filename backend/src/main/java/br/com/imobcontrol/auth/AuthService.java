@@ -1,5 +1,6 @@
 package br.com.imobcontrol.auth;
 
+import br.com.imobcontrol.tenant.PerfilUsuario;
 import br.com.imobcontrol.tenant.Usuario;
 import br.com.imobcontrol.tenant.UsuarioRepository;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -31,6 +32,15 @@ public class AuthService {
 
         if (!usuario.isAtivo()) {
             throw new DisabledException("Usuário inativo");
+        }
+
+        if (usuario.getPerfil() != PerfilUsuario.SUPER_ADMIN
+                && (usuario.getEmpresa() == null || !usuario.getEmpresa().isAtiva())) {
+            throw new DisabledException("Empresa inativa");
+        }
+
+        if (!usuario.isSenhaDefinida() || !usuario.isEmailVerificado()) {
+            throw new BadCredentialsException("Credenciais inválidas");
         }
 
         if (!passwordEncoder.matches(senha, usuario.getSenhaHash())) {

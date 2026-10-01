@@ -8,6 +8,19 @@ import {
 } from "react";
 import { addMonths, todayISO, uid } from "./format";
 import { useAuth } from "./auth";
+import { useTenant } from "./tenant";
+import { temAlgumaPermissao } from "./permissoes";
+import { carregarCatalogo } from "./catalogo-api";
+import {
+  atualizarVendaRemota,
+  carregarFinanceiro,
+  criarVendaRemota,
+  excluirVendaRemota,
+  receberParcelaRemota,
+  reverterParcelaRemota,
+  type VendaInput,
+  type VendaUpdatePatch,
+} from "./financeiro-api";
 
 // ---------- Types ----------
 export type EmpStatus = "planejamento" | "lancamento" | "em_vendas" | "concluido";
@@ -19,6 +32,7 @@ export type PagamentoTipo =
   | "sinal"
   | "sinal_parcelado"
   | "parcelas"
+  | "parcela_personalizada"
   | "bem"
   | "sem_sinal"
   | "outro";
@@ -92,6 +106,10 @@ export interface RegrasContrato {
   empresaPct: number;
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
+  /** Percentual de cada recebimento usado para quitar a comissão contratada. */
+  repasseComissaoPct?: number;
+  /** Quando true, multa/juros/correção também entram na base do repasse. */
+  comissaoSobreAcrescimos?: boolean;
   inadimplencia: RegrasInadimplencia;
 }
 
@@ -114,18 +132,26 @@ export interface Empreendimento {
   aliquotaTributaria: number;
   entradaPctCorretor?: number;
   parcelasPctCorretor?: number;
+  repasseComissaoPct?: number;
+  comissaoSobreAcrescimos?: boolean;
   inadimplencia?: RegrasInadimplencia;
   observacoes?: string;
   status: EmpStatus;
+  /** Versão do registro persistido no servidor, quando já sincronizado. */
+  versao?: number;
 }
+
+export type AgrupamentoTipo = "quadra" | "bloco" | "setor";
 
 export interface Quadra {
   id: string;
   empreendimentoId: string;
   nome: string;
+  tipoAgrupamento?: AgrupamentoTipo;
   descricao?: string;
   /** Quando ausente, herda as regras do empreendimento. */
   regras?: RegrasOperacao;
+  versao?: number;
 }
 
 export interface Matricula {
@@ -143,22 +169,27 @@ export interface Matricula {
   regras?: RegrasOperacao;
   compradorNome?: string;
   vendaId?: string;
+  versao?: number;
 }
 
 export interface Venda {
   id: string;
   empreendimentoId: string;
   matriculaId: string;
+  clienteId?: string;
   compradorNome: string;
   valorTotal: number;
   dataContrato: string;
   corretorNome: string;
   corretorPct: number;
+  repasseComissaoPct?: number;
+  comissaoSobreAcrescimos?: boolean;
   observacoes?: string;
   status: VendaStatus;
   composicao: PagamentoItem[];
-  /** Regras congeladas no momento do contrato. */
+  /** Regras próprias da venda; podem ser ajustadas sem reescrever recebimentos já realizados. */
   regras?: RegrasContrato;
+  versao?: number;
 }
 
 export interface Parcela {
@@ -166,6 +197,7 @@ export interface Parcela {
   vendaId: string;
   empreendimentoId: string;
   matriculaId: string;
+  clienteId?: string;
   compradorNome: string;
   origemTipo: PagamentoTipo;
   origemDescricao: string;
@@ -177,6 +209,7 @@ export interface Parcela {
   dataPagamento?: string;
   status: ParcelaStatus;
   regrasInadimplencia?: RegrasInadimplencia;
+  versao?: number;
 }
 
 export interface Movimento {
@@ -185,6 +218,7 @@ export interface Movimento {
   vendaId: string;
   empreendimentoId: string;
   matriculaId: string;
+  clienteId?: string;
   compradorNome: string;
   corretorNome: string;
   origem: PagamentoTipo;
@@ -199,15 +233,33 @@ export interface Movimento {
   aliquotaTributariaAplicada?: number;
   empresaPctAplicada?: number;
   socioPctAplicada?: number;
+  comissaoBaseCalculo?: number;
+  comissaoRepassePctAplicado?: number;
+  comissaoSobreAcrescimosAplicada?: boolean;
+  acrescimosRecebidos?: number;
+  comissaoTeorica?: number;
+  saldoComissaoApos?: number;
+}
+
+export interface Recebedor {
+  nome: string;
+  tipo: "socio" | "empresa" | "corretor";
+  documento?: string;
+  creci?: string;
+  email?: string;
+  telefone?: string;
+  chavePix?: string;
 }
 
 /** Compatibilidade com dados locais antigos e cadastros auxiliares. */
 export interface Config extends RegrasInadimplencia {
   corretorPctPadrao: number;
+  repasseComissaoPctPadrao: number;
+  comissaoSobreAcrescimosPadrao: boolean;
   entradaPctCorretor: number;
   parcelasPctCorretor: number;
   aliquotaPadrao: number;
-  recebedores: { nome: string; tipo: "socio" | "empresa" | "corretor" }[];
+  recebedores: Recebedor[];
   statusVenda: string[];
   formasPagamento: string[];
   aliquotasPorSpe: Record<string, number>;
@@ -237,10 +289,21 @@ export interface State {
   trimestres: TrimestreItem[];
 }
 
-const DATA_KEY = "imobcontrol.v2";
+const LEGACY_DATA_KEY = "imobcontrol.v2";
+
+function dataKey(empresaId: number | null, usuarioId: number | null) {
+  return empresaId == null || usuarioId == null
+    ? null
+    : `imobcontrol.v2.usuario.${usuarioId}.empresa.${empresaId}`;
+}
+
+// O dado antigo permanece intacto para uma migração assistida posterior.
+void LEGACY_DATA_KEY;
 
 const DEFAULT_CONFIG: Config = {
   corretorPctPadrao: 0,
+  repasseComissaoPctPadrao: 50,
+  comissaoSobreAcrescimosPadrao: false,
   entradaPctCorretor: 0,
   parcelasPctCorretor: 0,
   aliquotaPadrao: 0,
@@ -279,17 +342,19 @@ function pareceSeedAntigo(state: State) {
   return state.empreendimentos.some((e) => nomesDemo.has(e.nome));
 }
 
-function loadState(): State {
+function loadState(empresaId: number | null, usuarioId: number | null): State {
   if (typeof window === "undefined") return makeEmptyState();
+  const key = dataKey(empresaId, usuarioId);
+  if (!key) return makeEmptyState();
 
   try {
-    const raw = window.localStorage.getItem(DATA_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return makeEmptyState();
 
     const parsed = JSON.parse(raw) as State;
     if (pareceSeedAntigo(parsed)) {
       const empty = makeEmptyState();
-      window.localStorage.setItem(DATA_KEY, JSON.stringify(empty));
+      window.localStorage.setItem(key, JSON.stringify(empty));
       return empty;
     }
 
@@ -326,6 +391,8 @@ function snapshotRegrasContrato(regra: RegrasOperacao): RegrasContrato {
     empresaPct: regra.empresaPct,
     entradaPctCorretor: regra.corretorPct,
     parcelasPctCorretor: regra.corretorPct,
+    repasseComissaoPct: regra.repasseComissaoPct ?? 50,
+    comissaoSobreAcrescimos: regra.comissaoSobreAcrescimos ?? false,
     inadimplencia: snapshotInadimplencia(regra.inadimplencia),
   };
 }
@@ -341,6 +408,9 @@ export function regrasEfetivasEmpreendimento(
     corretorPct: emp.corretorPct,
     entradaPctCorretor: emp.corretorPct,
     parcelasPctCorretor: emp.corretorPct,
+    repasseComissaoPct: emp.repasseComissaoPct ?? cfg.repasseComissaoPctPadrao ?? 50,
+    comissaoSobreAcrescimos:
+      emp.comissaoSobreAcrescimos ?? cfg.comissaoSobreAcrescimosPadrao ?? false,
     inadimplencia: snapshotInadimplencia(emp.inadimplencia ?? cfg),
   };
 }
@@ -367,7 +437,25 @@ export function regrasEfetivasUnidade(
 }
 
 function regrasContrato(venda: Venda, emp: Empreendimento, cfg: Config): RegrasContrato {
-  return venda.regras ?? snapshotRegrasContrato(regrasEfetivasEmpreendimento(emp, cfg));
+  const base = venda.regras ?? snapshotRegrasContrato(regrasEfetivasEmpreendimento(emp, cfg));
+  return {
+    ...base,
+    repasseComissaoPct:
+      venda.repasseComissaoPct ?? base.repasseComissaoPct ?? cfg.repasseComissaoPctPadrao ?? 50,
+    comissaoSobreAcrescimos:
+      venda.comissaoSobreAcrescimos ??
+      base.comissaoSobreAcrescimos ??
+      cfg.comissaoSobreAcrescimosPadrao ??
+      false,
+  };
+}
+
+function repasseComissaoPct(venda: Venda, regra?: RegrasContrato) {
+  return Math.max(0, venda.repasseComissaoPct ?? regra?.repasseComissaoPct ?? 50);
+}
+
+function incluiAcrescimosNaComissao(venda: Venda, regra?: RegrasContrato) {
+  return venda.comissaoSobreAcrescimos ?? regra?.comissaoSobreAcrescimos ?? false;
 }
 
 // ---------- Context ----------
@@ -381,11 +469,13 @@ interface Ctx {
   updateQuadra: (id: string, patch: Partial<Quadra>) => void;
   addMatricula: (m: Omit<Matricula, "id">) => Matricula;
   updateMatricula: (id: string, patch: Partial<Matricula>) => void;
-  addVenda: (v: Omit<Venda, "id" | "status" | "regras"> & { status?: VendaStatus }) => Venda;
-  receberParcela: (id: string, valorRecebido?: number, data?: string) => void;
-  reverterParcela: (id: string) => void;
-  marcarParcelaPaga: (id: string, dataPagamento?: string) => void;
-  desmarcarParcela: (id: string) => void;
+  addVenda: (v: VendaInput) => Promise<Venda>;
+  updateVenda: (id: string, patch: VendaUpdatePatch) => Promise<void>;
+  deleteVenda: (id: string) => Promise<void>;
+  receberParcela: (id: string, valorRecebido?: number, data?: string) => Promise<void>;
+  reverterParcela: (id: string) => Promise<void>;
+  marcarParcelaPaga: (id: string, dataPagamento?: string) => Promise<void>;
+  desmarcarParcela: (id: string) => Promise<void>;
   updateConfig: (patch: Partial<Config>) => void;
   updateTrimestre: (id: string, patch: Partial<TrimestreItem>) => void;
 }
@@ -411,10 +501,16 @@ function computeReceber(
     .filter((m) => m.vendaId === venda.id)
     .reduce((a, m) => a + m.comissaoPaga, 0);
   const restanteComissao = Math.max(0, comissaoTotal - jaPago);
-  const pctCor = Math.max(0, venda.corretorPct || 0);
 
-  let comissaoUsada = valorRecebido * (pctCor / 100);
-  if (comissaoUsada > restanteComissao) comissaoUsada = restanteComissao;
+  const repassePct = repasseComissaoPct(venda, regra);
+  const sobreAcrescimos = incluiAcrescimosNaComissao(venda, regra);
+  const acrescimosRecebidos = Math.max(0, valorRecebido - parcela.valor);
+  const baseComissao = sobreAcrescimos
+    ? valorRecebido
+    : Math.min(valorRecebido, parcela.valor);
+  const comissaoTeorica = baseComissao * (repassePct / 100);
+
+  let comissaoUsada = Math.min(comissaoTeorica, restanteComissao);
   if (comissaoUsada + imposto > valorRecebido) {
     comissaoUsada = Math.max(0, valorRecebido - imposto);
   }
@@ -444,6 +540,12 @@ function computeReceber(
     aliquotaTributariaAplicada: regra.aliquotaTributaria,
     empresaPctAplicada: regra.empresaPct,
     socioPctAplicada: regra.socioPct,
+    comissaoBaseCalculo: baseComissao,
+    comissaoRepassePctAplicado: repassePct,
+    comissaoSobreAcrescimosAplicada: sobreAcrescimos,
+    acrescimosRecebidos,
+    comissaoTeorica,
+    saldoComissaoApos: Math.max(0, restanteComissao - comissaoUsada),
   };
 
   return mov;
@@ -459,23 +561,85 @@ function vendaQuitadaAposPagamento(parcelas: Parcela[], vendaId: string, parcela
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { usuario } = useAuth();
+  const { empresaAtualId } = useTenant();
   const usuarioNome = usuario?.nome?.trim() || "Usuário autenticado";
+  const usuarioId = usuario?.id ?? null;
+  const podeCarregarCatalogo = temAlgumaPermissao(usuario, [
+    "EMPREENDIMENTOS_VISUALIZAR",
+    "EMPREENDIMENTOS_GERENCIAR",
+    "VENDAS_VISUALIZAR",
+    "VENDAS_CRIAR",
+    "VENDAS_EDITAR",
+    "VENDAS_EXCLUIR",
+    "RECEBIMENTOS_VISUALIZAR",
+    "RECEBIMENTOS_REGISTRAR",
+    "RECEBIMENTOS_ESTORNAR",
+    "FINANCEIRO_VISUALIZAR",
+    "RELATORIOS_VISUALIZAR",
+  ]);
+  const podeCarregarFinanceiro = temAlgumaPermissao(usuario, [
+    "VENDAS_VISUALIZAR",
+    "VENDAS_CRIAR",
+    "VENDAS_EDITAR",
+    "VENDAS_EXCLUIR",
+    "RECEBIMENTOS_VISUALIZAR",
+    "RECEBIMENTOS_REGISTRAR",
+    "RECEBIMENTOS_ESTORNAR",
+    "FINANCEIRO_VISUALIZAR",
+    "RELATORIOS_VISUALIZAR",
+  ]);
   const [state, setStateRaw] = useState<State>(() => makeEmptyState());
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setStateRaw(loadState());
+    setHydrated(false);
+    setStateRaw(loadState(empresaAtualId, usuarioId));
     setHydrated(true);
-  }, []);
+  }, [empresaAtualId, usuarioId]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || empresaAtualId == null) return;
+    const key = dataKey(empresaAtualId, usuarioId);
+    if (!key) return;
     try {
-      window.localStorage.setItem(DATA_KEY, JSON.stringify(state));
+      window.localStorage.setItem(key, JSON.stringify(state));
     } catch {
-      // Falha de persistência local não deve derrubar a interface.
+      // O cache local não é a fonte de verdade e não deve derrubar a interface.
     }
-  }, [state, hydrated]);
+  }, [state, hydrated, empresaAtualId, usuarioId]);
+
+  useEffect(() => {
+    if (empresaAtualId == null) return;
+    let cancelado = false;
+
+    void Promise.all([
+      podeCarregarCatalogo
+        ? carregarCatalogo(empresaAtualId)
+        : Promise.resolve({ empreendimentos: [], quadras: [], matriculas: [] }),
+      podeCarregarFinanceiro
+        ? carregarFinanceiro(empresaAtualId)
+        : Promise.resolve({ vendas: [], parcelas: [], movimentos: [] }),
+    ])
+      .then(([catalogo, financeiro]) => {
+        if (cancelado) return;
+        setStateRaw((atual) => ({
+          ...atual,
+          empreendimentos: catalogo.empreendimentos,
+          quadras: catalogo.quadras,
+          matriculas: catalogo.matriculas,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
+      })
+      .catch(() => {
+        // Enquanto a API não estiver disponível, mantém apenas o cache isolado da empresa.
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId, podeCarregarCatalogo, podeCarregarFinanceiro]);
 
   const api = useMemo<Ctx>(() => {
     const setState = (updater: (s: State) => State) => setStateRaw(updater);
@@ -516,151 +680,101 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...s,
           matriculas: s.matriculas.map((x) => (x.id === id ? { ...x, ...patch } : x)),
         })),
-      addVenda: (v) => {
-        const emp = state.empreendimentos.find((e) => e.id === v.empreendimentoId);
-        const mat = state.matriculas.find((m) => m.id === v.matriculaId);
-        if (!emp || !mat) throw new Error("Empreendimento ou unidade não encontrados para a venda");
-        const quadra = mat.quadraId ? state.quadras.find((q) => q.id === mat.quadraId) : undefined;
-        const efetiva = regrasEfetivasUnidade(emp, mat, quadra, state.config).regras;
-
-        const vId = uid();
-        const newVenda: Venda = {
-          ...v,
-          id: vId,
-          status: v.status ?? "ativa",
-          regras: snapshotRegrasContrato(efetiva),
-        };
-        const newParcelas: Parcela[] = [];
-
-        for (const item of newVenda.composicao) {
-          if (item.tipo === "bem") continue;
-          const parcelado = item.tipo === "parcelas" || item.tipo === "sinal_parcelado";
-          const n = parcelado ? Math.max(1, item.parcelas || 1) : 1;
-          for (let i = 1; i <= n; i++) {
-            newParcelas.push({
-              id: uid(),
-              vendaId: vId,
-              empreendimentoId: newVenda.empreendimentoId,
-              matriculaId: newVenda.matriculaId,
-              compradorNome: newVenda.compradorNome,
-              origemTipo: item.tipo,
-              origemDescricao: item.descricao || item.tipo,
-              numero: i,
-              totalParcelas: n,
-              vencimento: addMonths(item.primeiroVencimento, i - 1),
-              valor: item.valor,
-              valorPago: 0,
-              status: "pendente",
-              regrasInadimplencia: snapshotInadimplencia(efetiva.inadimplencia),
-            });
-          }
-        }
-
+      addVenda: async (v) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const criada = await criarVendaRemota(empresaAtualId, v);
+        const financeiro = await carregarFinanceiro(empresaAtualId);
         setStateRaw((s) => ({
           ...s,
-          vendas: [...s.vendas, newVenda],
-          parcelas: [...s.parcelas, ...newParcelas],
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
           matriculas: s.matriculas.map((m) =>
-            m.id === newVenda.matriculaId
-              ? {
-                  ...m,
-                  status: "vendido",
-                  compradorNome: newVenda.compradorNome,
-                  vendaId: vId,
-                }
-              : m,
+            m.id === criada.matriculaId ? { ...m, status: "vendido" } : m,
           ),
         }));
-        return newVenda;
+        return criada;
       },
-      receberParcela: (id, valorRecebido, dataParam) => {
-        setStateRaw((s) => {
-          const p = s.parcelas.find((x) => x.id === id);
-          if (!p || p.status === "paga" || p.status === "cancelada") return s;
-
-          const data = dataParam ?? todayISO();
-          const dataReferencia = new Date(`${data}T12:00:00`);
-          const devido = inadimplenciaCalc(p, s.config, dataReferencia).atualizado;
-          const valor = valorRecebido ?? devido;
-          if (valor + 0.01 < devido) return s;
-
-          const mov = computeReceber(p, valor, data, s, usuarioNome);
-          if (!mov) return s;
-          const quitada = vendaQuitadaAposPagamento(s.parcelas, p.vendaId, p.id);
-
-          return {
-            ...s,
-            parcelas: s.parcelas.map((x) =>
-              x.id === id
-                ? { ...x, status: "paga", valorPago: valor, dataPagamento: data }
-                : x,
-            ),
-            vendas: s.vendas.map((v) =>
-              v.id === p.vendaId && quitada ? { ...v, status: "quitada" } : v,
-            ),
-            movimentos: [...s.movimentos, mov],
-          };
-        });
+      updateVenda: async (id, patch) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const atual = state.vendas.find((v) => v.id === id);
+        if (!atual) throw new Error("Venda não encontrada");
+        const salva = await atualizarVendaRemota(empresaAtualId, atual, patch);
+        const financeiro = await carregarFinanceiro(empresaAtualId);
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
+        void salva;
       },
-      reverterParcela: (id) => {
-        setStateRaw((s) => {
-          const p = s.parcelas.find((x) => x.id === id);
-          if (!p) return s;
-          return {
-            ...s,
-            parcelas: s.parcelas.map((x) =>
-              x.id === id
-                ? { ...x, status: "pendente", valorPago: 0, dataPagamento: undefined }
-                : x,
-            ),
-            vendas: s.vendas.map((v) =>
-              v.id === p.vendaId && v.status === "quitada" ? { ...v, status: "ativa" } : v,
-            ),
-            movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
-          };
-        });
-      },
-      marcarParcelaPaga: (id, dataPagamento) => {
-        setStateRaw((s) => {
-          const p = s.parcelas.find((x) => x.id === id);
-          if (!p || p.status === "paga" || p.status === "cancelada") return s;
-          const data = dataPagamento ?? todayISO();
-          const dataReferencia = new Date(`${data}T12:00:00`);
-          const devido = inadimplenciaCalc(p, s.config, dataReferencia).atualizado;
-          const mov = computeReceber(p, devido, data, s, usuarioNome);
-          const quitada = vendaQuitadaAposPagamento(s.parcelas, p.vendaId, p.id);
+      deleteVenda: async (id) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const atual = state.vendas.find((v) => v.id === id);
+        if (!atual) throw new Error("Venda não encontrada");
 
-          return {
-            ...s,
-            parcelas: s.parcelas.map((x) =>
-              x.id === id
-                ? { ...x, status: "paga", valorPago: devido, dataPagamento: data }
-                : x,
-            ),
-            vendas: s.vendas.map((v) =>
-              v.id === p.vendaId && quitada ? { ...v, status: "quitada" } : v,
-            ),
-            movimentos: mov ? [...s.movimentos, mov] : s.movimentos,
-          };
-        });
+        await excluirVendaRemota(empresaAtualId, id);
+        const financeiro = await carregarFinanceiro(empresaAtualId);
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+          matriculas: s.matriculas.map((m) =>
+            m.id === atual.matriculaId ? { ...m, status: "disponivel" } : m,
+          ),
+        }));
       },
-      desmarcarParcela: (id) => {
-        setStateRaw((s) => {
-          const p = s.parcelas.find((x) => x.id === id);
-          if (!p) return s;
-          return {
-            ...s,
-            parcelas: s.parcelas.map((x) =>
-              x.id === id
-                ? { ...x, status: "pendente", valorPago: 0, dataPagamento: undefined }
-                : x,
-            ),
-            vendas: s.vendas.map((v) =>
-              v.id === p.vendaId && v.status === "quitada" ? { ...v, status: "ativa" } : v,
-            ),
-            movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
-          };
-        });
+      receberParcela: async (id, valorRecebido, data) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const financeiro = await receberParcelaRemota(
+          empresaAtualId,
+          id,
+          valorRecebido,
+          data,
+        );
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
+      },
+      reverterParcela: async (id) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const financeiro = await reverterParcelaRemota(empresaAtualId, id);
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
+      },
+      marcarParcelaPaga: async (id, dataPagamento) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const financeiro = await receberParcelaRemota(
+          empresaAtualId,
+          id,
+          undefined,
+          dataPagamento,
+        );
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
+      },
+      desmarcarParcela: async (id) => {
+        if (empresaAtualId == null) throw new Error("Selecione uma empresa");
+        const financeiro = await reverterParcelaRemota(empresaAtualId, id);
+        setStateRaw((s) => ({
+          ...s,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
       },
       updateConfig: (patch) =>
         setStateRaw((s) => ({ ...s, config: { ...s.config, ...patch } })),
@@ -738,8 +852,12 @@ export function comissaoDaVenda(
   }[] = [];
   for (const p of ps) {
     if (restante <= 0) break;
-    const pct = Math.max(0, v.corretorPct || 0);
-    let repasse = p.valorPago * (pct / 100);
+    const regra = v.regras;
+    const pct = repasseComissaoPct(v, regra);
+    const baseRepasse = incluiAcrescimosNaComissao(v, regra)
+      ? p.valorPago
+      : Math.min(p.valorPago, p.valor);
+    let repasse = baseRepasse * (pct / 100);
     if (repasse > restante) repasse = restante;
     restante -= repasse;
     repasses.push({
@@ -773,7 +891,7 @@ export function previsaoQuitacaoComissao(
     };
   }
 
-  const percentual = Math.max(0, v.corretorPct || 0);
+  const percentual = repasseComissaoPct(v, v.regras);
   if (percentual <= 0) {
     return {
       quitada: false,
@@ -803,7 +921,10 @@ export function previsaoQuitacaoComissao(
   let parcelaQuitacao: Parcela | undefined;
 
   for (const p of pendentes) {
-    const repassePrevisto = Math.max(0, p.valor) * (percentual / 100);
+    const valorBase = incluiAcrescimosNaComissao(v, v.regras)
+      ? inadimplenciaCalc(p, cfg, new Date()).atualizado
+      : Math.max(0, p.valor);
+    const repassePrevisto = valorBase * (percentual / 100);
     if (repassePrevisto <= 0) continue;
 
     recebimentosRestantes += 1;
