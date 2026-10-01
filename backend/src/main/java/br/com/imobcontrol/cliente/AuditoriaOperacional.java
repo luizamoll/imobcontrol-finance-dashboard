@@ -33,6 +33,9 @@ public class AuditoriaOperacional {
     @Column(nullable = false, length = 40)
     private String acao;
 
+    @Column(columnDefinition = "TEXT")
+    private String detalhes;
+
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
 
@@ -50,7 +53,23 @@ public class AuditoriaOperacional {
         this.usuarioId = usuarioId;
         this.entidade = entidade;
         this.entidadeId = entidadeId;
+        this(empresaId, usuarioId, entidade, entidadeId, acao, null);
+    }
+
+    public AuditoriaOperacional(
+            Long empresaId,
+            Long usuarioId,
+            String entidade,
+            Long entidadeId,
+            String acao,
+            String detalhes
+    ) {
+        this.empresaId = empresaId;
+        this.usuarioId = usuarioId;
+        this.entidade = entidade;
+        this.entidadeId = entidadeId;
         this.acao = acao;
+        this.detalhes = detalhes;
     }
 
     @PrePersist
@@ -64,5 +83,6 @@ public class AuditoriaOperacional {
     public String getEntidade() { return entidade; }
     public Long getEntidadeId() { return entidadeId; }
     public String getAcao() { return acao; }
+    public String getDetalhes() { return detalhes; }
     public LocalDateTime getCriadoEm() { return criadoEm; }
 }
