@@ -90,24 +90,17 @@ function RecebedoresPage() {
     };
 
     if (editandoNomeOriginal) {
-      setState((atual) => ({
-        ...atual,
-        config: {
-          ...atual.config,
-          recebedores: atual.config.recebedores.map((r) =>
-            r.nome === editandoNomeOriginal ? dados : r,
-          ),
-        },
-        vendas:
+      updateConfig({
+        recebedores: state.config.recebedores.map((r) =>
+          r.nome === editandoNomeOriginal ? dados : r,
+        ),
+      });
+      toast.success("Cadastro atualizado.", {
+        description:
           editandoNomeOriginal !== nome
-            ? atual.vendas.map((v) =>
-                v.corretorNome === editandoNomeOriginal
-                  ? { ...v, corretorNome: nome }
-                  : v,
-              )
-            : atual.vendas,
-      }));
-      toast.success("Recebedor atualizado.");
+            ? "Vendas já registradas preservam o corretor gravado no contrato. Para corrigir uma venda específica, use Editar venda."
+            : undefined,
+      });
     } else {
       updateConfig({
         recebedores: [...state.config.recebedores, dados],
@@ -180,17 +173,17 @@ function RecebedoresPage() {
     <PageShell>
       <PageHeader
         eyebrow="Distribuição financeira"
-        title="Recebedores"
-        description="Cadastre quem participa da operação e acompanhe os repasses efetivamente gerados pelos recebimentos."
+        title="Corretores e recebedores"
+        description="Cadastre e edite corretores, sócios e empresas que recebem valores, e acompanhe os repasses gerados pelas vendas."
       />
 
       <Card className="border-border/70">
         <CardHeader>
-          <CardTitle className="text-base">{editandoNomeOriginal ? "Editar recebedor" : "Cadastro de recebedores"}</CardTitle>
+          <CardTitle className="text-base">{editandoNomeOriginal ? "Editar corretor / recebedor" : "Cadastro de corretores e recebedores"}</CardTitle>
           <p className="text-xs text-muted-foreground">
             {editandoNomeOriginal
-              ? "Altere os dados cadastrais e salve. Vínculos existentes serão preservados."
-              : "Sócios, empresa e corretores usados nas vendas e na distribuição financeira."}
+              ? "Altere nome, documento, CRECI, contato ou PIX. Vendas já registradas preservam os dados contratuais e podem ser corrigidas em Editar venda."
+              : "Cadastre corretores, sócios e empresas usados nas vendas e na distribuição financeira."}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
