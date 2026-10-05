@@ -291,7 +291,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       total + (itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 0),
     0,
   );
-  const limiteArredondamentoCentavos = Math.max(1, Math.ceil(parcelasAjustaveis / 2));
+  const limiteArredondamentoCentavos = Math.max(1, parcelasAjustaveis * 5);
   const ajusteAutomatico =
     valorContrato > 0 &&
     parcelasAjustaveis > 0 &&
@@ -839,15 +839,15 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         </div>
         {valorContrato > 0 && ajusteAutomatico && (
           <p className="mt-2 text-xs leading-5 text-amber-700">
-            Essa diferença é compatível com arredondamento de centavos. Ao registrar a venda, o
-            ImobControl distribuirá {brl(Math.abs(diferenca))} entre as últimas parcelas para que a
+            Essa diferença é pequena em relação ao parcelamento. Ao registrar a venda, o
+            ImobControl ajustará {brl(Math.abs(diferenca))} somente na última parcela para que a
             soma final fique exatamente em {brl(valorContrato)}.
           </p>
         )}
         {valorContrato > 0 && !composicaoConfere && (
           <p className="mt-2 text-xs text-destructive">
-            A diferença é maior do que um arredondamento normal de parcelamento. Revise os valores
-            antes de registrar a venda.
+            A diferença ultrapassa o limite seguro de ajuste automático (até R$ 0,05 por parcela).
+            Revise os valores antes de registrar a venda.
           </p>
         )}
       </div>
