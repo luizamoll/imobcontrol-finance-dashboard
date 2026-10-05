@@ -80,6 +80,7 @@ import {
   type PagamentoTipo,
   type ParcelaStatus,
   type RegrasInadimplencia,
+  type Recebedor,
   type Venda,
 } from "@/lib/store";
 
@@ -289,6 +290,7 @@ function VendaDetail() {
         <EditarVendaDialog
           venda={v}
           clientes={clientes}
+          corretores={state.config.recebedores.filter((item) => item.tipo === "corretor")}
           possuiRecebimentos={movs.length > 0}
           onSalvar={async (patch) => {
             try {
@@ -691,12 +693,14 @@ function VendaDetail() {
 function EditarVendaDialog({
   venda,
   clientes,
+  corretores,
   possuiRecebimentos,
   onSalvar,
   onClose,
 }: {
   venda: Venda;
   clientes: ClienteEdicao[];
+  corretores: Recebedor[];
   possuiRecebimentos: boolean;
   onSalvar: (patch: VendaUpdatePatch) => void;
   onClose: () => void;
@@ -734,7 +738,7 @@ function EditarVendaDialog({
       total + (itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 0),
     0,
   );
-  const limiteArredondamentoCentavos = Math.max(1, Math.ceil(parcelasAjustaveis / 2));
+  const limiteArredondamentoCentavos = Math.max(1, parcelasAjustaveis * 5);
   const composicaoConfere =
     diferencaCentavos === 0 ||
     (parcelasAjustaveis > 0 &&
@@ -795,9 +799,9 @@ function EditarVendaDialog({
       <DialogHeader>
         <DialogTitle>Editar venda</DialogTitle>
         <DialogDescription>
-          Dados cadastrais, comissão e regras de atraso podem ser corrigidos. Valor e composição das
-          parcelas ficam bloqueados após o primeiro recebimento, mas juros, correção, multa e tolerância
-          continuam editáveis para as parcelas ainda abertas.
+          Corrija comprador, corretor, comissão e regras desta venda. Valor e composição das parcelas
+          ficam bloqueados após o primeiro recebimento, mas corretor, comissão, juros, correção, multa
+          e tolerância continuam editáveis para as parcelas ainda abertas.
         </DialogDescription>
       </DialogHeader>
 
@@ -840,12 +844,35 @@ function EditarVendaDialog({
           <Label>Data do contrato</Label>
           <Input type="date" value={dataContrato} onChange={(e) => setDataContrato(e.target.value)} />
         </div>
-        <div>
-          <Label>Corretor</Label>
-          <Input value={corretorNome} onChange={(e) => setCorretorNome(e.target.value)} />
+        <div className="sm:col-span-2">
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <Label>Corretor responsável</Label>
+            <Button asChild type="button" variant="link" size="sm" className="h-auto p-0 text-xs">
+              <Link to="/recebedores">Gerenciar cadastro de corretores</Link>
+            </Button>
+          </div>
+          <Select value={corretorNome || "__sem_corretor__"} onValueChange={(value) => setCorretorNome(value === "__sem_corretor__" ? "" : value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione o corretor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__sem_corretor__">Sem corretor</SelectItem>
+              {corretorNome && !corretores.some((item) => item.nome === corretorNome) && (
+                <SelectItem value={corretorNome}>{corretorNome} · vínculo atual</SelectItem>
+              )}
+              {corretores.map((item) => (
+                <SelectItem key={item.nome} value={item.nome}>
+                  {item.nome}{item.creci ? ` · CRECI ${item.creci}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O cadastro pessoal do corretor fica em Corretores e recebedores. Aqui você define quem é o responsável por esta venda.
+          </p>
         </div>
         <div>
-          <Label>% comissão total sobre a venda</Label>
+          <Label>% comissão total desta venda</Label>
           <Input
             type="number"
             min="0"
@@ -856,7 +883,7 @@ function EditarVendaDialog({
           />
         </div>
         <div>
-          <Label>% de cada recebimento para quitar a comissão</Label>
+          <Label>% de cada recebimento destinado à comissão</Label>
           <Input
             type="number"
             min="0"
