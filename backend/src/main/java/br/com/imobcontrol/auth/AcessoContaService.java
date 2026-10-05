@@ -99,28 +99,30 @@ public class AcessoContaService {
             return false;
         }
 
-        String token = emitirToken(
+        String codigo = emitirCodigoVerificacao(
                 usuario,
-                TipoTokenAcesso.VERIFICACAO_EMAIL,
-                LocalDateTime.now().plusHours(24)
+                LocalDateTime.now().plusMinutes(15)
         );
-        String link = appUrl + "/verificar-email?token=" + url(token);
 
         boolean enviado = emails.enviar(
                 usuario.getEmail(),
-                "Confirme seu novo e-mail no ImobControl",
+                "Código de verificação do ImobControl",
                 """
                 Olá, %s.
 
-                Confirme seu novo e-mail de acesso ao ImobControl pelo link abaixo:
+                Seu código de verificação do ImobControl é:
+
                 %s
 
-                Este link é de uso único e expira em 24 horas.
-                """.formatted(usuario.getNome(), link)
+                Digite este código na tela Minha conta.
+                Ele é de uso único e expira em 15 minutos.
+
+                Se você não solicitou esta alteração, não compartilhe o código com ninguém.
+                """.formatted(usuario.getNome(), codigo)
         );
 
         if (!enviado) {
-            invalidarTokenBruto(token, TipoTokenAcesso.VERIFICACAO_EMAIL);
+            invalidarCodigoVerificacao(usuario.getId(), codigo);
         }
         return enviado;
     }
@@ -210,12 +212,69 @@ public class AcessoContaService {
     }
 
     @Transactional
+    public void verificarEmailCodigo(Long usuarioId, String codigo) {
+        if (usuarioId == null || codigo == null || !codigo.trim().matches("\\d{6}")) {
+            throw codigoInvalido();
+        }
+
+        TokenAcesso token = tokens.findByTokenHashAndTipo(
+                        hashCodigo(usuarioId, codigo.trim()),
+                        TipoTokenAcesso.VERIFICACAO_EMAIL
+                )
+                .orElseThrow(this::codigoInvalido);
+
+        if (token.getUsadoEm() != null || token.getExpiraEm().isBefore(LocalDateTime.now())) {
+            throw codigoInvalido();
+        }
+
+        Usuario usuario = token.getUsuario();
+        if (usuario == null
+                || !usuario.getId().equals(usuarioId)
+                || !usuario.isAtivo()
+                || !empresaAtiva(usuario)) {
+            throw codigoInvalido();
+        }
+
+        usuario.setEmailVerificado(true);
+        usuarios.saveAndFlush(usuario);
+
+        consumir(token);
+        invalidarAbertos(usuario.getId(), TipoTokenAcesso.VERIFICACAO_EMAIL);
+        registrar(usuario, "EMAIL_VERIFICADO");
+    }
+
+    @Transactional
     public void invalidarTokensDoUsuario(Long usuarioId) {
         consumirTodos(usuarioId);
     }
 
     public void encerrarSessoes(String email) {
         sessoes.encerrarTodas(email);
+    }
+
+    private String emitirCodigoVerificacao(
+            Usuario usuario,
+            LocalDateTime expiraEm
+    ) {
+        invalidarAbertos(usuario.getId(), TipoTokenAcesso.VERIFICACAO_EMAIL);
+
+        for (int tentativa = 0; tentativa < 10; tentativa++) {
+            String codigo = String.format(Locale.ROOT, "%06d", RANDOM.nextInt(1_000_000));
+            String tokenHash = hashCodigo(usuario.getId(), codigo);
+            if (tokens.findByTokenHashAndTipo(tokenHash, TipoTokenAcesso.VERIFICACAO_EMAIL).isPresent()) {
+                continue;
+            }
+
+            TokenAcesso token = new TokenAcesso();
+            token.setUsuario(usuario);
+            token.setTipo(TipoTokenAcesso.VERIFICACAO_EMAIL);
+            token.setTokenHash(tokenHash);
+            token.setExpiraEm(expiraEm);
+            tokens.saveAndFlush(token);
+            return codigo;
+        }
+
+        throw new IllegalStateException("Não foi possível gerar um código de verificação");
     }
 
     private String emitirToken(
@@ -286,6 +345,17 @@ public class AcessoContaService {
         tokens.findByTokenHashAndTipo(hash(tokenBruto), tipo).ifPresent(this::consumir);
     }
 
+    private void invalidarCodigoVerificacao(Long usuarioId, String codigo) {
+        tokens.findByTokenHashAndTipo(
+                hashCodigo(usuarioId, codigo),
+                TipoTokenAcesso.VERIFICACAO_EMAIL
+        ).ifPresent(this::consumir);
+    }
+
+    private String hashCodigo(Long usuarioId, String codigo) {
+        return hash(usuarioId + ":" + codigo);
+    }
+
     private void validarSenha(String senha) {
         if (senha == null || senha.length() < 8 || senha.length() > 72) {
             throw new ResponseStatusException(
@@ -299,6 +369,13 @@ public class AcessoContaService {
         return new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "Este link é inválido, já foi usado ou expirou"
+        );
+    }
+
+    private ResponseStatusException codigoInvalido() {
+        return new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Código inválido, já utilizado ou expirado"
         );
     }
 
