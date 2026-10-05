@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -199,6 +200,33 @@ public class AuthController {
         acessoConta.verificarEmail(body.token());
     }
 
+    @PostMapping("/verificar-email-codigo")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void verificarEmailCodigo(
+            Authentication authentication,
+            @Valid @RequestBody CodigoEmailRequest body
+    ) {
+        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        acessoConta.verificarEmailCodigo(usuario.getId(), body.codigo());
+    }
+
+    @PostMapping("/reenviar-verificacao-email")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reenviarVerificacaoEmail(Authentication authentication) {
+        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+
+        if (usuario.isEmailVerificado()) return;
+
+        if (!acessoConta.enviarVerificacaoEmail(usuario)) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "O envio de e-mail ainda não está configurado neste ambiente"
+            );
+        }
+    }
+
     @GetMapping("/csrf")
     public Map<String, String> csrf(CsrfToken token) {
         return Map.of(
@@ -236,6 +264,13 @@ public class AuthController {
 
     public record TokenRequest(
             @NotBlank String token
+    ) {
+    }
+
+    public record CodigoEmailRequest(
+            @NotBlank
+            @Pattern(regexp = "\\d{6}", message = "O código deve ter 6 dígitos")
+            String codigo
     ) {
     }
 
