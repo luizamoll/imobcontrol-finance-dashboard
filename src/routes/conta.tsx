@@ -27,7 +27,7 @@ type AuthResponse = {
 };
 
 function MinhaContaPage() {
-  const { usuario, recarregar } = useAuth();
+  const { usuarioReal: usuario, recarregar } = useAuth();
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
