@@ -91,6 +91,32 @@ class AcessoContaServiceTests {
     }
 
     @Test
+    void codigoDeSeisDigitosConfirmaEmailUmaUnicaVez() throws Exception {
+        Usuario usuario = criarUsuarioPendente();
+        usuario.setSenhaDefinida(true);
+        usuario = usuarios.saveAndFlush(usuario);
+
+        String codigo = "482731";
+        TokenAcesso token = new TokenAcesso();
+        token.setUsuario(usuario);
+        token.setTipo(TipoTokenAcesso.VERIFICACAO_EMAIL);
+        token.setTokenHash(hash(usuario.getId() + ":" + codigo));
+        token.setExpiraEm(LocalDateTime.now().plusMinutes(15));
+        tokens.saveAndFlush(token);
+
+        acessoConta.verificarEmailCodigo(usuario.getId(), codigo);
+
+        Usuario confirmado = usuarios.findById(usuario.getId()).orElseThrow();
+        assertTrue(confirmado.isEmailVerificado());
+
+        Long usuarioId = confirmado.getId();
+        assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> acessoConta.verificarEmailCodigo(usuarioId, codigo)
+        );
+    }
+
+    @Test
     void tokenExpiradoNaoPodeSerUsado() throws Exception {
         Usuario usuario = criarUsuarioPendente();
         String bruto = "expirado-" + UUID.randomUUID();
