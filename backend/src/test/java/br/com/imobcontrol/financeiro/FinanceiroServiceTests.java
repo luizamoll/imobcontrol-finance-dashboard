@@ -592,6 +592,63 @@ class FinanceiroServiceTests {
         );
     }
 
+    @Test
+    void ajustaDiferencaPequenaNaUltimaDeMuitasParcelas() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+
+        LocalDate contrato = LocalDate.of(2026, 10, 5);
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("419000.00"),
+                        contrato,
+                        null,
+                        BigDecimal.ZERO,
+                        new BigDecimal("50"),
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "sinal", "Sinal", new BigDecimal("50280.00"),
+                                        1, contrato, "pendente"
+                                ),
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Mensais", new BigDecimal("2168.91"),
+                                        170, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        List<ParcelaResponse> geradas = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .toList();
+
+        List<ParcelaResponse> mensais = geradas.stream()
+                .filter(p -> "parcelas".equals(p.origemTipo()))
+                .toList();
+
+        assertEquals(170, mensais.size());
+        assertDinheiro("2168.91", mensais.get(0).valor());
+        assertDinheiro("2174.21", mensais.get(169).valor());
+        assertDinheiro(
+                "419000.00",
+                geradas.stream()
+                        .map(ParcelaResponse::valor)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+        );
+    }
+
     private Empresa criarEmpresa() {
         Empresa e = new Empresa();
         e.setNome("Empresa teste");
