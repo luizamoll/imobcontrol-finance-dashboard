@@ -333,6 +333,7 @@ export function exportReportPdf(data: ReportExportData) {
 
 function xmlEscape(value: string) {
   return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -379,6 +380,8 @@ function zipStore(files: Array<{ name: string; data: Uint8Array }>) {
   const locals: Uint8Array[] = [];
   const centrals: Uint8Array[] = [];
   let offset = 0;
+  const dosTime = 0;
+  const dosDate = 0x0021; // 01/01/1980, menor data válida no formato ZIP/DOS.
 
   for (const file of files) {
     const name = encoder.encode(file.name);
@@ -388,8 +391,8 @@ function zipStore(files: Array<{ name: string; data: Uint8Array }>) {
       u16(20),
       u16(0),
       u16(0),
-      u16(0),
-      u16(0),
+      u16(dosTime),
+      u16(dosDate),
       u32(crc),
       u32(file.data.length),
       u32(file.data.length),
@@ -406,8 +409,8 @@ function zipStore(files: Array<{ name: string; data: Uint8Array }>) {
       u16(20),
       u16(0),
       u16(0),
-      u16(0),
-      u16(0),
+      u16(dosTime),
+      u16(dosDate),
       u32(crc),
       u32(file.data.length),
       u32(file.data.length),
@@ -445,7 +448,7 @@ function inlineStringCell(ref: string, text: string, style = 0) {
     ref +
     '" t="inlineStr"' +
     (style ? ' s="' + style + '"' : "") +
-    "><is><t>" +
+    '><is><t xml:space="preserve">' +
     xmlEscape(text) +
     "</t></is></c>"
   );
@@ -456,7 +459,7 @@ function numberCell(ref: string, value: number, style = 0) {
   return (
     '<c r="' +
     ref +
-    '"' +
+    '" t="n"' +
     (style ? ' s="' + style + '"' : "") +
     "><v>" +
     finite +
@@ -468,7 +471,8 @@ function buildSheetXml(data: ReportExportData) {
   const summary = data.summary ?? [];
   const headerRow = 4 + summary.length;
   const firstDataRow = headerRow + 1;
-  const lastColumn = columnLetter(Math.max(0, data.columns.length - 1));
+  const columnCount = Math.max(1, data.columns.length);
+  const lastColumn = columnLetter(columnCount - 1);
   const lastDataRow = Math.max(headerRow, firstDataRow + data.rows.length - 1);
   const filterText = [data.company ? "Empresa: " + data.company : "", data.filters ?? ""]
     .filter(Boolean)
@@ -524,38 +528,54 @@ function buildSheetXml(data: ReportExportData) {
     })
     .join("");
 
-  const mergeList = [
-    '<mergeCell ref="A1:' + lastColumn + '1"/>',
-    '<mergeCell ref="A2:' + lastColumn + '2"/>',
-    '<mergeCell ref="A3:' + lastColumn + '3"/>',
-  ];
-  summary.forEach((_, index) => {
-    const row = 4 + index;
-    mergeList.push('<mergeCell ref="A' + row + ":" + lastColumn + row + '"/>');
-  });
+  const mergeList: string[] = [];
+  if (data.columns.length > 1) {
+    mergeList.push(
+      '<mergeCell ref="A1:' + lastColumn + '1"/>',
+      '<mergeCell ref="A2:' + lastColumn + '2"/>',
+      '<mergeCell ref="A3:' + lastColumn + '3"/>',
+    );
+    summary.forEach((_, index) => {
+      const row = 4 + index;
+      mergeList.push('<mergeCell ref="A' + row + ":" + lastColumn + row + '"/>');
+    });
+  }
+
+  const autoFilter =
+    data.columns.length > 0
+      ? '<autoFilter ref="A' + headerRow + ":" + lastColumn + lastDataRow + '"/>'
+      : "";
+  const merges =
+    mergeList.length > 0
+      ? '<mergeCells count="' + mergeList.length + '">' + mergeList.join("") + "</mergeCells>"
+      : "";
 
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    "<sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"" +
+    '<dimension ref="A1:' +
+    lastColumn +
+    lastDataRow +
+    '"/>' +
+    '<sheetViews><sheetView workbookViewId="0"><pane ySplit="' +
     headerRow +
-    "\" topLeftCell=\"A" +
+    '" topLeftCell="A' +
     firstDataRow +
-    "\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews>" +
+    '" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A' +
+    firstDataRow +
+    '" sqref="A' +
+    firstDataRow +
+    '"/></sheetView></sheetViews>' +
+    '<sheetFormatPr defaultRowHeight="15"/>' +
     "<cols>" +
     cols +
     "</cols><sheetData>" +
     rows.join("") +
-    "</sheetData><mergeCells count=\"" +
-    mergeList.length +
-    "\">" +
-    mergeList.join("") +
-    "</mergeCells><autoFilter ref=\"A" +
-    headerRow +
-    ":" +
-    lastColumn +
-    lastDataRow +
-    "\"/></worksheet>"
+    "</sheetData>" +
+    autoFilter +
+    merges +
+    '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>' +
+    "</worksheet>"
   );
 }
 
@@ -597,8 +617,8 @@ export function exportReportExcel(data: ReportExportData) {
       data: encoder.encode(
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
-          '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="/xl/worksheets/sheet1.xml"/>' +
+          '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="/xl/styles.xml"/>' +
           "</Relationships>",
       ),
     },
