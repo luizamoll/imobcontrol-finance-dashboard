@@ -34,7 +34,10 @@ function MinhaContaPage() {
   const [senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmacao, setConfirmacao] = useState("");
+  const [codigoEmail, setCodigoEmail] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [confirmandoCodigo, setConfirmandoCodigo] = useState(false);
+  const [reenviandoCodigo, setReenviandoCodigo] = useState(false);
 
   useEffect(() => {
     setNome(usuario?.nome ?? "");
@@ -83,12 +86,55 @@ function MinhaContaPage() {
       toast.success(
         resposta.emailVerificado
           ? "Sua conta foi atualizada."
-          : "Dados atualizados. Confirme o novo e-mail pelo link enviado.",
+          : "Dados atualizados. Enviamos um código de 6 dígitos para o novo e-mail.",
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível atualizar sua conta.");
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function confirmarCodigoEmail() {
+    const codigo = codigoEmail.replace(/\D/g, "");
+    if (codigo.length !== 6) {
+      toast.error("Digite o código de 6 dígitos enviado ao seu e-mail.");
+      return;
+    }
+
+    setConfirmandoCodigo(true);
+    try {
+      await apiJson<void>("/api/auth/verificar-email-codigo", {
+        method: "POST",
+        body: JSON.stringify({ codigo }),
+      });
+      await recarregar();
+      setCodigoEmail("");
+      toast.success("E-mail verificado com sucesso.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível confirmar o código.",
+      );
+    } finally {
+      setConfirmandoCodigo(false);
+    }
+  }
+
+  async function reenviarCodigoEmail() {
+    setReenviandoCodigo(true);
+    try {
+      await apiJson<void>("/api/auth/reenviar-verificacao-email", {
+        method: "POST",
+      });
+      toast.success("Novo código enviado para o seu e-mail.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível reenviar o código agora.",
+      );
+    } finally {
+      setReenviandoCodigo(false);
     }
   }
 
@@ -151,9 +197,48 @@ function MinhaContaPage() {
                 <span>
                   {usuario?.emailVerificado
                     ? "E-mail verificado."
-                    : "E-mail aguardando confirmação. Confirme pelo link enviado antes do próximo login."}
+                    : "E-mail aguardando confirmação. Digite abaixo o código enviado para este endereço."}
                 </span>
               </div>
+
+              {!usuario?.emailVerificado && (
+                <div className="mt-3 rounded-lg border border-primary/15 bg-primary/5 p-4">
+                  <div className="text-sm font-medium text-foreground">
+                    Confirmar e-mail
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    O código tem 6 dígitos, é de uso único e expira em 15 minutos.
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={codigoEmail}
+                      onChange={(event) =>
+                        setCodigoEmail(event.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      placeholder="000000"
+                      className="font-mono tracking-[0.28em] sm:max-w-40"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => void confirmarCodigoEmail()}
+                      disabled={confirmandoCodigo || codigoEmail.length !== 6}
+                    >
+                      {confirmandoCodigo ? "Confirmando..." : "Confirmar código"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void reenviarCodigoEmail()}
+                      disabled={reenviandoCodigo}
+                    >
+                      {reenviandoCodigo ? "Reenviando..." : "Reenviar código"}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-border/70 pt-5">
