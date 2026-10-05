@@ -41,7 +41,7 @@ export const Route = createFileRoute("/recebedores")({
 });
 
 function RecebedoresPage() {
-  const { state, setState, updateConfig } = useStore();
+  const { state, updateConfig } = useStore();
   const [novoNome, setNovoNome] = useState("");
   const [novoTipo, setNovoTipo] = useState<"socio" | "empresa" | "corretor">("corretor");
   const [novoDocumento, setNovoDocumento] = useState("");
