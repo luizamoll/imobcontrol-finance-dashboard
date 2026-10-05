@@ -501,13 +501,19 @@ public class FinanceiroService {
                 BigDecimal valorParcela = moeda(item.valor());
 
                 if (itemParcelado) {
-                    long moduloAjuste = Math.abs(ajusteRestanteCentavos);
-                    if (moduloAjuste > 0 && moduloAjuste >= parcelasAjustaveisRestantes) {
-                        long passo = ajusteRestanteCentavos > 0 ? 1L : -1L;
-                        valorParcela = moeda(valorParcela.add(BigDecimal.valueOf(passo, 2)));
-                        ajusteRestanteCentavos -= passo;
-                    }
                     parcelasAjustaveisRestantes--;
+                    if (parcelasAjustaveisRestantes == 0 && ajusteRestanteCentavos != 0) {
+                        valorParcela = moeda(
+                                valorParcela.add(BigDecimal.valueOf(ajusteRestanteCentavos, 2))
+                        );
+                        if (valorParcela.signum() <= 0) {
+                            throw new ResponseStatusException(
+                                    HttpStatus.BAD_REQUEST,
+                                    "O ajuste final deixaria a última parcela sem valor positivo"
+                            );
+                        }
+                        ajusteRestanteCentavos = 0;
+                    }
                 }
 
                 Parcela parcela = new Parcela();
@@ -559,7 +565,7 @@ public class FinanceiroService {
         if (diferencaCentavos == 0) return;
 
         int parcelasAjustaveis = quantidadeParcelasAjustaveis(body.composicao());
-        long limiteArredondamento = Math.max(1L, (parcelasAjustaveis + 1L) / 2L);
+        long limiteArredondamento = Math.max(1L, parcelasAjustaveis * 5L);
 
         if (parcelasAjustaveis == 0 || diferencaCentavos > limiteArredondamento) {
             throw new ResponseStatusException(
