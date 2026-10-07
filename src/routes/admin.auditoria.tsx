@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { apiJson } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatLocalDateTime } from "@/lib/format";
 
 export const Route = createFileRoute("/admin/auditoria")({
   component: AdminAuditoriaPage,
@@ -153,7 +154,7 @@ function AdminAuditoriaPage() {
             {filtrados.map((registro) => (
               <TableRow key={registro.id}>
                 <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                  {new Date(registro.criadoEm).toLocaleString("pt-BR")}
+                  {formatLocalDateTime(registro.criadoEm)}
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline">{rotulos[registro.acao] ?? registro.acao}</Badge>
