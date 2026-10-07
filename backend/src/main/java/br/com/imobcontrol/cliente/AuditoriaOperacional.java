@@ -9,6 +9,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Entity
 @Table(name = "auditoria_operacional")
@@ -68,9 +69,11 @@ public class AuditoriaOperacional {
         this.detalhes = detalhes;
     }
 
+    private static final ZoneId FUSO_NEGOCIO = ZoneId.of("America/Sao_Paulo");
+
     @PrePersist
     void prePersist() {
-        criadoEm = LocalDateTime.now();
+        criadoEm = LocalDateTime.now(FUSO_NEGOCIO);
     }
 
     public Long getId() { return id; }
