@@ -16,6 +16,26 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: imobcontrol_test
+          POSTGRES_USER: imobcontrol
+          POSTGRES_PASSWORD: imobcontrol
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U imobcontrol -d imobcontrol_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/imobcontrol_test
+      SPRING_DATASOURCE_USERNAME: imobcontrol
+      SPRING_DATASOURCE_PASSWORD: imobcontrol
+
     defaults:
       run:
         working-directory: backend
