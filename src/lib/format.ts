@@ -26,6 +26,17 @@ export const formatDate = (iso?: string) => {
   return d.toLocaleDateString("pt-BR");
 };
 
+export const formatLocalDateTime = (iso?: string) => {
+  if (!iso) return "-";
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(iso);
+  if (!m) {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "-" : d.toLocaleString("pt-BR");
+  }
+  const segundos = m[6] ? `:${m[6]}` : "";
+  return `${m[3]}/${m[2]}/${m[1]}, ${m[4]}:${m[5]}${segundos}`;
+};
+
 export const formatCNPJ = (v: string) => {
   const d = (v || "").replace(/\D/g, "").slice(0, 14);
   return d
