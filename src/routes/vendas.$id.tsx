@@ -65,7 +65,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { addMonths, brl, formatDate, pct, uid } from "@/lib/format";
+import { addMonths, brl, formatDate, formatLocalDateTime, pct, uid } from "@/lib/format";
 import { useLiveNow } from "@/lib/use-live-now";
 import { useTenant } from "@/lib/tenant";
 import {
@@ -592,7 +592,7 @@ function VendaDetail() {
                               : registro.acao}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {new Date(registro.criadoEm).toLocaleString("pt-BR")}
+                        {formatLocalDateTime(registro.criadoEm)}
                       </div>
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
