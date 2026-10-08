@@ -2,6 +2,7 @@ package br.com.imobcontrol.tenant;
 
 import br.com.imobcontrol.cliente.AuditoriaOperacional;
 import br.com.imobcontrol.cliente.AuditoriaOperacionalRepository;
+import br.com.imobcontrol.cliente.ClienteRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -30,15 +31,18 @@ public class SuperAdminEmpresaController {
     private final EmpresaRepository empresas;
     private final UsuarioRepository usuarios;
     private final AuditoriaOperacionalRepository auditoria;
+    private final ClienteRepository clientes;
 
     public SuperAdminEmpresaController(
             EmpresaRepository empresas,
             UsuarioRepository usuarios,
-            AuditoriaOperacionalRepository auditoria
+            AuditoriaOperacionalRepository auditoria,
+            ClienteRepository clientes
     ) {
         this.empresas = empresas;
         this.usuarios = usuarios;
         this.auditoria = auditoria;
+        this.clientes = clientes;
     }
 
     @GetMapping
@@ -203,6 +207,7 @@ public class SuperAdminEmpresaController {
                 empresa.isAtiva(),
                 administradoresAtivos,
                 administradoresPendentes,
+                clientes.countByEmpresaId(empresa.getId()),
                 empresa.getCriadoEm(),
                 empresa.getAtualizadoEm()
         );
@@ -219,6 +224,7 @@ public class SuperAdminEmpresaController {
             boolean ativa,
             long administradoresAtivos,
             long administradoresPendentes,
+            long clientesCadastrados,
             java.time.LocalDateTime criadoEm,
             java.time.LocalDateTime atualizadoEm
     ) {
