@@ -44,13 +44,20 @@ public class SuperAdminAuditoriaController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fim
     ) {
         int tamanhoSeguro = Math.max(1, Math.min(tamanho, 200));
+        LocalDateTime inicioEfetivo = inicio == null
+                ? LocalDateTime.of(2000, 1, 1, 0, 0)
+                : inicio;
+        LocalDateTime fimEfetivo = fim == null
+                ? LocalDateTime.of(9999, 12, 31, 23, 59, 59)
+                : fim;
+
         return auditoria.buscar(
                         empresaId,
                         usuarioId,
                         acao == null ? null : acao.trim(),
                         entidade == null ? null : entidade.trim(),
-                        inicio,
-                        fim,
+                        inicioEfetivo,
+                        fimEfetivo,
                         PageRequest.of(Math.max(0, pagina), tamanhoSeguro)
                 )
                 .map(this::toResponse);
