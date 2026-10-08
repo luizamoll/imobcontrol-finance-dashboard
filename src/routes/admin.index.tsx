@@ -99,14 +99,14 @@ function AdminDashboard() {
     }
   }
 
-  useEffect(() => {
-    const empresasAtivas = empresas.filter((empresa) => empresa.ativa !== false);
+  const empresasAtivas = empresas.filter((empresa) => empresa.ativa !== false);
   const totalClientes = empresas.reduce(
     (total, empresa) => total + (empresa.clientesCadastrados ?? 0),
     0,
   );
 
-  if (usuario?.perfil !== "SUPER_ADMIN") {
+  useEffect(() => {
+    if (usuario?.perfil !== "SUPER_ADMIN") {
       setCarregando(false);
       return;
     }
