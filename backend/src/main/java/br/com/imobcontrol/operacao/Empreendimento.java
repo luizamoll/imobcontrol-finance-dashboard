@@ -45,6 +45,9 @@ public class Empreendimento {
     @Column(name = "valor_total", nullable = false, precision = 19, scale = 2)
     private BigDecimal valorTotal = BigDecimal.ZERO;
 
+    @Column(name = "socio_nome", length = 160)
+    private String socioNome;
+
     @Column(name = "socio_pct", nullable = false, precision = 9, scale = 4)
     private BigDecimal socioPct = BigDecimal.ZERO;
 
@@ -65,6 +68,9 @@ public class Empreendimento {
 
     @Column(name = "inadimplencia_json", columnDefinition = "TEXT")
     private String inadimplenciaJson;
+
+    @Column(name = "reajuste_contratual_json", columnDefinition = "TEXT")
+    private String reajusteContratualJson;
 
     @Column(columnDefinition = "TEXT")
     private String observacoes;
@@ -117,6 +123,8 @@ public class Empreendimento {
     public void setUnidadesPrevistas(Integer unidadesPrevistas) { this.unidadesPrevistas = unidadesPrevistas; }
     public BigDecimal getValorTotal() { return valorTotal; }
     public void setValorTotal(BigDecimal valorTotal) { this.valorTotal = valorTotal; }
+    public String getSocioNome() { return socioNome; }
+    public void setSocioNome(String socioNome) { this.socioNome = socioNome; }
     public BigDecimal getSocioPct() { return socioPct; }
     public void setSocioPct(BigDecimal socioPct) { this.socioPct = socioPct; }
     public BigDecimal getEmpresaPct() { return empresaPct; }
@@ -131,6 +139,8 @@ public class Empreendimento {
     public void setComissaoSobreAcrescimos(boolean comissaoSobreAcrescimos) { this.comissaoSobreAcrescimos = comissaoSobreAcrescimos; }
     public String getInadimplenciaJson() { return inadimplenciaJson; }
     public void setInadimplenciaJson(String inadimplenciaJson) { this.inadimplenciaJson = inadimplenciaJson; }
+    public String getReajusteContratualJson() { return reajusteContratualJson; }
+    public void setReajusteContratualJson(String reajusteContratualJson) { this.reajusteContratualJson = reajusteContratualJson; }
     public String getObservacoes() { return observacoes; }
     public void setObservacoes(String observacoes) { this.observacoes = observacoes; }
     public String getStatus() { return status; }
