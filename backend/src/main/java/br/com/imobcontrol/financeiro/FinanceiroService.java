@@ -121,6 +121,7 @@ public class FinanceiroService {
         }
 
         validarComposicao(body);
+        validarComposicaoEconomica(body);
 
         JsonNode regras = aplicarInadimplencia(
                 regrasEfetivas(emp, unidade),
@@ -132,6 +133,10 @@ public class FinanceiroService {
         venda.setUnidadeId(unidade.getId());
         venda.setClienteId(cliente.getId());
         venda.setValorTotal(moeda(body.valorTotal()));
+        venda.setValorImovel(moedaOpcional(body.valorImovel()));
+        venda.setCorretagemValor(moedaOpcional(body.corretagemValor()));
+        venda.setCorretagemCompoeValorContrato(body.corretagemCompoeValorContrato());
+        venda.setCorretagemFormaPagamento(texto(body.corretagemFormaPagamento()));
         venda.setDataContrato(body.dataContrato());
         venda.setCorretorNome(texto(body.corretorNome()));
         venda.setCorretorPct(percentual(body.corretorPct()));
@@ -209,6 +214,7 @@ public class FinanceiroService {
             }
         } else {
             validarComposicao(body);
+            validarComposicaoEconomica(body);
             atual.setClienteId(body.clienteId());
             atual.setValorTotal(moeda(body.valorTotal()));
             pagamentos.deleteByEmpresaIdAndVendaId(ctx.empresaId(), atual.getId());
@@ -221,6 +227,10 @@ public class FinanceiroService {
             );
         }
 
+        atual.setValorImovel(moedaOpcional(body.valorImovel()));
+        atual.setCorretagemValor(moedaOpcional(body.corretagemValor()));
+        atual.setCorretagemCompoeValorContrato(body.corretagemCompoeValorContrato());
+        atual.setCorretagemFormaPagamento(texto(body.corretagemFormaPagamento()));
         atual.setDataContrato(body.dataContrato());
         atual.setCorretorNome(texto(body.corretorNome()));
         atual.setCorretorPct(percentual(body.corretorPct()));
@@ -350,6 +360,10 @@ public class FinanceiroService {
         }
 
         JsonNode regras = ler(venda.getRegrasJson());
+        String socioNome = textoJson(regras, "socioNome", null);
+        if (texto(socioNome) == null) {
+            socioNome = empreendimento(ctx.empresaId(), venda.getEmpreendimentoId()).getSocioNome();
+        }
         BigDecimal aliquota = decimal(regras, "aliquotaTributaria", BigDecimal.ZERO);
         BigDecimal empresaPct = decimal(regras, "empresaPct", BigDecimal.ZERO);
         BigDecimal socioPct = decimal(regras, "socioPct", BigDecimal.ZERO);
@@ -390,6 +404,7 @@ public class FinanceiroService {
         mov.setUnidadeId(parcela.getUnidadeId());
         mov.setClienteId(parcela.getClienteId());
         mov.setCorretorNome(venda.getCorretorNome());
+        mov.setSocioNome(texto(socioNome));
         mov.setOrigem(parcela.getOrigemTipo());
         mov.setOrigemDescricao(parcela.getOrigemDescricao());
         mov.setDataMovimento(data);
@@ -608,6 +623,7 @@ public class FinanceiroService {
 
         ObjectNode node = json.createObjectNode();
         node.put("aliquotaTributaria", emp.getAliquotaTributaria());
+        if (texto(emp.getSocioNome()) != null) node.put("socioNome", emp.getSocioNome());
         node.put("socioPct", emp.getSocioPct());
         node.put("empresaPct", emp.getEmpresaPct());
         node.put("corretorPct", emp.getCorretorPct());
@@ -615,6 +631,9 @@ public class FinanceiroService {
         node.put("comissaoSobreAcrescimos", emp.isComissaoSobreAcrescimos());
         if (texto(emp.getInadimplenciaJson()) != null) {
             node.set("inadimplencia", ler(emp.getInadimplenciaJson()));
+        }
+        if (texto(emp.getReajusteContratualJson()) != null) {
+            node.set("reajusteContratual", ler(emp.getReajusteContratualJson()));
         }
         return node;
     }
@@ -673,8 +692,10 @@ public class FinanceiroService {
 
         return new VendaResponse(
                 v.getId(), v.getEmpresaId(), v.getEmpreendimentoId(), v.getUnidadeId(),
-                v.getClienteId(), cliente.getNome(), v.getValorTotal(), v.getDataContrato(),
-                v.getCorretorNome(), v.getCorretorPct(), v.getRepasseComissaoPct(),
+                v.getClienteId(), cliente.getNome(), v.getValorTotal(),
+                v.getValorImovel(), v.getCorretagemValor(),
+                v.getCorretagemCompoeValorContrato(), v.getCorretagemFormaPagamento(),
+                v.getDataContrato(), v.getCorretorNome(), v.getCorretorPct(), v.getRepasseComissaoPct(),
                 v.isComissaoSobreAcrescimos(), v.getObservacoes(), v.getStatus(),
                 ler(v.getRegrasJson()), v.getVersao(), composicao
         );
@@ -784,7 +805,7 @@ public class FinanceiroService {
         return new MovimentoResponse(
                 m.getId(), m.getParcelaId(), m.getVendaId(), m.getEmpreendimentoId(),
                 m.getUnidadeId(), m.getClienteId(), cliente.getNome(), m.getCorretorNome(),
-                m.getOrigem(), m.getOrigemDescricao(), m.getDataMovimento(), usuario,
+                m.getSocioNome(), m.getOrigem(), m.getOrigemDescricao(), m.getDataMovimento(), usuario,
                 m.getValorRecebido(), m.getImpostoReservado(), m.getComissaoPaga(),
                 m.getEmpresaValor(), m.getSocioValor(), m.getAliquotaTributariaAplicada(),
                 m.getEmpresaPctAplicada(), m.getSocioPctAplicada(), m.getComissaoBaseCalculo(),
@@ -827,6 +848,30 @@ public class FinanceiroService {
                             : "A venda foi alterada por outro usuário. Atualize a tela."
             );
         }
+    }
+
+    private void validarComposicaoEconomica(VendaRequest body) {
+        BigDecimal valorImovel = moedaOpcional(body.valorImovel());
+        BigDecimal corretagem = moedaOpcional(body.corretagemValor());
+        if (Boolean.TRUE.equals(body.corretagemCompoeValorContrato())
+                && valorImovel != null
+                && corretagem != null) {
+            BigDecimal soma = moeda(valorImovel.add(corretagem));
+            if (soma.compareTo(moeda(body.valorTotal())) != 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Valor do imóvel + corretagem deve fechar com o valor total do contrato"
+                );
+            }
+        }
+    }
+
+    private BigDecimal moedaOpcional(BigDecimal valor) {
+        if (valor == null) return null;
+        if (valor.signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor não pode ser negativo");
+        }
+        return moeda(valor);
     }
 
     private BigDecimal percentual(BigDecimal valor) {
@@ -912,7 +957,29 @@ public class FinanceiroService {
 
         BigDecimal novoValor = moeda(body.valorTotal());
         if (atual.getValorTotal().compareTo(novoValor) != 0) {
-            alteracoes.add("Valor da venda: " + dinheiro(atual.getValorTotal()) + " → " + dinheiro(novoValor));
+            alteracoes.add("Valor total do contrato: " + dinheiro(atual.getValorTotal()) + " → " + dinheiro(novoValor));
+        }
+
+        BigDecimal novoValorImovel = moedaOpcional(body.valorImovel());
+        if (!Objects.equals(atual.getValorImovel(), novoValorImovel)) {
+            alteracoes.add("Valor do imóvel: " + dinheiro(atual.getValorImovel()) + " → " + dinheiro(novoValorImovel));
+        }
+
+        BigDecimal novaCorretagem = moedaOpcional(body.corretagemValor());
+        if (!Objects.equals(atual.getCorretagemValor(), novaCorretagem)) {
+            alteracoes.add("Corretagem: " + dinheiro(atual.getCorretagemValor()) + " → " + dinheiro(novaCorretagem));
+        }
+
+        if (!Objects.equals(atual.getCorretagemCompoeValorContrato(), body.corretagemCompoeValorContrato())) {
+            alteracoes.add("Corretagem compõe o valor do contrato: "
+                    + simNao(Boolean.TRUE.equals(atual.getCorretagemCompoeValorContrato()))
+                    + " → " + simNao(Boolean.TRUE.equals(body.corretagemCompoeValorContrato())));
+        }
+
+        if (!Objects.equals(texto(atual.getCorretagemFormaPagamento()), texto(body.corretagemFormaPagamento()))) {
+            alteracoes.add("Forma da corretagem: "
+                    + textoLegivel(texto(atual.getCorretagemFormaPagamento()))
+                    + " → " + textoLegivel(texto(body.corretagemFormaPagamento())));
         }
 
         if (!Objects.equals(atual.getDataContrato(), body.dataContrato())) {
