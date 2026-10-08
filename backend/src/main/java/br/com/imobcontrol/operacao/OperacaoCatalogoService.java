@@ -252,6 +252,7 @@ public class OperacaoCatalogoService {
         e.setTipo(body.tipo().trim().toLowerCase(Locale.ROOT));
         e.setUnidadesPrevistas(body.unidadesPrevistas());
         e.setValorTotal(valor(body.valorTotal()));
+        e.setSocioNome(texto(body.socioNome()));
         e.setSocioPct(valor(body.socioPct()));
         e.setEmpresaPct(valor(body.empresaPct()));
         e.setCorretorPct(valor(body.corretorPct()));
@@ -259,6 +260,8 @@ public class OperacaoCatalogoService {
         e.setRepasseComissaoPct(valor(body.repasseComissaoPct()));
         e.setComissaoSobreAcrescimos(body.comissaoSobreAcrescimos());
         e.setInadimplenciaJson(json(body.inadimplencia()));
+        validarReajusteContratual(body.reajusteContratual());
+        e.setReajusteContratualJson(json(body.reajusteContratual()));
         e.setObservacoes(texto(body.observacoes()));
         e.setStatus(body.status().trim().toLowerCase(Locale.ROOT));
     }
@@ -360,6 +363,21 @@ public class OperacaoCatalogoService {
             );
         }
         return numero;
+    }
+
+    private void validarReajusteContratual(JsonNode reajuste) {
+        if (reajuste == null || reajuste.isNull()) return;
+        if (!reajuste.isObject()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Regra de reajuste contratual inválida");
+        }
+        decimalNaoNegativo(reajuste, "percentualBase");
+        decimalNaoNegativo(reajuste, "gatilhoPercentual");
+        if (reajuste.has("periodicidadeMeses") && reajuste.path("periodicidadeMeses").asInt() < 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Periodicidade do reajuste deve ser de pelo menos 1 mês"
+            );
+        }
     }
 
     private void validarQuadraDaUnidade(Long empresaId, Long empreendimentoId, Long quadraId) {
@@ -482,6 +500,7 @@ public class OperacaoCatalogoService {
                 e.getTipo(),
                 e.getUnidadesPrevistas(),
                 e.getValorTotal(),
+                e.getSocioNome(),
                 e.getSocioPct(),
                 e.getEmpresaPct(),
                 e.getCorretorPct(),
@@ -489,6 +508,7 @@ public class OperacaoCatalogoService {
                 e.getRepasseComissaoPct(),
                 e.isComissaoSobreAcrescimos(),
                 json(e.getInadimplenciaJson()),
+                json(e.getReajusteContratualJson()),
                 e.getObservacoes(),
                 e.getStatus(),
                 e.getVersao(),
