@@ -5,6 +5,7 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import tools.jackson.databind.JsonNode;
 import java.math.BigDecimal;
@@ -16,6 +17,10 @@ public record VendaRequest(
         @NotNull Long unidadeId,
         @NotNull Long clienteId,
         @NotNull @Positive BigDecimal valorTotal,
+        @PositiveOrZero BigDecimal valorImovel,
+        @PositiveOrZero BigDecimal corretagemValor,
+        Boolean corretagemCompoeValorContrato,
+        @Size(max=40) String corretagemFormaPagamento,
         @NotNull LocalDate dataContrato,
         @Size(max=160) String corretorNome,
         @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal corretorPct,
@@ -41,19 +46,33 @@ public record VendaRequest(
             Long versao
     ) {
         this(
-                empreendimentoId,
-                unidadeId,
-                clienteId,
-                valorTotal,
-                dataContrato,
-                corretorNome,
-                corretorPct,
-                repasseComissaoPct,
-                comissaoSobreAcrescimos,
-                observacoes,
-                composicao,
-                null,
-                versao
+                empreendimentoId, unidadeId, clienteId, valorTotal,
+                null, null, null, null,
+                dataContrato, corretorNome, corretorPct, repasseComissaoPct,
+                comissaoSobreAcrescimos, observacoes, composicao, null, versao
+        );
+    }
+
+    public VendaRequest(
+            Long empreendimentoId,
+            Long unidadeId,
+            Long clienteId,
+            BigDecimal valorTotal,
+            LocalDate dataContrato,
+            String corretorNome,
+            BigDecimal corretorPct,
+            BigDecimal repasseComissaoPct,
+            boolean comissaoSobreAcrescimos,
+            String observacoes,
+            List<PagamentoRequest> composicao,
+            JsonNode regrasInadimplencia,
+            Long versao
+    ) {
+        this(
+                empreendimentoId, unidadeId, clienteId, valorTotal,
+                null, null, null, null,
+                dataContrato, corretorNome, corretorPct, repasseComissaoPct,
+                comissaoSobreAcrescimos, observacoes, composicao, regrasInadimplencia, versao
         );
     }
 
