@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { CurrencyInput } from "@/components/currency-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { ReajusteContratualForm } from "@/components/reajuste-contratual-form";
 import { EmpStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,6 +42,7 @@ import { carregarConfiguracaoEmpresa } from "@/lib/empresa-config-api";
 import { useAuth } from "@/lib/auth";
 import { brl, formatCNPJ, num, pct } from "@/lib/format";
 import {
+  DEFAULT_REAJUSTE_CONTRATUAL,
   DEFAULT_REGRAS_INADIMPLENCIA,
   empTotais,
   useStore,
@@ -48,6 +50,7 @@ import {
   type EmpreendimentoTipo,
   type InicioJuros,
   type JurosTipo,
+  type ReajusteContratual,
   type RegrasInadimplencia,
 } from "@/lib/store";
 import { useTenant } from "@/lib/tenant";
@@ -103,6 +106,7 @@ function EmpreendimentosList() {
           empresaAtualId={empresaAtualId}
           empresaAtualNome={empresaAtual?.nome ?? null}
           carregandoEmpresas={carregandoEmpresas}
+          socios={state.config.recebedores.filter((item) => item.tipo === "socio")}
           onSelecionarEmpresa={selecionarEmpresa}
           onSave={async (e) => {
             if (!empresaAtualId) {
@@ -246,6 +250,7 @@ type NovoEmpreendimento = {
   tipo: EmpreendimentoTipo;
   matriculasCount: number;
   valorTotal: number;
+  socioNome?: string;
   socioPct: number;
   empresaPct: number;
   corretorPct: number;
@@ -255,6 +260,7 @@ type NovoEmpreendimento = {
   repasseComissaoPct: number;
   comissaoSobreAcrescimos: boolean;
   inadimplencia: RegrasInadimplencia;
+  reajusteContratual?: ReajusteContratual;
   observacoes?: string;
   status: EmpStatus;
 };
@@ -266,6 +272,7 @@ function NewEmpreendimentoDialog({
   empresaAtualId,
   empresaAtualNome,
   carregandoEmpresas,
+  socios,
   onSelecionarEmpresa,
 }: {
   onSave: (e: NovoEmpreendimento) => void;
@@ -274,6 +281,7 @@ function NewEmpreendimentoDialog({
   empresaAtualId: number | null;
   empresaAtualNome: string | null;
   carregandoEmpresas: boolean;
+  socios: Array<{ nome: string }>;
   onSelecionarEmpresa: (id: number) => void;
 }) {
   const [nome, setNome] = useState("");
@@ -283,6 +291,7 @@ function NewEmpreendimentoDialog({
   const [tipo, setTipo] = useState<EmpreendimentoTipo>("loteamento");
   const [matriculasCount, setMatriculasCount] = useState("");
   const [valorTotal, setValorTotal] = useState(0);
+  const [socioNome, setSocioNome] = useState("");
   const [socioPct, setSocioPct] = useState("");
   const [empresaPct, setEmpresaPct] = useState("");
   const [corretorPct, setCorretorPct] = useState("");
@@ -291,6 +300,8 @@ function NewEmpreendimentoDialog({
   const [aliq, setAliq] = useState("");
   const [obs, setObs] = useState("");
   const [status, setStatus] = useState<EmpStatus>("planejamento");
+  const [reajusteContratual, setReajusteContratual] =
+    useState<ReajusteContratual>({ ...DEFAULT_REAJUSTE_CONTRATUAL });
 
   const [correcaoAtiva, setCorrecaoAtiva] = useState(false);
   const [correcaoIndice, setCorrecaoIndice] = useState("");
@@ -351,6 +362,10 @@ function NewEmpreendimentoDialog({
       toast.error("Informe o nome do empreendimento e a SPE responsável.");
       return;
     }
+    if (socio > 0 && !socioNome) {
+      toast.error("Selecione o sócio responsável por este empreendimento");
+      return;
+    }
     if (Math.abs(socio + empresa - 100) > 0.001) {
       toast.error("A participação do saldo líquido deve totalizar 100%", {
         description: `Sócio (${socio}%) + Empresa (${empresa}%) = ${socio + empresa}%.`,
@@ -382,6 +397,7 @@ function NewEmpreendimentoDialog({
       tipo,
       matriculasCount: Number(matriculasCount) || 0,
       valorTotal,
+      socioNome: socioNome || undefined,
       socioPct: socio,
       empresaPct: empresa,
       corretorPct: Number(corretorPct) || 0,
@@ -391,6 +407,9 @@ function NewEmpreendimentoDialog({
       repasseComissaoPct: Number(repasseComissaoPct) || 0,
       comissaoSobreAcrescimos,
       inadimplencia,
+      reajusteContratual: reajusteContratual.ativo
+        ? { ...reajusteContratual, descricao: reajusteContratual.descricao.trim() }
+        : undefined,
       observacoes: obs.trim(),
       status,
     });
@@ -539,6 +558,26 @@ function NewEmpreendimentoDialog({
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Label>Sócio deste empreendimento</Label>
+              <Select
+                value={socioNome || "__sem_socio__"}
+                onValueChange={(value) => setSocioNome(value === "__sem_socio__" ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o sócio cadastrado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__sem_socio__">Sem sócio definido</SelectItem>
+                  {socios.map((item) => (
+                    <SelectItem key={item.nome} value={item.nome}>{item.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Cada empreendimento possui seu próprio sócio. Cadastre novos sócios em Corretores e recebedores.
+              </p>
+            </div>
             <div>
               <Label>Participação do sócio no saldo líquido (%)</Label>
               <Input
@@ -622,6 +661,13 @@ function NewEmpreendimentoDialog({
           </div>
         </div>
 
+        <div className="sm:col-span-2">
+          <ReajusteContratualForm
+            value={reajusteContratual}
+            onChange={setReajusteContratual}
+          />
+        </div>
+
         <div className="sm:col-span-2 rounded-lg border border-border/70 p-4">
           <p className="text-sm font-semibold">Inadimplência deste empreendimento</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -630,7 +676,7 @@ function NewEmpreendimentoDialog({
 
           <div className="mt-4 space-y-4">
             <RegraToggle
-              titulo="Correção contratual"
+              titulo="Correção por atraso"
               ativa={correcaoAtiva}
               onAtiva={setCorrecaoAtiva}
             >
