@@ -27,6 +27,10 @@ type VendaApi = {
   clienteId: number;
   compradorNome: string;
   valorTotal: number;
+  valorImovel: number | null;
+  corretagemValor: number | null;
+  corretagemCompoeValorContrato: boolean | null;
+  corretagemFormaPagamento: string | null;
   dataContrato: string;
   corretorNome: string | null;
   corretorPct: number;
@@ -36,11 +40,13 @@ type VendaApi = {
   status: string;
   regras: {
     aliquotaTributaria?: number;
+    socioNome?: string;
     socioPct?: number;
     empresaPct?: number;
     corretorPct?: number;
     repasseComissaoPct?: number;
     comissaoSobreAcrescimos?: boolean;
+    reajusteContratual?: RegrasContrato["reajusteContratual"];
     inadimplencia?: Partial<RegrasInadimplencia>;
   };
   versao: number;
@@ -84,6 +90,7 @@ type MovimentoApi = {
   clienteId: number;
   compradorNome: string;
   corretorNome: string | null;
+  socioNome: string | null;
   origem: string;
   origemDescricao: string | null;
   data: string;
@@ -123,6 +130,7 @@ function regrasContrato(v: VendaApi): RegrasContrato {
   const r = v.regras ?? {};
   return {
     aliquotaTributaria: Number(r.aliquotaTributaria ?? 0),
+    socioNome: r.socioNome,
     socioPct: Number(r.socioPct ?? 0),
     empresaPct: Number(r.empresaPct ?? 0),
     entradaPctCorretor: Number(v.corretorPct ?? r.corretorPct ?? 0),
@@ -130,6 +138,9 @@ function regrasContrato(v: VendaApi): RegrasContrato {
     repasseComissaoPct: Number(v.repasseComissaoPct ?? r.repasseComissaoPct ?? 50),
     comissaoSobreAcrescimos:
       v.comissaoSobreAcrescimos ?? r.comissaoSobreAcrescimos ?? false,
+    reajusteContratual: r.reajusteContratual
+      ? { ...r.reajusteContratual }
+      : undefined,
     inadimplencia: { ...INAD_PADRAO, ...(r.inadimplencia ?? {}) },
   };
 }
@@ -142,6 +153,11 @@ function vendaFromApi(v: VendaApi): Venda {
     clienteId: String(v.clienteId),
     compradorNome: v.compradorNome,
     valorTotal: Number(v.valorTotal),
+    valorImovel: v.valorImovel == null ? undefined : Number(v.valorImovel),
+    corretagemValor: v.corretagemValor == null ? undefined : Number(v.corretagemValor),
+    corretagemCompoeValorContrato: v.corretagemCompoeValorContrato ?? undefined,
+    corretagemFormaPagamento:
+      (v.corretagemFormaPagamento ?? undefined) as Venda["corretagemFormaPagamento"],
     dataContrato: v.dataContrato,
     corretorNome: v.corretorNome ?? "",
     corretorPct: Number(v.corretorPct ?? 0),
@@ -195,6 +211,7 @@ function movimentoFromApi(m: MovimentoApi): Movimento {
     clienteId: String(m.clienteId),
     compradorNome: m.compradorNome,
     corretorNome: m.corretorNome ?? "",
+    socioNome: m.socioNome ?? undefined,
     origem: m.origem as Movimento["origem"],
     origemDescricao: m.origemDescricao ?? m.origem,
     data: m.data,
@@ -251,6 +268,10 @@ function vendaBody(
     unidadeId: Number(v.matriculaId),
     clienteId: Number(v.clienteId),
     valorTotal: v.valorTotal,
+    valorImovel: v.valorImovel ?? null,
+    corretagemValor: v.corretagemValor ?? null,
+    corretagemCompoeValorContrato: v.corretagemCompoeValorContrato ?? null,
+    corretagemFormaPagamento: v.corretagemFormaPagamento ?? null,
     dataContrato: v.dataContrato,
     corretorNome: v.corretorNome || null,
     corretorPct: v.corretorPct,
