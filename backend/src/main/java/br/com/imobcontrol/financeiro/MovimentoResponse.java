@@ -12,6 +12,7 @@ public record MovimentoResponse(
         Long clienteId,
         String compradorNome,
         String corretorNome,
+        String socioNome,
         String origem,
         String origemDescricao,
         LocalDate data,
