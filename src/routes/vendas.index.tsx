@@ -213,6 +213,12 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [clientes, setClientes] = useState<ClienteVenda[]>([]);
   const [carregandoClientes, setCarregandoClientes] = useState(false);
   const [valorNegociado, setValorNegociado] = useState(0);
+  const [valorImovel, setValorImovel] = useState(0);
+  const [corretagemValor, setCorretagemValor] = useState(0);
+  const [corretagemCompoeTotal, setCorretagemCompoeTotal] = useState<"nao_informado" | "sim" | "nao">("nao_informado");
+  const [corretagemForma, setCorretagemForma] = useState<
+    "repasse_recebimentos" | "direto_corretor" | "separada" | "outro"
+  >("repasse_recebimentos");
   const [dataContrato, setDataContrato] = useState(todayISO());
   const [corretor, setCorretor] = useState("");
   const [corretorPct, setCorretorPct] = useState("0");
@@ -363,6 +369,18 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       });
       return;
     }
+    if (
+      corretagemCompoeTotal === "sim" &&
+      valorImovel > 0 &&
+      corretagemValor >= 0 &&
+      Math.abs(valorImovel + corretagemValor - valorContrato) > 0.01
+    ) {
+      toast.error("Valor do imóvel + corretagem não fecha com o total do contrato", {
+        description: `${brl(valorImovel)} + ${brl(corretagemValor)} = ${brl(valorImovel + corretagemValor)}`,
+      });
+      return;
+    }
+
     const pctCorretor = Number(corretorPct) || 0;
     const pctRepasse = Number(repasseComissaoPct) || 0;
     if (pctCorretor < 0 || pctCorretor > 100 || pctRepasse < 0 || pctRepasse > 100) {
@@ -381,6 +399,13 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         clienteId,
         compradorNome: clienteSelecionado.nome,
         valorTotal: valorContrato,
+        valorImovel: valorImovel > 0 ? valorImovel : undefined,
+        corretagemValor: corretagemValor > 0 ? corretagemValor : undefined,
+        corretagemCompoeValorContrato:
+          corretagemCompoeTotal === "nao_informado"
+            ? undefined
+            : corretagemCompoeTotal === "sim",
+        corretagemFormaPagamento: corretagemValor > 0 ? corretagemForma : undefined,
         dataContrato,
         corretorNome: corretor,
         corretorPct: pctCorretor,
@@ -419,6 +444,10 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
               setEmpId(value);
               setMatId("");
               setValorNegociado(0);
+              setValorImovel(0);
+              setCorretagemValor(0);
+              setCorretagemCompoeTotal("nao_informado");
+              setCorretagemForma("repasse_recebimentos");
               setCorretorPct("0");
               setRepasseComissaoPct("50");
               setComissaoSobreAcrescimos("nao");
@@ -522,19 +551,66 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <div>
-          <Label>Valor negociado do contrato (R$)</Label>
+          <Label>Valor total do contrato (R$)</Label>
           <CurrencyInput
             value={valorNegociado}
             onValueChange={setValorNegociado}
-            placeholder="Ex.: 100.000,00"
+            placeholder="Ex.: 320.000,00"
           />
           {matricula && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Valor cadastrado da unidade: {brl(matricula.valorVenda)}. Altere apenas se a venda tiver
-              negociação diferente.
+              Valor cadastrado da unidade: {brl(matricula.valorVenda)}. O total do contrato pode incluir outros componentes.
             </p>
           )}
         </div>
+
+        <div>
+          <Label>Valor efetivo do imóvel (R$)</Label>
+          <CurrencyInput
+            value={valorImovel}
+            onValueChange={setValorImovel}
+            placeholder="Ex.: 288.000,00"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Use quando o contrato separar o preço do imóvel de corretagem ou outros componentes.
+          </p>
+        </div>
+
+        <div>
+          <Label>Valor da corretagem (R$)</Label>
+          <CurrencyInput
+            value={corretagemValor}
+            onValueChange={setCorretagemValor}
+            placeholder="Ex.: 32.000,00"
+          />
+        </div>
+
+        <div>
+          <Label>A corretagem compõe o valor total do contrato?</Label>
+          <Select value={corretagemCompoeTotal} onValueChange={(value) => setCorretagemCompoeTotal(value as typeof corretagemCompoeTotal)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nao_informado">Não informado no cadastro</SelectItem>
+              <SelectItem value="sim">Sim — está dentro do total</SelectItem>
+              <SelectItem value="nao">Não — é cobrada fora do total</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {corretagemValor > 0 && (
+          <div>
+            <Label>Forma de pagamento da corretagem</Label>
+            <Select value={corretagemForma} onValueChange={(value) => setCorretagemForma(value as typeof corretagemForma)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="repasse_recebimentos">Repasse a partir dos recebimentos</SelectItem>
+                <SelectItem value="direto_corretor">Pagamento direto ao corretor</SelectItem>
+                <SelectItem value="separada">Cobrança separada</SelectItem>
+                <SelectItem value="outro">Outra forma prevista no contrato</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div>
           <Label>Data do contrato</Label>
