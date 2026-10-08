@@ -15,6 +15,10 @@ public class Venda {
     @Column(name="unidade_id", nullable=false) private Long unidadeId;
     @Column(name="cliente_id", nullable=false) private Long clienteId;
     @Column(name="valor_total", nullable=false, precision=19, scale=2) private BigDecimal valorTotal;
+    @Column(name="valor_imovel", precision=19, scale=2) private BigDecimal valorImovel;
+    @Column(name="corretagem_valor", precision=19, scale=2) private BigDecimal corretagemValor;
+    @Column(name="corretagem_compoe_valor_contrato") private Boolean corretagemCompoeValorContrato;
+    @Column(name="corretagem_forma_pagamento", length=40) private String corretagemFormaPagamento;
     @Column(name="data_contrato", nullable=false) private LocalDate dataContrato;
     @Column(name="corretor_nome", length=160) private String corretorNome;
     @Column(name="corretor_pct", nullable=false, precision=9, scale=4) private BigDecimal corretorPct = BigDecimal.ZERO;
@@ -37,6 +41,10 @@ public class Venda {
     public Long getUnidadeId(){return unidadeId;} public void setUnidadeId(Long v){unidadeId=v;}
     public Long getClienteId(){return clienteId;} public void setClienteId(Long v){clienteId=v;}
     public BigDecimal getValorTotal(){return valorTotal;} public void setValorTotal(BigDecimal v){valorTotal=v;}
+    public BigDecimal getValorImovel(){return valorImovel;} public void setValorImovel(BigDecimal v){valorImovel=v;}
+    public BigDecimal getCorretagemValor(){return corretagemValor;} public void setCorretagemValor(BigDecimal v){corretagemValor=v;}
+    public Boolean getCorretagemCompoeValorContrato(){return corretagemCompoeValorContrato;} public void setCorretagemCompoeValorContrato(Boolean v){corretagemCompoeValorContrato=v;}
+    public String getCorretagemFormaPagamento(){return corretagemFormaPagamento;} public void setCorretagemFormaPagamento(String v){corretagemFormaPagamento=v;}
     public LocalDate getDataContrato(){return dataContrato;} public void setDataContrato(LocalDate v){dataContrato=v;}
     public String getCorretorNome(){return corretorNome;} public void setCorretorNome(String v){corretorNome=v;}
     public BigDecimal getCorretorPct(){return corretorPct;} public void setCorretorPct(BigDecimal v){corretorPct=v;}
