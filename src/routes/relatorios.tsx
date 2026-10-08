@@ -103,8 +103,9 @@ function RelatoriosPage() {
         columns: [
           { key: "data", label: "Data", width: 0.9 },
           { key: "cliente", label: "Cliente", width: 1.8 },
-          { key: "empreendimento", label: "Empreendimento", width: 1.7 },
-          { key: "origem", label: "Origem", width: 1.6 },
+          { key: "empreendimento", label: "Empreendimento", width: 1.5 },
+          { key: "socio", label: "Sócio", width: 1.3 },
+          { key: "origem", label: "Origem", width: 1.4 },
           { key: "valor", label: "Valor recebido", width: 1.2, align: "right", kind: "currency" },
         ],
         rows: itens.map((p) => ({
@@ -112,6 +113,12 @@ function RelatoriosPage() {
           cliente: p.compradorNome,
           empreendimento:
             state.empreendimentos.find((e) => e.id === p.empreendimentoId)?.nome ?? "—",
+          socio:
+            state.movimentos
+              .filter((movimento) => movimento.parcelaId === p.id)
+              .at(-1)?.socioNome
+            ?? state.empreendimentos.find((e) => e.id === p.empreendimentoId)?.socioNome
+            ?? "—",
           origem: p.origemDescricao,
           valor: p.valorPago,
         })),
@@ -134,10 +141,13 @@ function RelatoriosPage() {
         columns: [
           { key: "data", label: "Data", width: 0.9 },
           { key: "comprador", label: "Comprador", width: 1.8 },
-          { key: "empreendimento", label: "Empreendimento", width: 1.7 },
-          { key: "unidade", label: "Unidade", width: 1.1 },
-          { key: "corretor", label: "Corretor", width: 1.5 },
-          { key: "valor", label: "Valor da venda", width: 1.2, align: "right", kind: "currency" },
+          { key: "empreendimento", label: "Empreendimento", width: 1.5 },
+          { key: "unidade", label: "Unidade", width: 1.0 },
+          { key: "socio", label: "Sócio", width: 1.3 },
+          { key: "corretor", label: "Corretor", width: 1.3 },
+          { key: "imovel", label: "Valor imóvel", width: 1.1, align: "right", kind: "currency" },
+          { key: "corretagem", label: "Corretagem", width: 1.0, align: "right", kind: "currency" },
+          { key: "valor", label: "Total contrato", width: 1.1, align: "right", kind: "currency" },
         ],
         rows: itens.map((v) => {
           const unidade = state.matriculas.find((m) => m.id === v.matriculaId);
@@ -147,7 +157,10 @@ function RelatoriosPage() {
             empreendimento:
               state.empreendimentos.find((e) => e.id === v.empreendimentoId)?.nome ?? "—",
             unidade: unidade ? `${unidade.numero} · ${unidade.unidade}` : "—",
+            socio: v.regras?.socioNome || "—",
             corretor: v.corretorNome || "—",
+            imovel: v.valorImovel ?? null,
+            corretagem: v.corretagemValor ?? null,
             valor: v.valorTotal,
           };
         }),
@@ -202,6 +215,7 @@ function RelatoriosPage() {
         .reduce((soma, parcela) => soma + parcela.valorPago, 0);
       return {
         empreendimento: e.nome,
+        socio: e.socioNome || "—",
         vgv: e.valorTotal,
         vendido,
         recebido,
@@ -220,7 +234,8 @@ function RelatoriosPage() {
         `Vendido: ${brl(dados.reduce((soma, item) => soma + item.vendido, 0))} · Recebido: ${brl(dados.reduce((soma, item) => soma + item.recebido, 0))}`,
       ],
       columns: [
-        { key: "empreendimento", label: "Empreendimento", width: 2.2 },
+        { key: "empreendimento", label: "Empreendimento", width: 1.9 },
+        { key: "socio", label: "Sócio atual", width: 1.4 },
         { key: "vgv", label: "VGV", width: 1.2, align: "right", kind: "currency" },
         { key: "vendido", label: "Vendas", width: 1.2, align: "right", kind: "currency" },
         { key: "recebido", label: "Recebido", width: 1.2, align: "right", kind: "currency" },
