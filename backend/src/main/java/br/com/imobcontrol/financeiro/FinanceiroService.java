@@ -360,13 +360,21 @@ public class FinanceiroService {
         }
 
         JsonNode regras = ler(venda.getRegrasJson());
-        String socioNome = textoJson(regras, "socioNome", null);
-        if (texto(socioNome) == null) {
-            socioNome = empreendimento(ctx.empresaId(), venda.getEmpreendimentoId()).getSocioNome();
+        Empreendimento empreendimentoAtual =
+                empreendimento(ctx.empresaId(), venda.getEmpreendimentoId());
+
+        String socioNome = texto(empreendimentoAtual.getSocioNome());
+        if (socioNome == null) {
+            socioNome = textoJson(regras, "socioNome", null);
         }
+
         BigDecimal aliquota = decimal(regras, "aliquotaTributaria", BigDecimal.ZERO);
-        BigDecimal empresaPct = decimal(regras, "empresaPct", BigDecimal.ZERO);
-        BigDecimal socioPct = decimal(regras, "socioPct", BigDecimal.ZERO);
+        BigDecimal empresaPct = empreendimentoAtual.getEmpresaPct() == null
+                ? decimal(regras, "empresaPct", BigDecimal.ZERO)
+                : empreendimentoAtual.getEmpresaPct();
+        BigDecimal socioPct = empreendimentoAtual.getSocioPct() == null
+                ? decimal(regras, "socioPct", BigDecimal.ZERO)
+                : empreendimentoAtual.getSocioPct();
 
         BigDecimal imposto = porcentagem(recebido, aliquota);
         BigDecimal comissaoTotal = porcentagem(venda.getValorTotal(), venda.getCorretorPct());
@@ -615,23 +623,38 @@ public class FinanceiroService {
     }
 
     private JsonNode regrasEfetivas(Empreendimento emp, Unidade unidade) {
-        if (texto(unidade.getRegrasJson()) != null) return ler(unidade.getRegrasJson());
-        if (unidade.getQuadraId() != null) {
-            Quadra q = quadras.findByIdAndEmpresaId(unidade.getQuadraId(), emp.getEmpresaId()).orElse(null);
-            if (q != null && texto(q.getRegrasJson()) != null) return ler(q.getRegrasJson());
-        }
-
         ObjectNode node = json.createObjectNode();
         node.put("aliquotaTributaria", emp.getAliquotaTributaria());
-        if (texto(emp.getSocioNome()) != null) node.put("socioNome", emp.getSocioNome());
-        node.put("socioPct", emp.getSocioPct());
-        node.put("empresaPct", emp.getEmpresaPct());
         node.put("corretorPct", emp.getCorretorPct());
         node.put("repasseComissaoPct", emp.getRepasseComissaoPct());
         node.put("comissaoSobreAcrescimos", emp.isComissaoSobreAcrescimos());
         if (texto(emp.getInadimplenciaJson()) != null) {
             node.set("inadimplencia", ler(emp.getInadimplenciaJson()));
         }
+
+        JsonNode regrasEspecificas = null;
+        if (texto(unidade.getRegrasJson()) != null) {
+            regrasEspecificas = ler(unidade.getRegrasJson());
+        } else if (unidade.getQuadraId() != null) {
+            Quadra q = quadras.findByIdAndEmpresaId(unidade.getQuadraId(), emp.getEmpresaId()).orElse(null);
+            if (q != null && texto(q.getRegrasJson()) != null) {
+                regrasEspecificas = ler(q.getRegrasJson());
+            }
+        }
+        if (regrasEspecificas != null && regrasEspecificas.isObject()) {
+            node.setAll((ObjectNode) regrasEspecificas);
+        }
+
+        // Sócio, participação e reajuste pertencem ao empreendimento.
+        // Regras próprias de quadra/unidade não podem trocar esses vínculos.
+        node.remove("socioNome");
+        if (texto(emp.getSocioNome()) != null) {
+            node.put("socioNome", emp.getSocioNome());
+        }
+        node.put("socioPct", emp.getSocioPct());
+        node.put("empresaPct", emp.getEmpresaPct());
+
+        node.remove("reajusteContratual");
         if (texto(emp.getReajusteContratualJson()) != null) {
             node.set("reajusteContratual", ler(emp.getReajusteContratualJson()));
         }
