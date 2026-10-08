@@ -16,6 +16,7 @@ public class Movimento {
     @Column(name="unidade_id", nullable=false) private Long unidadeId;
     @Column(name="cliente_id", nullable=false) private Long clienteId;
     @Column(name="corretor_nome", length=160) private String corretorNome;
+    @Column(name="socio_nome", length=160) private String socioNome;
     @Column(nullable=false, length=40) private String origem;
     @Column(name="origem_descricao", length=240) private String origemDescricao;
     @Column(name="data_movimento", nullable=false) private LocalDate dataMovimento;
@@ -43,6 +44,7 @@ public class Movimento {
     public Long getParcelaId(){return parcelaId;} public void setParcelaId(Long v){parcelaId=v;} public Long getVendaId(){return vendaId;} public void setVendaId(Long v){vendaId=v;}
     public Long getEmpreendimentoId(){return empreendimentoId;} public void setEmpreendimentoId(Long v){empreendimentoId=v;} public Long getUnidadeId(){return unidadeId;} public void setUnidadeId(Long v){unidadeId=v;}
     public Long getClienteId(){return clienteId;} public void setClienteId(Long v){clienteId=v;} public String getCorretorNome(){return corretorNome;} public void setCorretorNome(String v){corretorNome=v;}
+    public String getSocioNome(){return socioNome;} public void setSocioNome(String v){socioNome=v;}
     public String getOrigem(){return origem;} public void setOrigem(String v){origem=v;} public String getOrigemDescricao(){return origemDescricao;} public void setOrigemDescricao(String v){origemDescricao=v;}
     public LocalDate getDataMovimento(){return dataMovimento;} public void setDataMovimento(LocalDate v){dataMovimento=v;} public Long getUsuarioId(){return usuarioId;} public void setUsuarioId(Long v){usuarioId=v;}
     public BigDecimal getValorRecebido(){return valorRecebido;} public void setValorRecebido(BigDecimal v){valorRecebido=v;} public BigDecimal getImpostoReservado(){return impostoReservado;} public void setImpostoReservado(BigDecimal v){impostoReservado=v;}
