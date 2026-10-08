@@ -517,7 +517,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             <span className="text-muted-foreground">Regra financeira identificada: </span>
             <strong>{descricaoOrigemRegra(regraSelecionada.origem, empreendimento.nome, quadra?.nome)}</strong>
             <span className="text-muted-foreground">
-              {` · tributação ${regraSelecionada.regras.aliquotaTributaria}% · corretor ${regraSelecionada.regras.corretorPct}% · sócio ${regraSelecionada.regras.socioPct}% · empresa ${regraSelecionada.regras.empresaPct}%`}
+              {` · tributação ${regraSelecionada.regras.aliquotaTributaria}% · corretor ${regraSelecionada.regras.corretorPct}% · sócio ${regraSelecionada.regras.socioNome || "não definido"} (${regraSelecionada.regras.socioPct}%) · empresa ${regraSelecionada.regras.empresaPct}%`}
             </span>
           </div>
         )}
