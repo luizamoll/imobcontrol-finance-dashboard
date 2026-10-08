@@ -404,7 +404,12 @@ function loadState(empresaId: number | null, usuarioId: number | null): State {
       config: {
         ...DEFAULT_CONFIG,
         ...(parsed.config ?? {}),
-        recebedores: parsed.config?.recebedores ?? [],
+        recebedores: (parsed.config?.recebedores ?? []).filter(
+          (recebedor) =>
+            !["joão ferreira", "joao ferreira"].includes(
+              recebedor.nome.trim().toLocaleLowerCase("pt-BR"),
+            ),
+        ),
         statusVenda: parsed.config?.statusVenda ?? DEFAULT_CONFIG.statusVenda,
         formasPagamento: parsed.config?.formasPagamento ?? DEFAULT_CONFIG.formasPagamento,
         aliquotasPorSpe: parsed.config?.aliquotasPorSpe ?? {},
