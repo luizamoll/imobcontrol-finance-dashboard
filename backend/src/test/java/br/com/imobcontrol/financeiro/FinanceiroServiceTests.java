@@ -113,6 +113,125 @@ class FinanceiroServiceTests {
     }
 
     @Test
+    void recebimentoUsaSocioEParticipacaoAtuaisDoEmpreendimento() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        empreendimento.setSocioNome("Sócio antigo");
+        empreendimento.setSocioPct(new BigDecimal("50"));
+        empreendimento.setEmpresaPct(new BigDecimal("50"));
+        empreendimentos.saveAndFlush(empreendimento);
+
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        null,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcela única", new BigDecimal("100.00"),
+                                        1, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        empreendimento.setSocioNome("Sócio atual");
+        empreendimento.setSocioPct(new BigDecimal("25"));
+        empreendimento.setEmpresaPct(new BigDecimal("75"));
+        empreendimentos.saveAndFlush(empreendimento);
+
+        ParcelaResponse parcela = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .findFirst()
+                .orElseThrow();
+
+        MovimentoResponse movimento = service.receber(
+                autenticacao(usuario),
+                null,
+                parcela.id(),
+                new RecebimentoRequest(new BigDecimal("100.00"), contrato.plusMonths(1))
+        );
+
+        assertEquals("Sócio atual", movimento.socioNome());
+        assertDinheiro("25.00", movimento.socioPctAplicada());
+        assertDinheiro("75.00", movimento.empresaPctAplicada());
+        assertDinheiro("25.00", movimento.socioValor());
+        assertDinheiro("75.00", movimento.empresaValor());
+    }
+
+    @Test
+    void regraDaUnidadeNaoSobrescreveSocioNemReajusteDoEmpreendimento() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        empreendimento.setSocioNome("Pedro Lucas");
+        empreendimento.setSocioPct(new BigDecimal("30"));
+        empreendimento.setEmpresaPct(new BigDecimal("70"));
+        empreendimento.setReajusteContratualJson(
+                json.writeValueAsString(json.readTree(
+                        "{\"ativo\":true,\"modalidade\":\"indice\",\"indiceReferencia\":\"IPCA\",\"periodicidadeMeses\":12}"
+                ))
+        );
+        empreendimentos.saveAndFlush(empreendimento);
+
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        unidade.setRegrasJson(
+                json.writeValueAsString(json.readTree(
+                        "{\"aliquotaTributaria\":5.93,\"socioNome\":\"Sócio incorreto\",\"socioPct\":99,\"empresaPct\":1,"
+                                + "\"reajusteContratual\":{\"ativo\":false}}"
+                ))
+        );
+        unidades.saveAndFlush(unidade);
+
+        Cliente cliente = criarCliente(empresa, usuario);
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        LocalDate.of(2026, 9, 1),
+                        null,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcela única", new BigDecimal("100.00"),
+                                        1, LocalDate.of(2026, 10, 1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        assertEquals("Pedro Lucas", venda.regras().path("socioNome").asText());
+        assertDinheiro("30", venda.regras().path("socioPct").decimalValue());
+        assertDinheiro("70", venda.regras().path("empresaPct").decimalValue());
+        assertDinheiro("5.93", venda.regras().path("aliquotaTributaria").decimalValue());
+        assertEquals("IPCA", venda.regras().path("reajusteContratual").path("indiceReferencia").asText());
+    }
+
+    @Test
     void editaVendaJaCadastradaAntesDeRecebimentos() {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
