@@ -708,6 +708,18 @@ function EditarVendaDialog({
   const [clienteId, setClienteId] = useState(venda.clienteId ?? "");
   const clienteSelecionado = clientes.find((cliente) => String(cliente.id) === clienteId);
   const [valorTotal, setValorTotal] = useState(venda.valorTotal);
+  const [valorImovel, setValorImovel] = useState(venda.valorImovel ?? 0);
+  const [corretagemValor, setCorretagemValor] = useState(venda.corretagemValor ?? 0);
+  const [corretagemCompoeTotal, setCorretagemCompoeTotal] = useState<"nao_informado" | "sim" | "nao">(
+    venda.corretagemCompoeValorContrato == null
+      ? "nao_informado"
+      : venda.corretagemCompoeValorContrato
+        ? "sim"
+        : "nao",
+  );
+  const [corretagemForma, setCorretagemForma] = useState<
+    "repasse_recebimentos" | "direto_corretor" | "separada" | "outro"
+  >(venda.corretagemFormaPagamento ?? "repasse_recebimentos");
   const [dataContrato, setDataContrato] = useState(venda.dataContrato);
   const [corretorNome, setCorretorNome] = useState(venda.corretorNome);
   const [corretorPct, setCorretorPct] = useState(String(venda.corretorPct));
@@ -773,6 +785,15 @@ function EditarVendaDialog({
       toast.error("Os percentuais devem ficar entre 0% e 100%");
       return;
     }
+    if (
+      corretagemCompoeTotal === "sim" &&
+      valorImovel > 0 &&
+      corretagemValor >= 0 &&
+      Math.abs(valorImovel + corretagemValor - totalVenda) > 0.01
+    ) {
+      toast.error("Valor do imóvel + corretagem não fecha com o total do contrato");
+      return;
+    }
     if (!possuiRecebimentos && (totalVenda <= 0 || !composicaoConfere)) {
       toast.error("A composição não fecha com o valor da venda. Diferenças normais de arredondamento de parcelas são ajustadas automaticamente.");
       return;
@@ -784,6 +805,13 @@ function EditarVendaDialog({
       ...(!possuiRecebimentos
         ? { valorTotal: totalVenda, composicao }
         : {}),
+      valorImovel: valorImovel > 0 ? valorImovel : undefined,
+      corretagemValor: corretagemValor > 0 ? corretagemValor : undefined,
+      corretagemCompoeValorContrato:
+        corretagemCompoeTotal === "nao_informado"
+          ? undefined
+          : corretagemCompoeTotal === "sim",
+      corretagemFormaPagamento: corretagemValor > 0 ? corretagemForma : undefined,
       dataContrato,
       corretorNome: corretorNome.trim(),
       corretorPct: comissao,
@@ -832,14 +860,55 @@ function EditarVendaDialog({
           )}
         </div>
         <div>
-          <Label>Valor total da venda</Label>
+          <Label>Valor total do contrato</Label>
           <CurrencyInput
             value={valorTotal}
             onValueChange={setValorTotal}
             disabled={possuiRecebimentos}
-            placeholder="Ex.: 100.000,00"
+            placeholder="Ex.: 320.000,00"
           />
         </div>
+        <div>
+          <Label>Valor efetivo do imóvel</Label>
+          <CurrencyInput
+            value={valorImovel}
+            onValueChange={setValorImovel}
+            placeholder="Ex.: 288.000,00"
+          />
+        </div>
+        <div>
+          <Label>Valor da corretagem</Label>
+          <CurrencyInput
+            value={corretagemValor}
+            onValueChange={setCorretagemValor}
+            placeholder="Ex.: 32.000,00"
+          />
+        </div>
+        <div>
+          <Label>A corretagem compõe o total?</Label>
+          <Select value={corretagemCompoeTotal} onValueChange={(value) => setCorretagemCompoeTotal(value as typeof corretagemCompoeTotal)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nao_informado">Não informado</SelectItem>
+              <SelectItem value="sim">Sim — está dentro do total</SelectItem>
+              <SelectItem value="nao">Não — é cobrada fora</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {corretagemValor > 0 && (
+          <div>
+            <Label>Forma da corretagem</Label>
+            <Select value={corretagemForma} onValueChange={(value) => setCorretagemForma(value as typeof corretagemForma)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="repasse_recebimentos">Repasse a partir dos recebimentos</SelectItem>
+                <SelectItem value="direto_corretor">Pagamento direto ao corretor</SelectItem>
+                <SelectItem value="separada">Cobrança separada</SelectItem>
+                <SelectItem value="outro">Outra forma</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div>
           <Label>Data do contrato</Label>
           <Input type="date" value={dataContrato} onChange={(e) => setDataContrato(e.target.value)} />
