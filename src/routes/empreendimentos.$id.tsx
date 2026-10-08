@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CurrencyInput } from "@/components/currency-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { RegrasOperacaoForm } from "@/components/regras-operacao-form";
+import { ReajusteContratualForm } from "@/components/reajuste-contratual-form";
 import { EmpStatusBadge, MatriculaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +48,7 @@ import {
 } from "@/lib/catalogo-api";
 import { brl, formatCNPJ, num, pct } from "@/lib/format";
 import {
+  DEFAULT_REAJUSTE_CONTRATUAL,
   empTotais,
   regrasEfetivasEmpreendimento,
   regrasEfetivasUnidade,
@@ -59,6 +61,7 @@ import {
   type MatriculaStatus,
   type UnidadeTipo,
   type Quadra,
+  type ReajusteContratual,
   type RegrasOperacao,
 } from "@/lib/store";
 import { useTenant } from "@/lib/tenant";
@@ -147,6 +150,7 @@ function EmpreendimentoDetail() {
         <EditEmpreendimentoDialog
           emp={emp}
           regrasAtuais={regrasEmp}
+          socios={state.config.recebedores.filter((item) => item.tipo === "socio")}
           onSave={async (patch) => {
             if (!empresaAtualId) return;
             try {
@@ -229,6 +233,7 @@ function EmpreendimentoDetail() {
           </div>
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <Info label="Tipo" value={tipoLegivel(emp.tipo)} />
+            <Info label="Sócio" value={emp.socioNome || "Não definido"} />
             <Info label="Área total" value={`${num(emp.areaTotal)} m²`} />
             <Info label="Agrupamentos" value={String(quadras.length)} />
             <Info label="Unidades cadastradas" value={String(matriculas.length)} />
@@ -990,10 +995,12 @@ function EditUnidadeDialog({
 function EditEmpreendimentoDialog({
   emp,
   regrasAtuais,
+  socios,
   onSave,
 }: {
   emp: Empreendimento;
   regrasAtuais: RegrasOperacao;
+  socios: Array<{ nome: string }>;
   onSave: (patch: Partial<Empreendimento>) => void;
 }) {
   const [nome, setNome] = useState(emp.nome);
@@ -1003,6 +1010,12 @@ function EditEmpreendimentoDialog({
   const [tipo, setTipo] = useState<EmpreendimentoTipo>(emp.tipo);
   const [matriculasCount, setMatriculasCount] = useState(String(emp.matriculasCount || ""));
   const [valorTotal, setValorTotal] = useState(emp.valorTotal || 0);
+  const [socioNome, setSocioNome] = useState(emp.socioNome || "");
+  const [reajusteContratual, setReajusteContratual] = useState<ReajusteContratual>(
+    emp.reajusteContratual
+      ? { ...emp.reajusteContratual }
+      : { ...DEFAULT_REAJUSTE_CONTRATUAL },
+  );
   const [observacoes, setObservacoes] = useState(emp.observacoes || "");
   const [status, setStatus] = useState<EmpStatus>(emp.status);
   const [regras, setRegras] = useState<RegrasOperacao>(cloneRegras(regrasAtuais));
@@ -1010,6 +1023,10 @@ function EditEmpreendimentoDialog({
   const salvar = () => {
     if (!nome.trim() || !spe.trim()) {
       toast.error("Informe o nome do empreendimento e a SPE responsável.");
+      return;
+    }
+    if (regras.socioPct > 0 && !socioNome) {
+      toast.error("Selecione o sócio responsável por este empreendimento");
       return;
     }
     if (!validaRegras(regras)) {
@@ -1024,6 +1041,7 @@ function EditEmpreendimentoDialog({
       tipo,
       matriculasCount: Number(matriculasCount) || 0,
       valorTotal,
+      socioNome: socioNome || undefined,
       socioPct: regras.socioPct,
       empresaPct: regras.empresaPct,
       corretorPct: regras.corretorPct,
@@ -1033,6 +1051,9 @@ function EditEmpreendimentoDialog({
       repasseComissaoPct: regras.repasseComissaoPct ?? 50,
       comissaoSobreAcrescimos: regras.comissaoSobreAcrescimos ?? false,
       inadimplencia: cloneRegras(regras).inadimplencia,
+      reajusteContratual: reajusteContratual.ativo
+        ? { ...reajusteContratual, descricao: reajusteContratual.descricao.trim() }
+        : undefined,
       observacoes: observacoes.trim(),
       status,
     });
@@ -1099,7 +1120,29 @@ function EditEmpreendimentoDialog({
           <Label>VGV / valor total estimado (R$)</Label>
           <CurrencyInput value={valorTotal} onValueChange={setValorTotal} placeholder="Ex.: 2.000.000,00" />
         </div>
+        <div className="sm:col-span-2">
+          <Label>Sócio deste empreendimento</Label>
+          <Select
+            value={socioNome || "__sem_socio__"}
+            onValueChange={(value) => setSocioNome(value === "__sem_socio__" ? "" : value)}
+          >
+            <SelectTrigger><SelectValue placeholder="Selecione o sócio cadastrado" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__sem_socio__">Sem sócio definido</SelectItem>
+              {socios.map((item) => (
+                <SelectItem key={item.nome} value={item.nome}>{item.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            A troca vale para novos contratos e recebimentos futuros; movimentos já registrados preservam o sócio original.
+          </p>
+        </div>
       </div>
+      <ReajusteContratualForm
+        value={reajusteContratual}
+        onChange={setReajusteContratual}
+      />
       <RegrasOperacaoForm
         value={regras}
         onChange={setRegras}
