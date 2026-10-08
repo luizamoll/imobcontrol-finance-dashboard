@@ -145,8 +145,15 @@ function RecebedoresPage() {
       const corretor = movimentos.reduce((a, m) => a + m.comissaoPaga, 0);
       const empresa = movimentos.reduce((a, m) => a + m.empresaValor, 0);
       const socio = movimentos.reduce((a, m) => a + m.socioValor, 0);
+      const sociosRealizados = [...movimentos.reduce((map, movimento) => {
+        const nome = movimento.socioNome || e.socioNome || "Não identificado";
+        map.set(nome, (map.get(nome) ?? 0) + movimento.socioValor);
+        return map;
+      }, new Map<string, number>()).entries()]
+        .map(([nome, valor]) => ({ nome, valor }))
+        .filter((item) => item.valor !== 0);
       const imposto = movimentos.reduce((a, m) => a + m.impostoReservado, 0);
-      return { emp: e, recebido, socio, empresa, corretor, imposto };
+      return { emp: e, recebido, socio, sociosRealizados, empresa, corretor, imposto };
     });
   }, [state.empreendimentos, state.movimentos]);
 
@@ -364,7 +371,7 @@ function RecebedoresPage() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              {distribuicao.map(({ emp, recebido, socio, empresa, corretor, imposto }) => (
+              {distribuicao.map(({ emp, recebido, socio, sociosRealizados, empresa, corretor, imposto }) => (
                 <Card key={emp.id} className="border-border/70">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -379,7 +386,20 @@ function RecebedoresPage() {
                     <Row label="Imposto reservado" value={imposto} />
                     <Row label="Comissões pagas" value={corretor} />
                     <Row label={`Empresa (${emp.empresaPct}%)`} value={empresa} />
-                    <Row label={`Sócio (${emp.socioPct}%)`} value={socio} />
+                    {sociosRealizados.length > 0 ? (
+                      sociosRealizados.map((item) => (
+                        <Row
+                          key={item.nome}
+                          label={`Sócio · ${item.nome}`}
+                          value={item.valor}
+                        />
+                      ))
+                    ) : (
+                      <Row
+                        label={`Sócio · ${emp.socioNome || "não definido"} (${emp.socioPct}%)`}
+                        value={socio}
+                      />
+                    )}
                   </CardContent>
                 </Card>
               ))}
