@@ -21,6 +21,7 @@ type EmpreendimentoApi = {
   tipo: string;
   unidadesPrevistas: number;
   valorTotal: number;
+  socioNome: string | null;
   socioPct: number;
   empresaPct: number;
   corretorPct: number;
@@ -28,6 +29,7 @@ type EmpreendimentoApi = {
   repasseComissaoPct: number;
   comissaoSobreAcrescimos: boolean;
   inadimplencia: RegrasOperacao["inadimplencia"] | null;
+  reajusteContratual: RegrasOperacao["reajusteContratual"] | null;
   observacoes: string | null;
   status: string;
   versao: number;
@@ -74,6 +76,7 @@ function empFromApi(e: EmpreendimentoApi): EmpreendimentoRemoto {
     tipo: e.tipo as Empreendimento["tipo"],
     matriculasCount: e.unidadesPrevistas ?? 0,
     valorTotal: Number(e.valorTotal ?? 0),
+    socioNome: e.socioNome ?? undefined,
     socioPct: Number(e.socioPct ?? 0),
     empresaPct: Number(e.empresaPct ?? 0),
     corretorPct: Number(e.corretorPct ?? 0),
@@ -81,6 +84,7 @@ function empFromApi(e: EmpreendimentoApi): EmpreendimentoRemoto {
     repasseComissaoPct: Number(e.repasseComissaoPct ?? 50),
     comissaoSobreAcrescimos: Boolean(e.comissaoSobreAcrescimos),
     inadimplencia: e.inadimplencia ?? undefined,
+    reajusteContratual: e.reajusteContratual ?? undefined,
     observacoes: e.observacoes ?? undefined,
     status: e.status as Empreendimento["status"],
     versao: e.versao,
@@ -125,6 +129,7 @@ function empBody(e: Omit<Empreendimento, "id"> | EmpreendimentoRemoto) {
     tipo: e.tipo,
     unidadesPrevistas: e.matriculasCount ?? 0,
     valorTotal: e.valorTotal ?? 0,
+    socioNome: e.socioNome || null,
     socioPct: e.socioPct ?? 0,
     empresaPct: e.empresaPct ?? 0,
     corretorPct: e.corretorPct ?? 0,
@@ -132,6 +137,7 @@ function empBody(e: Omit<Empreendimento, "id"> | EmpreendimentoRemoto) {
     repasseComissaoPct: e.repasseComissaoPct ?? 50,
     comissaoSobreAcrescimos: e.comissaoSobreAcrescimos ?? false,
     inadimplencia: e.inadimplencia ?? null,
+    reajusteContratual: e.reajusteContratual ?? null,
     observacoes: e.observacoes ?? null,
     status: e.status,
     versao: "versao" in e ? e.versao ?? null : null,
