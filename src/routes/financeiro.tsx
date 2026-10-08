@@ -123,6 +123,22 @@ function FinanceiroPage() {
                       <TableCell>
                         <div className="font-medium">{e.nome}</div>
                         <div className="text-xs text-muted-foreground">{e.spe}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Sócio atual: <span className="text-foreground">{e.socioNome || "não definido"}</span>
+                        </div>
+                        {(() => {
+                          const historicos = [...new Set(
+                            movimentos
+                              .map((movimento) => movimento.socioNome)
+                              .filter((nome): nome is string => Boolean(nome)),
+                          )];
+                          const antigos = historicos.filter((nome) => nome !== e.socioNome);
+                          return antigos.length > 0 ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              Histórico: {antigos.join(", ")}
+                            </div>
+                          ) : null;
+                        })()}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {e.cnpj || "—"}
