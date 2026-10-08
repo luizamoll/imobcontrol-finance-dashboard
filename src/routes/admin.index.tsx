@@ -35,6 +35,9 @@ type EmpresaResumo = {
   email?: string | null;
   telefone?: string | null;
   ativa?: boolean;
+  administradoresAtivos?: number;
+  administradoresPendentes?: number;
+  clientesCadastrados?: number;
 };
 type Resumo = {
   total: number;
@@ -97,14 +100,20 @@ function AdminDashboard() {
   }
 
   useEffect(() => {
-    if (usuario?.perfil !== "SUPER_ADMIN") {
+    const empresasAtivas = empresas.filter((empresa) => empresa.ativa !== false);
+  const totalClientes = empresas.reduce(
+    (total, empresa) => total + (empresa.clientesCadastrados ?? 0),
+    0,
+  );
+
+  if (usuario?.perfil !== "SUPER_ADMIN") {
       setCarregando(false);
       return;
     }
 
     let cancelado = false;
     void Promise.all([
-      apiJson<EmpresaResumo[]>("/api/super-admin/empresas"),
+      apiJson<EmpresaResumo[]>("/api/super-admin/empresas?incluirInativas=true"),
       apiJson<Resumo>("/api/super-admin/usuarios/resumo"),
       fetch("/actuator/health", { credentials: "include" })
         .then(async (response) => response.ok ? await response.json() : { status: "DOWN" })
@@ -145,24 +154,43 @@ function AdminDashboard() {
     <PageShell>
       <PageHeader
         eyebrow="Administração da plataforma"
-        title="Visão geral"
-        description="Acompanhe empresas, acessos, atividade e saúde da plataforma em um único painel."
+        title="Central de controle"
+        description="Acompanhe sua base de clientes, empresas, acessos e saúde do ImobControl sem precisar entrar em cada ambiente."
       />
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
-        <Stat icon={Building2} label="Empresas ativas" value={carregando ? "—" : String(empresas.length)} />
-        <Stat icon={Users} label="Usuários" value={carregando ? "—" : String(resumo?.total ?? 0)} />
-        <Stat icon={ShieldCheck} label="Usuários ativos" value={carregando ? "—" : String(resumo?.ativos ?? 0)} />
-        <Stat icon={UserCog} label="Admins de empresa" value={carregando ? "—" : String(resumo?.administradores ?? 0)} />
-        <Stat icon={Activity} label="Plataforma" value={saude === "CHECKING" ? "Verificando" : saude === "UP" ? "Online" : "Atenção"} />
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <Stat
+          icon={Users}
+          label="Clientes cadastrados"
+          value={carregando ? "—" : String(totalClientes)}
+          detail="Base usada para acompanhar sua cobrança"
+        />
+        <Stat
+          icon={Building2}
+          label="Empresas ativas"
+          value={carregando ? "—" : String(empresasAtivas.length)}
+          detail={`${empresas.length} ambiente(s) no total`}
+        />
+        <Stat
+          icon={ShieldCheck}
+          label="Usuários ativos"
+          value={carregando ? "—" : String(resumo?.ativos ?? 0)}
+          detail={`${resumo?.administradores ?? 0} administrador(es) de empresa`}
+        />
+        <Stat
+          icon={Activity}
+          label="Plataforma"
+          value={saude === "CHECKING" ? "Verificando" : saude === "UP" ? "Online" : "Atenção"}
+          detail="Status geral da API"
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
         <Card className="border-border/70">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-base">Empresas</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">Visualize as empresas cadastradas e entre rapidamente no ambiente que precisa administrar.</p>
+              <CardTitle className="text-base">Base por empresa</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">Veja quantos clientes cada empresa possui e acesse rapidamente o ambiente correspondente.</p>
             </div>
             {empresas.length > 0 && (
               <Button
@@ -178,8 +206,20 @@ function AdminDashboard() {
             {empresas.slice(0, 5).map((empresa) => (
               <div key={empresa.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-4 py-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{empresa.nome}</div>
-                  <div className="truncate text-xs text-muted-foreground">{empresa.slug}</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="truncate text-sm font-medium">{empresa.nome}</div>
+                    {empresa.ativa === false && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        Inativa
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    <strong className="text-foreground">{empresa.clientesCadastrados ?? 0}</strong>{" "}
+                    cliente(s) cadastrado(s)
+                    <span className="mx-1.5">·</span>
+                    {empresa.slug}
+                  </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap justify-end gap-2">
                   <Button
@@ -330,7 +370,17 @@ function AdminDashboard() {
   );
 }
 
-function Stat({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  detail?: string;
+}) {
   return (
     <Card className="border-border/70">
       <CardContent className="p-4">
@@ -339,6 +389,7 @@ function Stat({ icon: Icon, label, value }: { icon: React.ComponentType<{ classN
           <span className="text-xs font-medium uppercase tracking-wide">{label}</span>
         </div>
         <div className="mt-2 text-2xl font-semibold">{value}</div>
+        {detail && <div className="mt-1 text-xs text-muted-foreground">{detail}</div>}
       </CardContent>
     </Card>
   );
