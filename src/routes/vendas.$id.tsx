@@ -328,6 +328,44 @@ function VendaDetail() {
         </CardContent>
       </Card>
 
+      {(v.valorImovel != null || v.corretagemValor != null || v.regras?.socioNome) && (
+        <Card className="border-border/70">
+          <CardHeader>
+            <CardTitle className="text-base">Composição econômica do contrato</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <FlowItem
+              icon={Wallet}
+              label="Valor total do contrato"
+              value={brl(v.valorTotal)}
+            />
+            <FlowItem
+              icon={Building2}
+              label="Valor efetivo do imóvel"
+              value={v.valorImovel == null ? "—" : brl(v.valorImovel)}
+            />
+            <FlowItem
+              icon={CircleDollarSign}
+              label="Corretagem"
+              value={v.corretagemValor == null ? "—" : brl(v.corretagemValor)}
+              sub={
+                v.corretagemCompoeValorContrato == null
+                  ? "Composição do total não informada"
+                  : v.corretagemCompoeValorContrato
+                    ? "Incluída no valor total"
+                    : "Cobrada fora do valor total"
+              }
+            />
+            <FlowItem
+              icon={Users}
+              label="Sócio do contrato"
+              value={v.regras?.socioNome || "Não definido"}
+              sub={`${v.regras?.socioPct ?? 0}% do saldo líquido`}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-primary/20 bg-primary/5">
         <CardContent className="p-4 text-sm">
           <div className="font-semibold text-foreground">Regras financeiras desta venda</div>
