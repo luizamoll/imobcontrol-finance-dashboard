@@ -538,6 +538,7 @@ function ResumoRegras({ regras }: { regras: RegrasOperacao }) {
       <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
         <Info label="Tributação" value={`${regras.aliquotaTributaria}%`} />
         <Info label="Corretor" value={`${regras.corretorPct}%`} />
+        <Info label="Sócio" value={regras.socioNome || "Não definido"} />
         <Info label="Sócio · saldo líquido" value={`${regras.socioPct}%`} />
         <Info label="Empresa · saldo líquido" value={`${regras.empresaPct}%`} />
         <Info label="Repasse por recebimento" value={`${regras.repasseComissaoPct ?? 50}%`} />
@@ -546,6 +547,15 @@ function ResumoRegras({ regras }: { regras: RegrasOperacao }) {
           value={regras.comissaoSobreAcrescimos ? "Sim" : "Não"}
         />
       </div>
+      {regras.reajusteContratual?.ativo && (
+        <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm">
+          <span className="text-muted-foreground">Reajuste contratual: </span>
+          <span>
+            {regras.reajusteContratual.descricao ||
+              `${regras.reajusteContratual.percentualBase}% · ${regras.reajusteContratual.indiceReferencia || "sem índice"} · a cada ${regras.reajusteContratual.periodicidadeMeses} mês(es)`}
+          </span>
+        </div>
+      )}
       <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm">
         <span className="text-muted-foreground">Inadimplência: </span>
         <span>{atraso.length ? atraso.join(" · ") : "sem acréscimos automáticos"}</span>
