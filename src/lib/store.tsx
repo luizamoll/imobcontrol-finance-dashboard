@@ -80,6 +80,32 @@ export const DEFAULT_REGRAS_INADIMPLENCIA: RegrasInadimplencia = {
   inicioJuros: "apos_tolerancia",
 };
 
+export type ReajusteModalidade =
+  | "percentual_fixo"
+  | "indice"
+  | "maior_entre"
+  | "regra_personalizada";
+
+export interface ReajusteContratual {
+  ativo: boolean;
+  modalidade: ReajusteModalidade;
+  percentualBase: number;
+  indiceReferencia: string;
+  periodicidadeMeses: number;
+  gatilhoPercentual: number;
+  descricao: string;
+}
+
+export const DEFAULT_REAJUSTE_CONTRATUAL: ReajusteContratual = {
+  ativo: false,
+  modalidade: "percentual_fixo",
+  percentualBase: 0,
+  indiceReferencia: "",
+  periodicidadeMeses: 12,
+  gatilhoPercentual: 0,
+  descricao: "",
+};
+
 export interface BemMaterial {
   tipo: string;
   descricao: string;
@@ -102,6 +128,7 @@ export interface PagamentoItem {
 
 export interface RegrasContrato {
   aliquotaTributaria: number;
+  socioNome?: string;
   socioPct: number;
   empresaPct: number;
   entradaPctCorretor: number;
@@ -110,6 +137,7 @@ export interface RegrasContrato {
   repasseComissaoPct?: number;
   /** Quando true, multa/juros/correção também entram na base do repasse. */
   comissaoSobreAcrescimos?: boolean;
+  reajusteContratual?: ReajusteContratual;
   inadimplencia: RegrasInadimplencia;
 }
 
@@ -126,6 +154,7 @@ export interface Empreendimento {
   tipo: EmpreendimentoTipo;
   matriculasCount: number;
   valorTotal: number;
+  socioNome?: string;
   socioPct: number;
   empresaPct: number;
   corretorPct: number;
@@ -135,6 +164,7 @@ export interface Empreendimento {
   repasseComissaoPct?: number;
   comissaoSobreAcrescimos?: boolean;
   inadimplencia?: RegrasInadimplencia;
+  reajusteContratual?: ReajusteContratual;
   observacoes?: string;
   status: EmpStatus;
   /** Versão do registro persistido no servidor, quando já sincronizado. */
@@ -179,6 +209,10 @@ export interface Venda {
   clienteId?: string;
   compradorNome: string;
   valorTotal: number;
+  valorImovel?: number;
+  corretagemValor?: number;
+  corretagemCompoeValorContrato?: boolean;
+  corretagemFormaPagamento?: "repasse_recebimentos" | "direto_corretor" | "separada" | "outro";
   dataContrato: string;
   corretorNome: string;
   corretorPct: number;
@@ -221,6 +255,7 @@ export interface Movimento {
   clienteId?: string;
   compradorNome: string;
   corretorNome: string;
+  socioNome?: string;
   origem: PagamentoTipo;
   origemDescricao: string;
   data: string;
@@ -387,12 +422,16 @@ function snapshotInadimplencia(regra: RegrasInadimplencia): RegrasInadimplencia 
 function snapshotRegrasContrato(regra: RegrasOperacao): RegrasContrato {
   return {
     aliquotaTributaria: regra.aliquotaTributaria,
+    socioNome: regra.socioNome,
     socioPct: regra.socioPct,
     empresaPct: regra.empresaPct,
     entradaPctCorretor: regra.corretorPct,
     parcelasPctCorretor: regra.corretorPct,
     repasseComissaoPct: regra.repasseComissaoPct ?? 50,
     comissaoSobreAcrescimos: regra.comissaoSobreAcrescimos ?? false,
+    reajusteContratual: regra.reajusteContratual
+      ? { ...regra.reajusteContratual }
+      : undefined,
     inadimplencia: snapshotInadimplencia(regra.inadimplencia),
   };
 }
@@ -403,6 +442,7 @@ export function regrasEfetivasEmpreendimento(
 ): RegrasOperacao {
   return {
     aliquotaTributaria: emp.aliquotaTributaria,
+    socioNome: emp.socioNome,
     socioPct: emp.socioPct,
     empresaPct: emp.empresaPct,
     corretorPct: emp.corretorPct,
@@ -411,6 +451,9 @@ export function regrasEfetivasEmpreendimento(
     repasseComissaoPct: emp.repasseComissaoPct ?? cfg.repasseComissaoPctPadrao ?? 50,
     comissaoSobreAcrescimos:
       emp.comissaoSobreAcrescimos ?? cfg.comissaoSobreAcrescimosPadrao ?? false,
+    reajusteContratual: emp.reajusteContratual
+      ? { ...emp.reajusteContratual }
+      : undefined,
     inadimplencia: snapshotInadimplencia(emp.inadimplencia ?? cfg),
   };
 }
@@ -423,13 +466,23 @@ export function regrasEfetivasUnidade(
 ): { regras: RegrasOperacao; origem: "empreendimento" | "quadra" | "unidade" } {
   if (matricula.regras) {
     return {
-      regras: { ...matricula.regras, inadimplencia: { ...matricula.regras.inadimplencia } },
+      regras: {
+        ...matricula.regras,
+        socioNome: emp.socioNome,
+        reajusteContratual: emp.reajusteContratual ? { ...emp.reajusteContratual } : undefined,
+        inadimplencia: { ...matricula.regras.inadimplencia },
+      },
       origem: "unidade",
     };
   }
   if (quadra?.regras) {
     return {
-      regras: { ...quadra.regras, inadimplencia: { ...quadra.regras.inadimplencia } },
+      regras: {
+        ...quadra.regras,
+        socioNome: emp.socioNome,
+        reajusteContratual: emp.reajusteContratual ? { ...emp.reajusteContratual } : undefined,
+        inadimplencia: { ...quadra.regras.inadimplencia },
+      },
       origem: "quadra",
     };
   }
