@@ -41,6 +41,7 @@ export type UnidadeTipo = "lote" | "apartamento" | "sala" | "casa" | "loja" | "o
 
 export type EmpreendimentoTipo =
   | "loteamento"
+  | "gleba_rural"
   | "vertical"
   | "horizontal"
   | "comercial"
