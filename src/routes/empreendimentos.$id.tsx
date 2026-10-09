@@ -1098,6 +1098,7 @@ function EditEmpreendimentoDialog({
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="loteamento">Loteamento</SelectItem>
+              <SelectItem value="gleba_rural">Gleba rural</SelectItem>
               <SelectItem value="vertical">Vertical</SelectItem>
               <SelectItem value="horizontal">Horizontal</SelectItem>
               <SelectItem value="comercial">Comercial</SelectItem>
@@ -1190,6 +1191,7 @@ function agrupamentoTipoLegivel(tipo?: AgrupamentoTipo) {
 function tipoLegivel(tipo: EmpreendimentoTipo) {
   const labels: Record<EmpreendimentoTipo, string> = {
     loteamento: "Loteamento",
+    gleba_rural: "Gleba rural",
     vertical: "Vertical",
     horizontal: "Horizontal",
     comercial: "Comercial",
