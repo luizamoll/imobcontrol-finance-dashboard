@@ -497,6 +497,7 @@ function NewEmpreendimentoDialog({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="loteamento">Loteamento</SelectItem>
+              <SelectItem value="gleba_rural">Gleba rural</SelectItem>
               <SelectItem value="vertical">Vertical</SelectItem>
               <SelectItem value="horizontal">Horizontal</SelectItem>
               <SelectItem value="comercial">Comercial</SelectItem>
