@@ -68,7 +68,7 @@ function RecebimentosPage() {
         const valorCobrado = calc.diasAtraso > 0 ? calc.atualizado : p.valor;
         return { ...p, status, calc, valorCobrado };
       })
-      .filter((p) => p.status !== "paga" && p.status !== "cancelada")
+      .filter((p) => p.status !== "paga" && p.status !== "cancelada" && p.status !== "em_acordo")
       .filter((p) => (empFilter === "todos" ? true : p.empreendimentoId === empFilter))
       .filter((p) =>
         origem === "todos"
