@@ -41,7 +41,7 @@ function InadimplenciaPage() {
 
   const rows = useMemo(() => {
     return state.parcelas
-      .filter((p) => p.status !== "paga" && p.status !== "cancelada")
+      .filter((p) => p.status !== "paga" && p.status !== "cancelada" && p.status !== "em_acordo")
       .map((p) => ({ p, calc: inadimplenciaCalc(p, state.config, hoje) }))
       .filter(({ calc }) => calc.diasAtraso > 0)
       .filter(({ p }) => (empFilter === "todos" ? true : p.empreendimentoId === empFilter))
