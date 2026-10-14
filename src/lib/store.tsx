@@ -26,13 +26,14 @@ import {
 export type EmpStatus = "planejamento" | "lancamento" | "em_vendas" | "concluido";
 export type MatriculaStatus = "disponivel" | "reservado" | "vendido" | "cancelado";
 export type VendaStatus = "ativa" | "cancelada" | "quitada";
-export type ParcelaStatus = "pendente" | "paga" | "vencida" | "cancelada";
+export type ParcelaStatus = "pendente" | "paga" | "vencida" | "em_acordo" | "cancelada";
 export type PagamentoTipo =
   | "avista"
   | "sinal"
   | "sinal_parcelado"
   | "parcelas"
   | "parcela_personalizada"
+  | "acordo"
   | "bem"
   | "sem_sinal"
   | "outro";
