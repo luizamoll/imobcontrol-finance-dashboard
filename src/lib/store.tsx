@@ -37,7 +37,7 @@ export type PagamentoTipo =
   | "sem_sinal"
   | "outro";
 
-export type UnidadeTipo = "lote" | "apartamento" | "sala" | "casa" | "loja" | "outro";
+export type UnidadeTipo = "lote" | "gleba" | "apartamento" | "sala" | "casa" | "loja" | "outro";
 
 export type EmpreendimentoTipo =
   | "loteamento"
