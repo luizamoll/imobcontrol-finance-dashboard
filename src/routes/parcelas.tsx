@@ -113,7 +113,7 @@ function ParcelasPage() {
         const totalPrevisto = parcelas.reduce((a, p) => a + p.valor, 0);
         const totalRecebido = parcelas.reduce((a, p) => a + p.valorPago, 0);
         const proximoVencimento = parcelas
-          .filter((p) => p.status !== "paga" && p.status !== "cancelada")
+          .filter((p) => p.status !== "paga" && p.status !== "cancelada" && p.status !== "em_acordo")
           .map((p) => p.vencimento)
           .sort((a, b) => a.localeCompare(b))[0];
 
@@ -350,6 +350,8 @@ function ParcelasPage() {
                                 </Button>
                               ) : p.status === "cancelada" ? (
                                 <span className="text-xs text-muted-foreground">Sem ação</span>
+                              ) : p.status === "em_acordo" ? (
+                                <span className="text-xs text-muted-foreground">Substituída pelo acordo</span>
                               ) : (
                                 <Button
                                   size="sm"
