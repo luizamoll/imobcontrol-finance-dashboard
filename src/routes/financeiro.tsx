@@ -37,7 +37,7 @@ function FinanceiroPage() {
       0,
     );
     const emAtraso = state.parcelas
-      .filter((p) => p.status !== "paga" && p.status !== "cancelada")
+      .filter((p) => p.status !== "paga" && p.status !== "cancelada" && p.status !== "em_acordo")
       .map((p) => inadimplenciaCalc(p, state.config, hoje))
       .filter((calc) => calc.diasAtraso > 0)
       .reduce((a, calc) => a + calc.atualizado, 0);
