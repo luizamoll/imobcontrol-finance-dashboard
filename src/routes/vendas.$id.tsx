@@ -128,6 +128,14 @@ type AcordoApi = {
   parcelasCobrancaIds: number[];
 };
 
+type ReajusteVendaApi = {
+  id: number;
+  dataReferencia: string;
+  percentualAplicado: number;
+  indiceReferencia: string | null;
+  criadoEm: string;
+};
+
 
 function VendaDetail() {
   const { id } = Route.useParams();
@@ -156,6 +164,11 @@ function VendaDetail() {
   const [primeiroVencimentoAcordo, setPrimeiroVencimentoAcordo] = useState(todayISO());
   const [obsAcordo, setObsAcordo] = useState("");
   const [salvandoAcordo, setSalvandoAcordo] = useState(false);
+  const [reajustesAplicados, setReajustesAplicados] = useState<ReajusteVendaApi[]>([]);
+  const [reajusteAberto, setReajusteAberto] = useState(false);
+  const [dataReferenciaReajuste, setDataReferenciaReajuste] = useState(todayISO());
+  const [percentualIndice, setPercentualIndice] = useState(0);
+  const [aplicandoReajuste, setAplicandoReajuste] = useState(false);
   useEffect(() => {
     if (!empresaAtualId) {
       setClientes([]);
@@ -203,15 +216,25 @@ function VendaDetail() {
   useEffect(() => {
     if (!empresaAtualId) {
       setAcordos([]);
+      setReajustesAplicados([]);
       return;
     }
     let cancelado = false;
-    void apiJson<AcordoApi[]>(`/api/vendas/${id}/acordos`, { empresaId: empresaAtualId })
-      .then((lista) => {
-        if (!cancelado) setAcordos(lista);
+    void Promise.all([
+      apiJson<AcordoApi[]>(`/api/vendas/${id}/acordos`, { empresaId: empresaAtualId }),
+      apiJson<ReajusteVendaApi[]>(`/api/vendas/${id}/reajustes`, { empresaId: empresaAtualId }),
+    ])
+      .then(([listaAcordos, listaReajustes]) => {
+        if (!cancelado) {
+          setAcordos(listaAcordos);
+          setReajustesAplicados(listaReajustes);
+        }
       })
       .catch(() => {
-        if (!cancelado) setAcordos([]);
+        if (!cancelado) {
+          setAcordos([]);
+          setReajustesAplicados([]);
+        }
       });
     return () => {
       cancelado = true;
@@ -322,6 +345,55 @@ function VendaDetail() {
       toast.error(error instanceof Error ? error.message : "Não foi possível lançar o acordo");
     } finally {
       setSalvandoAcordo(false);
+    }
+  };
+
+  const regraReajuste = regras.reajusteContratual;
+  const abrirReajuste = () => {
+    const periodicidade = Math.max(1, regraReajuste?.periodicidadeMeses ?? 12);
+    const ultima = reajustesAplicados[0]?.dataReferencia;
+    const referencia = ultima
+      ? addMonths(ultima, periodicidade)
+      : addMonths(v.dataContrato, periodicidade);
+    setDataReferenciaReajuste(referencia);
+    setPercentualIndice(0);
+    setReajusteAberto(true);
+  };
+
+  const aplicarReajuste = async () => {
+    if (!empresaAtualId) return;
+    if (percentualIndice <= 0) {
+      toast.error("Informe o percentual apurado do índice no período");
+      return;
+    }
+    setAplicandoReajuste(true);
+    try {
+      await apiJson<ReajusteVendaApi>(`/api/vendas/${id}/reajustes`, {
+        method: "POST",
+        empresaId: empresaAtualId,
+        body: JSON.stringify({
+          dataReferencia: dataReferenciaReajuste,
+          percentualIndice,
+        }),
+      });
+      const [financeiro, lista] = await Promise.all([
+        carregarFinanceiro(empresaAtualId),
+        apiJson<ReajusteVendaApi[]>(`/api/vendas/${id}/reajustes`, { empresaId: empresaAtualId }),
+      ]);
+      setState((s) => ({
+        ...s,
+        vendas: financeiro.vendas,
+        parcelas: financeiro.parcelas,
+        movimentos: financeiro.movimentos,
+      }));
+      setReajustesAplicados(lista);
+      setHistoricoRefresh((x) => x + 1);
+      setReajusteAberto(false);
+      toast.success("Reajuste aplicado às parcelas vincendas");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível aplicar o reajuste");
+    } finally {
+      setAplicandoReajuste(false);
     }
   };
 
@@ -723,6 +795,48 @@ function VendaDetail() {
         </CardContent>
       </Card>
 
+      {regraReajuste?.ativo && (
+        <Card className="border-border/70">
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">Correção contratual</CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {regraReajuste.modalidade === "percentual_fixo"
+                  ? `Percentual fixo de ${pct(regraReajuste.percentualBase)} aplicado automaticamente a cada ${regraReajuste.periodicidadeMeses} mês(es), conforme o vencimento das parcelas.`
+                  : `${regraReajuste.indiceReferencia || "Índice econômico"} · ciclo de ${regraReajuste.periodicidadeMeses} mês(es). Informe a variação apurada em cada aniversário para atualizar somente as parcelas vincendas.`}
+              </p>
+            </div>
+            {podeEditarVenda && regraReajuste.modalidade !== "percentual_fixo" && (
+              <Button size="sm" variant="outline" onClick={abrirReajuste}>
+                Aplicar índice do período
+              </Button>
+            )}
+          </CardHeader>
+          {regraReajuste.modalidade !== "percentual_fixo" && (
+            <CardContent>
+              {reajustesAplicados.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  Nenhum reajuste por índice foi registrado neste contrato.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {reajustesAplicados.map((item) => (
+                    <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 px-4 py-3 text-sm">
+                      <span>
+                        {item.indiceReferencia || "Índice"} · {pct(item.percentualAplicado)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        a partir de {formatDate(item.dataReferencia)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
+
       <Card className="border-border/70">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
@@ -812,6 +926,38 @@ function VendaDetail() {
               }}
             >
               Confirmar recebimento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reajusteAberto} onOpenChange={setReajusteAberto}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Aplicar correção contratual</DialogTitle>
+            <DialogDescription>
+              Informe a variação efetiva do {regraReajuste?.indiceReferencia || "índice"} neste ciclo. O percentual será aplicado somente às parcelas ainda não pagas com vencimento a partir da data de referência.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Data de referência</Label>
+              <Input type="date" value={dataReferenciaReajuste} onChange={(e) => setDataReferenciaReajuste(e.target.value)} />
+            </div>
+            <div>
+              <Label>Variação do índice (%)</Label>
+              <Input type="number" min="0.01" step="0.01" value={percentualIndice || ""} onChange={(e) => setPercentualIndice(Number(e.target.value) || 0)} />
+            </div>
+          </div>
+          {regraReajuste?.modalidade === "maior_entre" && (
+            <p className="text-xs text-muted-foreground">
+              O contrato usa o maior entre {pct(regraReajuste.percentualBase)} e o índice informado.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReajusteAberto(false)}>Cancelar</Button>
+            <Button disabled={aplicandoReajuste} onClick={() => void aplicarReajuste()}>
+              {aplicandoReajuste ? "Aplicando..." : "Aplicar reajuste"}
             </Button>
           </DialogFooter>
         </DialogContent>
