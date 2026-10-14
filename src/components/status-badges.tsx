@@ -30,6 +30,7 @@ const parcMap: Record<ParcelaStatus, { label: string; className: string }> = {
   pendente: { label: "Pendente", className: "bg-muted text-muted-foreground" },
   paga: { label: "Paga", className: "bg-success/10 text-success" },
   vencida: { label: "Vencida", className: "bg-destructive/10 text-destructive" },
+  em_acordo: { label: "Em acordo", className: "bg-warning/15 text-warning-foreground" },
   cancelada: { label: "Cancelada", className: "bg-muted text-muted-foreground" },
 };
 
