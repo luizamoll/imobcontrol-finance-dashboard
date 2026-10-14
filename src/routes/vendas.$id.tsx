@@ -23,7 +23,7 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { apiJson } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { temPermissao } from "@/lib/permissoes";
-import type { VendaUpdatePatch } from "@/lib/financeiro-api";
+import { carregarFinanceiro, type VendaUpdatePatch } from "@/lib/financeiro-api";
 import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,7 +65,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { addMonths, brl, formatDate, formatLocalDateTime, pct, uid } from "@/lib/format";
+import { addMonths, brl, formatDate, formatLocalDateTime, pct, todayISO, uid } from "@/lib/format";
 import { useLiveNow } from "@/lib/use-live-now";
 import { useTenant } from "@/lib/tenant";
 import {
@@ -113,12 +113,27 @@ type HistoricoVendaItem = {
   criadoEm: string;
 };
 
+type AcordoApi = {
+  id: number;
+  vendaId: number;
+  dataAcordo: string;
+  valorOriginal: number;
+  valorAcordo: number;
+  entradaValor: number;
+  quantidadeParcelas: number;
+  primeiroVencimento: string;
+  observacoes: string | null;
+  status: string;
+  parcelasOrigemIds: number[];
+  parcelasCobrancaIds: number[];
+};
+
 
 function VendaDetail() {
   const { id } = Route.useParams();
   const { empresaAtualId } = useTenant();
   const { usuario } = useAuth();
-  const { state, receberParcela, reverterParcela, updateVenda, deleteVenda } = useStore();
+  const { state, setState, receberParcela, reverterParcela, updateVenda, deleteVenda } = useStore();
   const podeEditarVenda = temPermissao(usuario, "VENDAS_EDITAR");
   const podeExcluirVenda = temPermissao(usuario, "VENDAS_EXCLUIR");
   const podeVerHistorico = temPermissao(usuario, "VENDAS_HISTORICO_VISUALIZAR");
@@ -128,6 +143,19 @@ function VendaDetail() {
   const [clientes, setClientes] = useState<ClienteEdicao[]>([]);
   const [historico, setHistorico] = useState<HistoricoVendaItem[]>([]);
   const [historicoRefresh, setHistoricoRefresh] = useState(0);
+  const [parcelaReceberId, setParcelaReceberId] = useState<string | null>(null);
+  const [dataRecebimento, setDataRecebimento] = useState(todayISO());
+  const [valorRecebimento, setValorRecebimento] = useState(0);
+  const [acordos, setAcordos] = useState<AcordoApi[]>([]);
+  const [acordoAberto, setAcordoAberto] = useState(false);
+  const [parcelasAcordo, setParcelasAcordo] = useState<string[]>([]);
+  const [dataAcordo, setDataAcordo] = useState(todayISO());
+  const [valorAcordo, setValorAcordo] = useState(0);
+  const [entradaAcordo, setEntradaAcordo] = useState(0);
+  const [qtdAcordo, setQtdAcordo] = useState(1);
+  const [primeiroVencimentoAcordo, setPrimeiroVencimentoAcordo] = useState(todayISO());
+  const [obsAcordo, setObsAcordo] = useState("");
+  const [salvandoAcordo, setSalvandoAcordo] = useState(false);
   useEffect(() => {
     if (!empresaAtualId) {
       setClientes([]);
@@ -172,6 +200,24 @@ function VendaDetail() {
     };
   }, [empresaAtualId, id, podeVerHistorico, historicoRefresh]);
 
+  useEffect(() => {
+    if (!empresaAtualId) {
+      setAcordos([]);
+      return;
+    }
+    let cancelado = false;
+    void apiJson<AcordoApi[]>(`/api/vendas/${id}/acordos`, { empresaId: empresaAtualId })
+      .then((lista) => {
+        if (!cancelado) setAcordos(lista);
+      })
+      .catch(() => {
+        if (!cancelado) setAcordos([]);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaAtualId, id, historicoRefresh]);
+
   const v = state.vendas.find((x) => x.id === id);
   if (!v) throw notFound();
 
@@ -193,6 +239,92 @@ function VendaDetail() {
         valorCobrado: calc.diasAtraso > 0 ? calc.atualizado : p.valor,
       };
     });
+  const parcelaReceber = parcelas.find((p) => p.id === parcelaReceberId);
+  const parcelasElegiveisAcordo = parcelas.filter(
+    (p) =>
+      p.status !== "paga" &&
+      p.status !== "cancelada" &&
+      p.status !== "em_acordo" &&
+      p.origemTipo !== "acordo",
+  );
+
+  const recalcularRecebimento = (parcelaId: string, data: string) => {
+    const parcela = state.parcelas.find((p) => p.id === parcelaId);
+    if (!parcela) return;
+    const calculo = inadimplenciaCalc(
+      parcela,
+      state.config,
+      new Date(`${data}T12:00:00`),
+    );
+    setValorRecebimento(Number(calculo.atualizado.toFixed(2)));
+  };
+
+  const abrirRecebimento = (parcelaId: string) => {
+    const data = todayISO();
+    setParcelaReceberId(parcelaId);
+    setDataRecebimento(data);
+    recalcularRecebimento(parcelaId, data);
+  };
+
+  const abrirAcordo = () => {
+    const vencidas = parcelasElegiveisAcordo
+      .filter((p) => p.vencimento < todayISO())
+      .map((p) => p.id);
+    const selecionadas = vencidas.length ? vencidas : parcelasElegiveisAcordo.map((p) => p.id);
+    const total = parcelasElegiveisAcordo
+      .filter((p) => selecionadas.includes(p.id))
+      .reduce((soma, p) => soma + p.valor, 0);
+    setParcelasAcordo(selecionadas);
+    setValorAcordo(Number(total.toFixed(2)));
+    setEntradaAcordo(0);
+    setQtdAcordo(Math.max(1, selecionadas.length));
+    setDataAcordo(todayISO());
+    setPrimeiroVencimentoAcordo(todayISO());
+    setObsAcordo("");
+    setAcordoAberto(true);
+  };
+
+  const salvarAcordo = async () => {
+    if (!empresaAtualId || parcelasAcordo.length === 0) {
+      toast.error("Selecione ao menos uma parcela para o acordo");
+      return;
+    }
+    setSalvandoAcordo(true);
+    try {
+      await apiJson<AcordoApi>(`/api/vendas/${id}/acordos`, {
+        method: "POST",
+        empresaId: empresaAtualId,
+        body: JSON.stringify({
+          parcelaIds: parcelasAcordo.map(Number),
+          dataAcordo,
+          valorAcordo,
+          entradaValor: entradaAcordo,
+          quantidadeParcelas: qtdAcordo,
+          primeiroVencimento: primeiroVencimentoAcordo,
+          observacoes: obsAcordo || null,
+        }),
+      });
+      const [financeiro, lista] = await Promise.all([
+        carregarFinanceiro(empresaAtualId),
+        apiJson<AcordoApi[]>(`/api/vendas/${id}/acordos`, { empresaId: empresaAtualId }),
+      ]);
+      setState((s) => ({
+        ...s,
+        vendas: financeiro.vendas,
+        parcelas: financeiro.parcelas,
+        movimentos: financeiro.movimentos,
+      }));
+      setAcordos(lista);
+      setHistoricoRefresh((x) => x + 1);
+      setAcordoAberto(false);
+      toast.success("Acordo lançado com as parcelas originais preservadas");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível lançar o acordo");
+    } finally {
+      setSalvandoAcordo(false);
+    }
+  };
+
   const movs = state.movimentos.filter((m) => m.vendaId === v.id);
   const c = comissaoDaVenda(v, state.parcelas, state.config, state.movimentos);
   const comissaoProgresso = c.total > 0 ? Math.min(100, (c.pago / c.total) * 100) : 100;
@@ -571,28 +703,17 @@ function VendaDetail() {
                     ) : p.status === "cancelada" ? (
                       <span className="text-xs text-muted-foreground">Sem ação</span>
                     ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={async () => {
-                          try {
-                            await receberParcela(p.id, p.valorCobrado);
-                            toast.success(
-                              p.status === "vencida"
-                                ? "Parcela recebida com os acréscimos contratuais"
-                                : "Recebimento registrado",
-                            );
-                          } catch (error) {
-                            toast.error(
-                              error instanceof Error
-                                ? error.message
-                                : "Não foi possível registrar o recebimento",
-                            );
-                          }
-                        }}
-                      >
-                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
-                      </Button>
+                      p.status === "em_acordo" ? (
+                        <span className="text-xs text-muted-foreground">Substituída pelo acordo</span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => abrirRecebimento(p.id)}
+                        >
+                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
+                        </Button>
+                      )
                     )}
                   </TableCell>
                 </TableRow>
@@ -601,6 +722,169 @@ function VendaDetail() {
           </Table>
         </CardContent>
       </Card>
+
+      <Card className="border-border/70">
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-base">Acordos</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              As parcelas originais permanecem no histórico com status Em acordo. Somente as novas parcelas do acordo ficam ativas para cobrança.
+            </p>
+          </div>
+          {podeEditarVenda && parcelasElegiveisAcordo.length > 0 && (
+            <Button size="sm" variant="outline" onClick={abrirAcordo}>
+              Lançar acordo
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {acordos.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              Nenhum acordo lançado neste contrato.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {acordos.map((acordo) => (
+                <div key={acordo.id} className="rounded-lg border border-border/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">Acordo #{acordo.id}</div>
+                    <div className="text-xs text-muted-foreground">{formatDate(acordo.dataAcordo)}</div>
+                  </div>
+                  <div className="mt-2 grid gap-2 text-sm sm:grid-cols-4">
+                    <div><span className="text-muted-foreground">Dívida original:</span> {brl(acordo.valorOriginal)}</div>
+                    <div><span className="text-muted-foreground">Negociado:</span> {brl(acordo.valorAcordo)}</div>
+                    <div><span className="text-muted-foreground">Entrada:</span> {brl(acordo.entradaValor)}</div>
+                    <div><span className="text-muted-foreground">Parcelas:</span> {acordo.quantidadeParcelas}</div>
+                  </div>
+                  {acordo.observacoes && (
+                    <p className="mt-2 text-xs text-muted-foreground">{acordo.observacoes}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={Boolean(parcelaReceberId)} onOpenChange={(open) => !open && setParcelaReceberId(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Registrar recebimento</DialogTitle>
+            <DialogDescription>
+              Informe a data em que o cliente realmente pagou. Juros e multa são calculados até essa data, não até a data em que o lançamento está sendo digitado.
+            </DialogDescription>
+          </DialogHeader>
+          {parcelaReceber && (
+            <div className="space-y-4">
+              <div>
+                <Label>Data real do pagamento</Label>
+                <Input
+                  type="date"
+                  value={dataRecebimento}
+                  onChange={(event) => {
+                    const data = event.target.value;
+                    setDataRecebimento(data);
+                    recalcularRecebimento(parcelaReceber.id, data);
+                  }}
+                />
+              </div>
+              <div>
+                <Label>Valor recebido</Label>
+                <CurrencyInput value={valorRecebimento} onValueChange={setValorRecebimento} />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Valor original {brl(parcelaReceber.valor)}. O valor acima é recalculado conforme a data informada e pode ser ajustado manualmente.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setParcelaReceberId(null)}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                if (!parcelaReceber) return;
+                try {
+                  await receberParcela(parcelaReceber.id, valorRecebimento, dataRecebimento);
+                  setParcelaReceberId(null);
+                  toast.success("Recebimento registrado na data real do pagamento");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Não foi possível registrar o recebimento");
+                }
+              }}
+            >
+              Confirmar recebimento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={acordoAberto} onOpenChange={setAcordoAberto}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Lançar acordo</DialogTitle>
+            <DialogDescription>
+              Selecione as parcelas que originaram a negociação. Elas serão preservadas como Em acordo e as novas parcelas passarão a representar a cobrança ativa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Parcelas incluídas</Label>
+              <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3">
+                {parcelasElegiveisAcordo.map((p) => (
+                  <label key={p.id} className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={parcelasAcordo.includes(p.id)}
+                        onChange={(event) => {
+                          setParcelasAcordo((atuais) =>
+                            event.target.checked
+                              ? [...atuais, p.id]
+                              : atuais.filter((idAtual) => idAtual !== p.id),
+                          );
+                        }}
+                      />
+                      Parcela {p.numero}/{p.totalParcelas} · venc. {formatDate(p.vencimento)}
+                    </span>
+                    <span>{brl(p.valor)}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Data do acordo</Label>
+                <Input type="date" value={dataAcordo} onChange={(e) => setDataAcordo(e.target.value)} />
+              </div>
+              <div>
+                <Label>Valor negociado</Label>
+                <CurrencyInput value={valorAcordo} onValueChange={setValorAcordo} />
+              </div>
+              <div>
+                <Label>Entrada</Label>
+                <CurrencyInput value={entradaAcordo} onValueChange={setEntradaAcordo} />
+              </div>
+              <div>
+                <Label>Quantidade de parcelas</Label>
+                <Input type="number" min="1" value={qtdAcordo} onChange={(e) => setQtdAcordo(Math.max(1, Number(e.target.value) || 1))} />
+              </div>
+              <div>
+                <Label>Primeiro vencimento</Label>
+                <Input type="date" value={primeiroVencimentoAcordo} onChange={(e) => setPrimeiroVencimentoAcordo(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <Label>Observações</Label>
+              <Textarea value={obsAcordo} onChange={(e) => setObsAcordo(e.target.value)} placeholder="Condições negociadas, desconto, motivo, responsável..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAcordoAberto(false)}>Cancelar</Button>
+            <Button disabled={salvandoAcordo || parcelasAcordo.length === 0} onClick={() => void salvarAcordo()}>
+              {salvandoAcordo ? "Salvando..." : "Criar acordo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {podeVerHistorico && (
         <Card className="border-border/70">
