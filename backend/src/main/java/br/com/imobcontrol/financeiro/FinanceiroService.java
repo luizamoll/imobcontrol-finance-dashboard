@@ -45,6 +45,7 @@ public class FinanceiroService {
     private final ParcelaRepository parcelas;
     private final MovimentoRepository movimentos;
     private final AcordoRepository acordos;
+    private final ReajusteVendaRepository reajustesVenda;
     private final EmpreendimentoRepository empreendimentos;
     private final QuadraRepository quadras;
     private final UnidadeRepository unidades;
@@ -60,6 +61,7 @@ public class FinanceiroService {
             ParcelaRepository parcelas,
             MovimentoRepository movimentos,
             AcordoRepository acordos,
+            ReajusteVendaRepository reajustesVenda,
             EmpreendimentoRepository empreendimentos,
             QuadraRepository quadras,
             UnidadeRepository unidades,
@@ -74,6 +76,7 @@ public class FinanceiroService {
         this.parcelas = parcelas;
         this.movimentos = movimentos;
         this.acordos = acordos;
+        this.reajustesVenda = reajustesVenda;
         this.empreendimentos = empreendimentos;
         this.quadras = quadras;
         this.unidades = unidades;
@@ -462,6 +465,126 @@ public class FinanceiroService {
 
         registrar(ctx, "PARCELA", parcela.getId(), "RECEBIMENTO");
         return toMovimentoResponse(ctx.empresaId(), salvo);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ReajusteVendaResponse> listarReajustes(
+            Authentication auth,
+            Long empresaSolicitada,
+            Long vendaId
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        venda(ctx.empresaId(), vendaId);
+        return reajustesVenda
+                .findAllByEmpresaIdAndVendaIdOrderByDataReferenciaDescIdDesc(ctx.empresaId(), vendaId)
+                .stream()
+                .map(r -> new ReajusteVendaResponse(
+                        r.getId(),
+                        r.getDataReferencia(),
+                        r.getPercentualAplicado(),
+                        r.getIndiceReferencia(),
+                        r.getCriadoEm()
+                ))
+                .toList();
+    }
+
+    @Transactional
+    public ReajusteVendaResponse aplicarReajusteIndice(
+            Authentication auth,
+            Long empresaSolicitada,
+            Long vendaId,
+            ReajusteVendaRequest body
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Venda venda = venda(ctx.empresaId(), vendaId);
+        JsonNode regra = ler(venda.getRegrasJson()).path("reajusteContratual");
+
+        if (regra.isMissingNode() || regra.isNull() || !bool(regra, "ativo", false)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Este contrato não possui reajuste contratual ativo"
+            );
+        }
+
+        String modalidade = textoJson(regra, "modalidade", "");
+        if ("percentual_fixo".equals(modalidade)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "O percentual fixo já é aplicado automaticamente às parcelas pelo vencimento"
+            );
+        }
+
+        long periodicidade = Math.max(1, inteiro(regra, "periodicidadeMeses", 12));
+        LocalDate primeiraData = venda.getDataContrato().plusMonths(periodicidade);
+        if (body.dataReferencia().isBefore(primeiraData)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "A data de referência precisa ser posterior ao primeiro ciclo contratual"
+            );
+        }
+
+        if (reajustesVenda.existsByEmpresaIdAndVendaIdAndDataReferencia(
+                ctx.empresaId(), vendaId, body.dataReferencia())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Já existe reajuste registrado para esta data de referência"
+            );
+        }
+
+        BigDecimal percentualInformado = percentual(body.percentualIndice());
+        BigDecimal percentualAplicado = percentualInformado;
+        if ("maior_entre".equals(modalidade)) {
+            BigDecimal base = percentual(decimal(regra, "percentualBase", BigDecimal.ZERO));
+            if (base.compareTo(percentualAplicado) > 0) percentualAplicado = base;
+        }
+
+        List<Parcela> abertas = parcelas
+                .findAllByEmpresaIdAndVendaIdOrderByVencimentoAscIdAsc(ctx.empresaId(), vendaId)
+                .stream()
+                .filter(p -> p.getAcordoId() == null)
+                .filter(p -> !"paga".equalsIgnoreCase(p.getStatus()))
+                .filter(p -> !"cancelada".equalsIgnoreCase(p.getStatus()))
+                .filter(p -> !"em_acordo".equalsIgnoreCase(p.getStatus()))
+                .filter(p -> !p.getVencimento().isBefore(body.dataReferencia()))
+                .toList();
+
+        BigDecimal fator = BigDecimal.ONE.add(
+                percentualAplicado.divide(CEM, 12, RoundingMode.HALF_UP)
+        );
+        for (Parcela p : abertas) {
+            if (p.getValorOriginal() == null) p.setValorOriginal(p.getValor());
+            p.setValor(moeda(p.getValor().multiply(fator)));
+            p.setReajustesAplicados((p.getReajustesAplicados() == null ? 0 : p.getReajustesAplicados()) + 1);
+        }
+        parcelas.saveAll(abertas);
+        parcelas.flush();
+
+        ReajusteVenda registro = new ReajusteVenda();
+        registro.setEmpresaId(ctx.empresaId());
+        registro.setVendaId(vendaId);
+        registro.setDataReferencia(body.dataReferencia());
+        registro.setPercentualAplicado(percentualAplicado);
+        registro.setIndiceReferencia(texto(textoJson(regra, "indiceReferencia", null)));
+        registro.setCriadoPorUsuarioId(ctx.usuarioId());
+        ReajusteVenda salvo = reajustesVenda.saveAndFlush(registro);
+
+        registrar(
+                ctx,
+                "VENDA",
+                vendaId,
+                "REAJUSTE_CONTRATUAL",
+                "Reajuste de " + percentualLegivel(percentualAplicado)
+                        + " aplicado a " + abertas.size() + " parcela(s) vincenda(s)"
+                        + " a partir de " + dataLegivel(body.dataReferencia())
+        );
+
+        return new ReajusteVendaResponse(
+                salvo.getId(),
+                salvo.getDataReferencia(),
+                salvo.getPercentualAplicado(),
+                salvo.getIndiceReferencia(),
+                salvo.getCriadoEm()
+        );
     }
 
     @Transactional(readOnly = true)
