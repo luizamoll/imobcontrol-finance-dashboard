@@ -437,7 +437,8 @@ class FinanceiroServiceTests {
                                         + "\"jurosTipo\":\"mensal\",\"moraAtiva\":true,\"moraPct\":2,"
                                         + "\"toleranciaAtiva\":false,\"diasTolerancia\":0,"
                                         + "\"inicioJuros\":\"vencimento\"}"
-                        )
+                        ),
+                        null
                 )
         );
 
