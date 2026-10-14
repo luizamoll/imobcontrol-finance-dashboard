@@ -613,7 +613,10 @@ function computeReceber(
 
 function vendaQuitadaAposPagamento(parcelas: Parcela[], vendaId: string, parcelaId: string) {
   const relacionadas = parcelas.filter(
-    (p) => p.vendaId === vendaId && p.status !== "cancelada",
+    (p) =>
+      p.vendaId === vendaId &&
+      p.status !== "cancelada" &&
+      p.status !== "em_acordo",
   );
   if (relacionadas.length === 0) return false;
   return relacionadas.every((p) => p.id === parcelaId || p.status === "paga");
@@ -970,7 +973,8 @@ export function previsaoQuitacaoComissao(
       (p) =>
         p.vendaId === v.id &&
         p.status !== "paga" &&
-        p.status !== "cancelada",
+        p.status !== "cancelada" &&
+        p.status !== "em_acordo",
     )
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
 
