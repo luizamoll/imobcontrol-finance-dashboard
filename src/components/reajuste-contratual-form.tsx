@@ -105,8 +105,9 @@ export function ReajusteContratualForm({
           </div>
 
           <div className="sm:col-span-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-            O ImobControl registra esta regra separadamente. Regras personalizadas não são aplicadas
-            automaticamente às parcelas até existir uma fórmula operacional validada para o contrato.
+            Percentuais fixos são refletidos automaticamente nas parcelas conforme os ciclos do contrato.
+            Para IPCA ou outro índice variável, o percentual apurado em cada aniversário é informado no
+            contrato e aplicado somente às parcelas vincendas, preservando o histórico.
           </div>
         </div>
       )}
