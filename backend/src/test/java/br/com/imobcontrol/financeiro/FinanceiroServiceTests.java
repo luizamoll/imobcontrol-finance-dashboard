@@ -403,6 +403,62 @@ class FinanceiroServiceTests {
     }
 
     @Test
+    void baixaParcelaVencidaAplicaJurosEMultaSemCorrecaoAnual() throws Exception {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("100.00"),
+                        contrato,
+                        null,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcela única", new BigDecimal("100.00"),
+                                        1, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        json.readTree(
+                                "{\"correcaoAtiva\":false,\"correcaoPctMes\":0,"
+                                        + "\"jurosAtivo\":true,\"jurosPctMes\":1,\"jurosPctDia\":0,"
+                                        + "\"jurosTipo\":\"mensal\",\"moraAtiva\":true,\"moraPct\":2,"
+                                        + "\"toleranciaAtiva\":false,\"diasTolerancia\":0,"
+                                        + "\"inicioJuros\":\"vencimento\"}"
+                        )
+                )
+        );
+
+        ParcelaResponse parcela = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .findFirst()
+                .orElseThrow();
+
+        MovimentoResponse movimento = service.receber(
+                autenticacao(usuario),
+                null,
+                parcela.id(),
+                new RecebimentoRequest(null, parcela.vencimento().plusDays(30))
+        );
+
+        assertDinheiro("103.00", movimento.valorRecebido());
+        assertDinheiro("3.00", movimento.acrescimosRecebidos());
+    }
+
+    @Test
     void vendaPodeAlterarSuaRegraDeJurosECorrecaoSemAfetarHistoricoPago() throws Exception {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
