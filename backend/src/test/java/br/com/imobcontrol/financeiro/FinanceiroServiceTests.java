@@ -403,6 +403,133 @@ class FinanceiroServiceTests {
     }
 
     @Test
+    void percentualFixoReajustaParcelasNoAniversarioDoContrato() throws Exception {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        empreendimento.setReajusteContratualJson(
+                "{\"ativo\":true,\"modalidade\":\"percentual_fixo\","
+                        + "\"percentualBase\":10,\"indiceReferencia\":\"\","
+                        + "\"periodicidadeMeses\":12,\"gatilhoPercentual\":0}"
+        );
+        empreendimentos.saveAndFlush(empreendimento);
+
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+        LocalDate contrato = LocalDate.of(2025, 1, 10);
+
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("1400.00"),
+                        contrato,
+                        null,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcelas", new BigDecimal("100.00"),
+                                        14, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        List<ParcelaResponse> criadas = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .toList();
+
+        assertDinheiro("100.00", criadas.get(10).valor());
+        assertDinheiro("110.00", criadas.get(11).valor());
+        assertDinheiro("110.00", criadas.get(13).valor());
+    }
+
+    @Test
+    void acordoPreservaParcelasOriginaisEMarcaComoEmAcordo() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+        LocalDate contrato = LocalDate.of(2026, 1, 1);
+
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario),
+                null,
+                new VendaRequest(
+                        empreendimento.getId(),
+                        unidade.getId(),
+                        cliente.getId(),
+                        new BigDecimal("400.00"),
+                        contrato,
+                        null,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        false,
+                        null,
+                        List.of(
+                                new VendaRequest.PagamentoRequest(
+                                        "parcelas", "Parcelas", new BigDecimal("100.00"),
+                                        4, contrato.plusMonths(1), "pendente"
+                                )
+                        ),
+                        null
+                )
+        );
+
+        List<ParcelaResponse> originais = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .toList();
+
+        AcordoResponse acordo = service.criarAcordo(
+                autenticacao(usuario),
+                null,
+                venda.id(),
+                new AcordoRequest(
+                        List.of(originais.get(0).id(), originais.get(1).id()),
+                        LocalDate.of(2026, 5, 1),
+                        new BigDecimal("200.00"),
+                        BigDecimal.ZERO,
+                        4,
+                        LocalDate.of(2026, 6, 1),
+                        "Teste"
+                )
+        );
+
+        List<ParcelaResponse> depois = service.listarParcelas(autenticacao(usuario), null)
+                .stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .toList();
+
+        long emAcordo = depois.stream().filter(p -> "em_acordo".equals(p.status())).count();
+        long cobrancasAcordo = depois.stream().filter(p -> "acordo".equals(p.origemTipo())).count();
+
+        assertEquals(2, emAcordo);
+        assertEquals(4, cobrancasAcordo);
+        assertDinheiro("200.00", acordo.valorOriginal());
+        assertDinheiro("200.00", acordo.valorAcordo());
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.receber(
+                        autenticacao(usuario),
+                        null,
+                        originais.get(0).id(),
+                        new RecebimentoRequest(new BigDecimal("100.00"), LocalDate.of(2026, 5, 1))
+                )
+        );
+    }
+
+    @Test
     void baixaParcelaVencidaAplicaJurosEMultaSemCorrecaoAnual() throws Exception {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
