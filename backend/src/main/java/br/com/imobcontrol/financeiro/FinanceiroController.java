@@ -148,6 +148,34 @@ public class FinanceiroController {
         return service.listarMovimentos(auth, empresaId);
     }
 
+    @GetMapping("/vendas/{id}/reajustes")
+    public List<ReajusteVendaResponse> listarReajustes(
+            Authentication auth,
+            @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
+            @PathVariable Long id
+    ) {
+        acesso.exigirQualquer(
+                auth,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_EDITAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RELATORIOS_VISUALIZAR
+        );
+        return service.listarReajustes(auth, empresaId, id);
+    }
+
+    @PostMapping("/vendas/{id}/reajustes")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ReajusteVendaResponse aplicarReajuste(
+            Authentication auth,
+            @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
+            @PathVariable Long id,
+            @Valid @RequestBody ReajusteVendaRequest body
+    ) {
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_EDITAR);
+        return service.aplicarReajusteIndice(auth, empresaId, id, body);
+    }
+
     @GetMapping("/vendas/{id}/acordos")
     public List<AcordoResponse> listarAcordos(
             Authentication auth,
