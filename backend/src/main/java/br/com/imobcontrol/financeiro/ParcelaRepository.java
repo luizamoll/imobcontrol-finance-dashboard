@@ -7,6 +7,7 @@ import java.util.Optional;
 public interface ParcelaRepository extends JpaRepository<Parcela, Long> {
     List<Parcela> findAllByEmpresaIdOrderByVencimentoAscIdAsc(Long empresaId);
     List<Parcela> findAllByEmpresaIdAndVendaIdOrderByVencimentoAscIdAsc(Long empresaId, Long vendaId);
+    List<Parcela> findAllByEmpresaIdAndAcordoIdOrderByVencimentoAscIdAsc(Long empresaId, Long acordoId);
     Optional<Parcela> findByIdAndEmpresaId(Long id, Long empresaId);
     void deleteByEmpresaIdAndVendaId(Long empresaId, Long vendaId);
     boolean existsByEmpresaIdAndVendaIdAndStatusNot(Long empresaId, Long vendaId, String status);
