@@ -751,6 +751,7 @@ function NewUnidadeDialog({
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="lote">Lote</SelectItem>
+              <SelectItem value="gleba">Gleba</SelectItem>
               <SelectItem value="apartamento">Apartamento</SelectItem>
               <SelectItem value="sala">Sala</SelectItem>
               <SelectItem value="casa">Casa</SelectItem>
@@ -922,6 +923,7 @@ function EditUnidadeDialog({
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="lote">Lote</SelectItem>
+              <SelectItem value="gleba">Gleba</SelectItem>
               <SelectItem value="apartamento">Apartamento</SelectItem>
               <SelectItem value="sala">Sala</SelectItem>
               <SelectItem value="casa">Casa</SelectItem>
