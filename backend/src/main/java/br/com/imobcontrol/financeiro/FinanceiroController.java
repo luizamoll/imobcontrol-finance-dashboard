@@ -148,6 +148,34 @@ public class FinanceiroController {
         return service.listarMovimentos(auth, empresaId);
     }
 
+    @GetMapping("/vendas/{id}/acordos")
+    public List<AcordoResponse> listarAcordos(
+            Authentication auth,
+            @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
+            @PathVariable Long id
+    ) {
+        acesso.exigirQualquer(
+                auth,
+                PermissaoUsuario.VENDAS_VISUALIZAR,
+                PermissaoUsuario.VENDAS_EDITAR,
+                PermissaoUsuario.FINANCEIRO_VISUALIZAR,
+                PermissaoUsuario.RECEBIMENTOS_VISUALIZAR
+        );
+        return service.listarAcordos(auth, empresaId, id);
+    }
+
+    @PostMapping("/vendas/{id}/acordos")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AcordoResponse criarAcordo(
+            Authentication auth,
+            @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
+            @PathVariable Long id,
+            @Valid @RequestBody AcordoRequest body
+    ) {
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_EDITAR);
+        return service.criarAcordo(auth, empresaId, id, body);
+    }
+
     @PostMapping("/parcelas/{id}/receber")
     @ResponseStatus(HttpStatus.CREATED)
     public MovimentoResponse receber(
