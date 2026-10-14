@@ -44,6 +44,7 @@ public class FinanceiroService {
     private final PagamentoItemRepository pagamentos;
     private final ParcelaRepository parcelas;
     private final MovimentoRepository movimentos;
+    private final AcordoRepository acordos;
     private final EmpreendimentoRepository empreendimentos;
     private final QuadraRepository quadras;
     private final UnidadeRepository unidades;
@@ -58,6 +59,7 @@ public class FinanceiroService {
             PagamentoItemRepository pagamentos,
             ParcelaRepository parcelas,
             MovimentoRepository movimentos,
+            AcordoRepository acordos,
             EmpreendimentoRepository empreendimentos,
             QuadraRepository quadras,
             UnidadeRepository unidades,
@@ -71,6 +73,7 @@ public class FinanceiroService {
         this.pagamentos = pagamentos;
         this.parcelas = parcelas;
         this.movimentos = movimentos;
+        this.acordos = acordos;
         this.empreendimentos = empreendimentos;
         this.quadras = quadras;
         this.unidades = unidades;
@@ -350,6 +353,12 @@ public class FinanceiroService {
         if ("cancelada".equalsIgnoreCase(parcela.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Parcela cancelada não pode ser recebida");
         }
+        if ("em_acordo".equalsIgnoreCase(parcela.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Esta parcela foi substituída por um acordo e não pode receber baixa direta"
+            );
+        }
 
         Venda venda = venda(ctx.empresaId(), parcela.getVendaId());
         LocalDate data = body.data() == null ? LocalDate.now() : body.data();
@@ -443,7 +452,8 @@ public class FinanceiroService {
                 )
                 .stream()
                 .anyMatch(p -> !"paga".equalsIgnoreCase(p.getStatus())
-                        && !"cancelada".equalsIgnoreCase(p.getStatus()));
+                        && !"cancelada".equalsIgnoreCase(p.getStatus())
+                        && !"em_acordo".equalsIgnoreCase(p.getStatus()));
         if (!faltaPagar) {
             venda.setStatus("quitada");
             venda.setAtualizadoPorUsuarioId(ctx.usuarioId());
@@ -452,6 +462,212 @@ public class FinanceiroService {
 
         registrar(ctx, "PARCELA", parcela.getId(), "RECEBIMENTO");
         return toMovimentoResponse(ctx.empresaId(), salvo);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AcordoResponse> listarAcordos(
+            Authentication auth,
+            Long empresaSolicitada,
+            Long vendaId
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        venda(ctx.empresaId(), vendaId);
+        return acordos.findAllByEmpresaIdAndVendaIdOrderByDataAcordoDescIdDesc(
+                        ctx.empresaId(),
+                        vendaId
+                )
+                .stream()
+                .map(a -> toAcordoResponse(ctx.empresaId(), a))
+                .toList();
+    }
+
+    @Transactional
+    public AcordoResponse criarAcordo(
+            Authentication auth,
+            Long empresaSolicitada,
+            Long vendaId,
+            AcordoRequest body
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Venda venda = venda(ctx.empresaId(), vendaId);
+
+        List<Long> ids = body.parcelaIds().stream().distinct().toList();
+        if (ids.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione ao menos uma parcela");
+        }
+
+        List<Parcela> originais = ids.stream()
+                .map(id -> parcela(ctx.empresaId(), id))
+                .toList();
+
+        for (Parcela p : originais) {
+            if (!Objects.equals(p.getVendaId(), vendaId)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Todas as parcelas do acordo precisam pertencer ao mesmo contrato"
+                );
+            }
+            if ("paga".equalsIgnoreCase(p.getStatus())
+                    || "cancelada".equalsIgnoreCase(p.getStatus())
+                    || "em_acordo".equalsIgnoreCase(p.getStatus())
+                    || p.getAcordoId() != null) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Uma das parcelas selecionadas não está disponível para acordo"
+                );
+            }
+        }
+
+        BigDecimal entrada = moeda(body.entradaValor());
+        BigDecimal valorAcordo = moeda(body.valorAcordo());
+        if (entrada.compareTo(valorAcordo) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "A entrada não pode ser maior que o valor do acordo"
+            );
+        }
+
+        BigDecimal valorOriginal = moeda(originais.stream()
+                .map(Parcela::getValor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+
+        Acordo acordo = new Acordo();
+        acordo.setEmpresaId(ctx.empresaId());
+        acordo.setVendaId(vendaId);
+        acordo.setClienteId(venda.getClienteId());
+        acordo.setDataAcordo(body.dataAcordo());
+        acordo.setValorOriginal(valorOriginal);
+        acordo.setValorAcordo(valorAcordo);
+        acordo.setEntradaValor(entrada);
+        acordo.setQuantidadeParcelas(body.quantidadeParcelas());
+        acordo.setPrimeiroVencimento(body.primeiroVencimento());
+        acordo.setObservacoes(texto(body.observacoes()));
+        acordo.setStatus("ativo");
+        acordo.setCriadoPorUsuarioId(ctx.usuarioId());
+        Acordo salvo = acordos.saveAndFlush(acordo);
+
+        for (Parcela original : originais) {
+            original.setStatus("em_acordo");
+            original.setAcordoId(salvo.getId());
+            original.setAcordoPapel("origem");
+        }
+        parcelas.saveAll(originais);
+
+        JsonNode inadimplencia = ler(venda.getRegrasJson()).path("inadimplencia");
+        String inadJson = inadimplencia.isMissingNode() || inadimplencia.isNull()
+                ? null
+                : escrever(inadimplencia);
+
+        if (entrada.signum() > 0) {
+            Parcela p = novaParcelaAcordo(
+                    venda,
+                    salvo,
+                    "Entrada do acordo #" + salvo.getId(),
+                    1,
+                    1,
+                    body.dataAcordo(),
+                    entrada,
+                    inadJson
+            );
+            parcelas.save(p);
+        }
+
+        BigDecimal saldo = moeda(valorAcordo.subtract(entrada));
+        int quantidade = body.quantidadeParcelas();
+        BigDecimal valorBase = quantidade == 0
+                ? BigDecimal.ZERO
+                : saldo.divide(BigDecimal.valueOf(quantidade), 2, RoundingMode.DOWN);
+        BigDecimal acumulado = BigDecimal.ZERO;
+        for (int numero = 1; numero <= quantidade; numero++) {
+            BigDecimal valor = numero == quantidade
+                    ? moeda(saldo.subtract(acumulado))
+                    : moeda(valorBase);
+            acumulado = acumulado.add(valor);
+            Parcela p = novaParcelaAcordo(
+                    venda,
+                    salvo,
+                    "Acordo #" + salvo.getId(),
+                    numero,
+                    quantidade,
+                    body.primeiroVencimento().plusMonths(numero - 1L),
+                    valor,
+                    inadJson
+            );
+            parcelas.save(p);
+        }
+        parcelas.flush();
+
+        registrar(
+                ctx,
+                "VENDA",
+                vendaId,
+                "ACORDO_CRIADO",
+                "Acordo #" + salvo.getId()
+                        + " · " + ids.size() + " parcela(s) original(is) marcada(s) como Em acordo"
+                        + " · valor negociado " + dinheiro(valorAcordo)
+        );
+
+        return toAcordoResponse(ctx.empresaId(), salvo);
+    }
+
+    private Parcela novaParcelaAcordo(
+            Venda venda,
+            Acordo acordo,
+            String descricao,
+            int numero,
+            int total,
+            LocalDate vencimento,
+            BigDecimal valor,
+            String inadJson
+    ) {
+        Parcela p = new Parcela();
+        p.setEmpresaId(venda.getEmpresaId());
+        p.setVendaId(venda.getId());
+        p.setEmpreendimentoId(venda.getEmpreendimentoId());
+        p.setUnidadeId(venda.getUnidadeId());
+        p.setClienteId(venda.getClienteId());
+        p.setOrigemTipo("acordo");
+        p.setOrigemDescricao(descricao);
+        p.setNumero(numero);
+        p.setTotalParcelas(total);
+        p.setVencimento(vencimento);
+        p.setValorOriginal(moeda(valor));
+        p.setValor(moeda(valor));
+        p.setReajustesAplicados(0);
+        p.setAcordoId(acordo.getId());
+        p.setAcordoPapel("cobranca");
+        p.setValorPago(BigDecimal.ZERO);
+        p.setStatus("pendente");
+        p.setRegrasInadimplenciaJson(inadJson);
+        return p;
+    }
+
+    private AcordoResponse toAcordoResponse(Long empresaId, Acordo a) {
+        List<Parcela> relacionadas =
+                parcelas.findAllByEmpresaIdAndAcordoIdOrderByVencimentoAscIdAsc(
+                        empresaId,
+                        a.getId()
+                );
+        return new AcordoResponse(
+                a.getId(),
+                a.getVendaId(),
+                a.getDataAcordo(),
+                a.getValorOriginal(),
+                a.getValorAcordo(),
+                a.getEntradaValor(),
+                a.getQuantidadeParcelas(),
+                a.getPrimeiroVencimento(),
+                a.getObservacoes(),
+                a.getStatus(),
+                relacionadas.stream()
+                        .filter(p -> "origem".equals(p.getAcordoPapel()))
+                        .map(Parcela::getId)
+                        .toList(),
+                relacionadas.stream()
+                        .filter(p -> "cobranca".equals(p.getAcordoPapel()))
+                        .map(Parcela::getId)
+                        .toList()
+        );
     }
 
     @Transactional
@@ -539,6 +755,15 @@ public class FinanceiroService {
                     }
                 }
 
+                LocalDate vencimento = item.primeiroVencimento().plusMonths(numero - 1L);
+                BigDecimal valorOriginal = valorParcela;
+                BigDecimal valorReajustado = reajustarParcelaFixa(
+                        venda.getDataContrato(),
+                        vencimento,
+                        valorOriginal,
+                        regras.path("reajusteContratual")
+                );
+
                 Parcela parcela = new Parcela();
                 parcela.setEmpresaId(empresaId);
                 parcela.setVendaId(venda.getId());
@@ -549,8 +774,14 @@ public class FinanceiroService {
                 parcela.setOrigemDescricao(texto(item.descricao()) == null ? item.tipo() : item.descricao());
                 parcela.setNumero(numero);
                 parcela.setTotalParcelas(quantidade);
-                parcela.setVencimento(item.primeiroVencimento().plusMonths(numero - 1L));
-                parcela.setValor(valorParcela);
+                parcela.setVencimento(vencimento);
+                parcela.setValorOriginal(valorOriginal);
+                parcela.setValor(valorReajustado);
+                parcela.setReajustesAplicados(ciclosReajusteFixo(
+                        venda.getDataContrato(),
+                        vencimento,
+                        regras.path("reajusteContratual")
+                ));
                 parcela.setValorPago(BigDecimal.ZERO);
                 parcela.setStatus("pendente");
                 parcela.setRegrasInadimplenciaJson(inadJson);
@@ -659,6 +890,32 @@ public class FinanceiroService {
             node.set("reajusteContratual", ler(emp.getReajusteContratualJson()));
         }
         return node;
+    }
+
+    private int ciclosReajusteFixo(
+            LocalDate dataContrato,
+            LocalDate vencimento,
+            JsonNode reajuste
+    ) {
+        if (reajuste == null || !reajuste.isObject() || !bool(reajuste, "ativo", false)) return 0;
+        if (!"percentual_fixo".equals(textoJson(reajuste, "modalidade", ""))) return 0;
+        long periodicidade = Math.max(1, inteiro(reajuste, "periodicidadeMeses", 12));
+        long meses = ChronoUnit.MONTHS.between(dataContrato, vencimento);
+        return (int) Math.max(0, meses / periodicidade);
+    }
+
+    private BigDecimal reajustarParcelaFixa(
+            LocalDate dataContrato,
+            LocalDate vencimento,
+            BigDecimal valorOriginal,
+            JsonNode reajuste
+    ) {
+        int ciclos = ciclosReajusteFixo(dataContrato, vencimento, reajuste);
+        if (ciclos <= 0) return moeda(valorOriginal);
+        BigDecimal pct = decimal(reajuste, "percentualBase", BigDecimal.ZERO);
+        if (pct.signum() <= 0) return moeda(valorOriginal);
+        BigDecimal fator = BigDecimal.ONE.add(pct.divide(CEM, 12, RoundingMode.HALF_UP));
+        return moeda(valorOriginal.multiply(fator.pow(ciclos)));
     }
 
     private BigDecimal valorCorrigido(Parcela parcela, LocalDate data) {
@@ -813,8 +1070,27 @@ public class FinanceiroService {
                         && !"cancelada".equalsIgnoreCase(p.getStatus()))
                 .toList();
 
+        Venda venda = venda(empresaId, vendaId);
+        JsonNode reajuste = regras.path("reajusteContratual");
         for (Parcela parcela : abertas) {
             parcela.setRegrasInadimplenciaJson(inadJson);
+            if (parcela.getAcordoId() == null && !"em_acordo".equalsIgnoreCase(parcela.getStatus())) {
+                BigDecimal original = parcela.getValorOriginal() == null
+                        ? parcela.getValor()
+                        : parcela.getValorOriginal();
+                parcela.setValorOriginal(original);
+                parcela.setValor(reajustarParcelaFixa(
+                        venda.getDataContrato(),
+                        parcela.getVencimento(),
+                        original,
+                        reajuste
+                ));
+                parcela.setReajustesAplicados(ciclosReajusteFixo(
+                        venda.getDataContrato(),
+                        parcela.getVencimento(),
+                        reajuste
+                ));
+            }
         }
         parcelas.saveAll(abertas);
         parcelas.flush();
