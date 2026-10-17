@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
-import { ArrowRight, Bot, Send, Sparkles, X } from "lucide-react";
+import { ArrowRight, Send, Sparkles, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,9 +26,9 @@ export function HelpAssistant() {
   const [messages, setMessages] = useState<HelpMessage[]>([
     {
       role: "assistant",
-      title: "Posso ajudar?",
+      title: "Oi! Posso ajudar?",
       text:
-        "Sou o guia do ImobControl. Posso explicar telas, regras, recebimentos, vendas, relatórios e acessos. Escolha uma pergunta ou escreva sua dúvida.",
+        "Eu sou o assistente do ImobControl. Conheço os principais fluxos, regras e telas do sistema e posso te guiar passo a passo. Escolha uma pergunta sugerida ou escreva do seu jeito.",
     },
   ]);
 
@@ -61,9 +61,13 @@ export function HelpAssistant() {
         <div className="mb-3 flex h-[620px] max-h-[calc(100vh-7rem)] w-[390px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-border/80 bg-background shadow-2xl shadow-black/20">
           <div className="flex items-center justify-between border-b border-border/70 bg-muted/30 px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background">
-                <Bot className="h-5 w-5 text-foreground" />
-                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500" />
+              <div className="relative h-11 w-11 overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+                <img
+                  src="/imobcontrol-assistant.webp"
+                  alt="Mascote do ImobControl"
+                  className="h-full w-full object-cover"
+                />
+                <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-sm font-semibold">
@@ -162,10 +166,17 @@ export function HelpAssistant() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="ml-auto flex items-center gap-2 rounded-full border border-border bg-foreground px-4 py-3 text-sm font-medium text-background shadow-lg shadow-black/15 transition-transform hover:-translate-y-0.5"
+        className="group ml-auto flex items-center gap-2 rounded-full border border-border bg-foreground py-2 pl-2 pr-4 text-sm font-medium text-background shadow-lg shadow-black/15 transition-all hover:-translate-y-0.5 hover:shadow-xl"
         aria-label="Abrir assistente do ImobControl"
       >
-        <Bot className="h-5 w-5" />
+        <span className="relative h-11 w-11 overflow-hidden rounded-full border-2 border-background/20 bg-white transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-105">
+          <img
+            src="/imobcontrol-assistant.webp"
+            alt=""
+            className="h-full w-full object-cover"
+          />
+          <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+        </span>
         <span>Posso ajudar?</span>
       </button>
     </div>
