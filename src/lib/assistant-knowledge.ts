@@ -1,3 +1,5 @@
+import { expandedHelpTopics } from "@/lib/assistant-expanded-knowledge";
+
 // Base de conhecimento do Assistente ImobControl — v1.
 export type HelpTarget = {
   label: string;
@@ -556,6 +558,8 @@ export const helpTopics: HelpTopic[] = [
   }
 ];
 
+const allHelpTopics: HelpTopic[] = [...expandedHelpTopics, ...helpTopics];
+
 function normalize(value: string) {
   return value
     .normalize("NFD")
@@ -571,7 +575,7 @@ function routeMatches(topic: HelpTopic, currentPath: string) {
 }
 
 export function getContextSuggestions(currentPath: string, limit = 5) {
-  const contextual = helpTopics
+  const contextual = allHelpTopics
     .filter((topic) => routeMatches(topic, currentPath))
     .flatMap((topic) => topic.questions);
 
@@ -601,7 +605,7 @@ export function findHelpAnswer(query: string, currentPath: string) {
     .filter((word) => word.length > 2 && !stopwords.has(word));
   const words = [...new Set(baseWords.flatMap((word) => [word, ...(synonyms[word] ?? [])]))];
 
-  const ranked = helpTopics
+  const ranked = allHelpTopics
     .map((topic) => {
       const title = normalize(topic.title);
       const questions = normalize(topic.questions.join(" "));
@@ -609,8 +613,13 @@ export function findHelpAnswer(query: string, currentPath: string) {
       const answer = normalize(topic.answer);
       let score = 0;
 
+      const exactQuestion = topic.questions.some(
+        (question) => normalize(question) === normalizedQuery,
+      );
+
+      if (exactQuestion) score += 60;
       if (title.includes(normalizedQuery)) score += 12;
-      if (questions.includes(normalizedQuery)) score += 14;
+      if (questions.includes(normalizedQuery)) score += 18;
       if (keywords.includes(normalizedQuery)) score += 10;
 
       for (const word of words) {
