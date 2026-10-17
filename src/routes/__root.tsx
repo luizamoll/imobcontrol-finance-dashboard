@@ -20,7 +20,8 @@ import { AdminHeader } from "@/components/admin-header";
 import { StoreProvider } from "@/lib/store";
 import { AuthGate, AuthProvider } from "@/lib/auth";
 import { TenantProvider } from "@/lib/tenant";
-import { Toaster } from "@/components/ui/sonner";\nimport { HelpAssistant } from "@/components/help-assistant";
+import { Toaster } from "@/components/ui/sonner";
+import { HelpAssistant } from "@/components/help-assistant";
 
 function NotFoundComponent() {
   return (
@@ -148,6 +149,7 @@ function RootComponent() {
         {isPublicAuthPage ? (
           <>
             <Outlet />
+            <HelpAssistant />
             <Toaster position="top-right" />
           </>
         ) : (
@@ -182,6 +184,7 @@ function RootComponent() {
                   </SidebarProvider>
                 </StoreProvider>
               )}
+              <HelpAssistant />
             </TenantProvider>
           </AuthGate>
         )}
