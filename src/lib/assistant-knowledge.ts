@@ -719,6 +719,83 @@ export function getContextSuggestions(currentPath: string, limit = 5) {
   return selected.slice(0, limit);
 }
 
+function getRelatedQuestions(topic: HelpTopic, currentPath: string, limit = 4) {
+  const topicKeywords = new Set(
+    topic.keywords.flatMap((keyword) =>
+      normalize(keyword).split(/\s+/).filter((word) => word.length > 2),
+    ),
+  );
+  const topicTitleWords = new Set(
+    normalize(topic.title).split(/\s+/).filter((word) => word.length > 3),
+  );
+  const currentAnswer = normalize(topic.answer);
+
+  const ranked = allHelpTopics
+    .filter(
+      (candidate) =>
+        candidate.id !== topic.id &&
+        normalize(candidate.answer) !== currentAnswer &&
+        candidate.questions.length > 0,
+    )
+    .map((candidate) => {
+      let score = 0;
+      const candidateKeywords = candidate.keywords.flatMap((keyword) =>
+        normalize(keyword).split(/\s+/).filter((word) => word.length > 2),
+      );
+      const candidateTitleWords = normalize(candidate.title)
+        .split(/\s+/)
+        .filter((word) => word.length > 3);
+
+      for (const word of candidateKeywords) {
+        if (topicKeywords.has(word)) score += 4;
+        if (topicTitleWords.has(word)) score += 2;
+      }
+      for (const word of candidateTitleWords) {
+        if (topicKeywords.has(word)) score += 3;
+        if (topicTitleWords.has(word)) score += 2;
+      }
+
+      const sharesTopicRoute =
+        topic.routes?.some((route) => candidate.routes?.includes(route)) ?? false;
+      if (sharesTopicRoute) score += 6;
+      if (routeMatches(candidate, currentPath)) score += 3;
+
+      return { candidate, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const picked: string[] = [];
+  const seenAnswers = new Set<string>();
+
+  for (const item of ranked) {
+    if (item.score <= 0) continue;
+    const answerKey = normalize(item.candidate.answer);
+    if (seenAnswers.has(answerKey)) continue;
+
+    const question = item.candidate.questions[0];
+    if (!question || topic.questions.some((q) => normalize(q) === normalize(question))) continue;
+
+    picked.push(question);
+    seenAnswers.add(answerKey);
+    if (picked.length >= limit) break;
+  }
+
+  if (picked.length < limit) {
+    for (const question of getContextSuggestions(currentPath, limit * 2)) {
+      if (
+        picked.some((item) => normalize(item) === normalize(question)) ||
+        topic.questions.some((item) => normalize(item) === normalize(question))
+      ) {
+        continue;
+      }
+      picked.push(question);
+      if (picked.length >= limit) break;
+    }
+  }
+
+  return picked.slice(0, limit);
+}
+
 export function findHelpAnswer(query: string, currentPath: string) {
   const normalizedQuery = normalize(query);
   const stopwords = new Set(["como", "para", "por", "que", "uma", "um", "meu", "minha", "no", "na", "do", "da", "de"]);
@@ -768,13 +845,15 @@ export function findHelpAnswer(query: string, currentPath: string) {
       title: "Ainda não encontrei essa dúvida",
       answer:
         "Não encontrei uma orientação segura para essa pergunta na base do ImobControl. Tente explicar com outras palavras ou escolha uma das perguntas sugeridas. Se for uma regra específica da sua operação, confirme com o responsável antes de alterar dados.",
-      target: undefined as HelpTarget | undefined
+      target: undefined as HelpTarget | undefined,
+      relatedQuestions: getContextSuggestions(currentPath, 4),
     };
   }
 
   return {
     title: ranked[0].topic.title,
     answer: ranked[0].topic.answer,
-    target: ranked[0].topic.target
+    target: ranked[0].topic.target,
+    relatedQuestions: getRelatedQuestions(ranked[0].topic, currentPath, 4),
   };
 }
