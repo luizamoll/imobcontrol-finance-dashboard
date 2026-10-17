@@ -1,3 +1,4 @@
+// Base de conhecimento do Assistente ImobControl — v1.
 export type HelpTarget = {
   label: string;
   href: string;
