@@ -58,14 +58,14 @@ export function HelpAssistant() {
   };
 
   return (
-    <div className="fixed bottom-5 right-5 z-[80] print:hidden">
+    <div className="fixed bottom-3 right-3 z-[80] overflow-visible print:hidden sm:bottom-5 sm:right-5">
       {open ? (
         <div className="mb-3 flex h-[620px] max-h-[calc(100vh-7rem)] w-[390px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-border/80 bg-background shadow-2xl shadow-black/20">
           <div className="flex items-center justify-between border-b border-border/70 bg-muted/30 px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="relative h-11 w-11 overflow-hidden rounded-xl border border-border bg-background shadow-sm">
                 <img
-                  src="/imobcontrol-assistant.webp"
+                  src="/imobcontrol-assistant-v2.webp"
                   alt="Mascote do ImobControl"
                   className="h-full w-full object-cover"
                 />
@@ -193,18 +193,18 @@ export function HelpAssistant() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="group relative ml-auto flex h-[132px] w-[132px] items-end justify-center bg-transparent p-0 outline-none"
+        className="group relative ml-auto flex h-[138px] w-[132px] items-end justify-end bg-transparent p-0 outline-none"
         aria-label="Abrir assistente do ImobControl"
       >
-        <span className="absolute right-[94px] top-1 whitespace-nowrap rounded-2xl rounded-br-sm border border-border/80 bg-background px-3 py-2 text-xs font-semibold text-foreground shadow-lg transition-transform duration-200 group-hover:-translate-y-1">
+        <span className="absolute bottom-[116px] right-0 max-w-[118px] whitespace-nowrap rounded-2xl rounded-br-sm border border-border/80 bg-background px-3 py-2 text-center text-xs font-semibold leading-tight text-foreground shadow-lg transition-transform duration-200 group-hover:-translate-y-1">
           Posso ajudar?
         </span>
 
-        <span className="imob-mascot-character relative block h-[122px] w-[122px] transition-transform duration-300 group-hover:scale-[1.04]">
+        <span className="imob-mascot-character relative block h-[126px] w-[126px] transition-transform duration-300 group-hover:scale-[1.04]">
           <img
-            src="/imobcontrol-assistant.webp"
+            src="/imobcontrol-assistant-v2.webp"
             alt="Assistente do ImobControl"
-            className="h-full w-full object-contain mix-blend-multiply drop-shadow-[0_10px_12px_rgba(0,0,0,0.18)]"
+            className="h-full w-full object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
           />
         </span>
       </button>
