@@ -193,22 +193,13 @@ export function HelpAssistant() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="group relative ml-auto flex h-[158px] w-[118px] items-end justify-center bg-transparent p-0 outline-none"
+        className="ml-auto flex items-center gap-2 rounded-full border border-border bg-foreground px-4 py-3 text-sm font-medium text-background shadow-lg shadow-black/15 transition-transform hover:-translate-y-0.5"
         aria-label="Abrir assistente do ImobControl"
       >
-        {!open && (
-          <span className="pointer-events-none absolute right-1 top-0 rounded-2xl rounded-br-sm border border-border/80 bg-background px-3 py-2 text-xs font-semibold leading-tight text-foreground shadow-lg">
-            Posso ajudar?
-          </span>
-        )}
-
-        <span className="imob-mascot-character relative block h-[142px] w-[104px] transition-transform duration-300 group-hover:scale-[1.04]">
-          <img
-            src="/imobcontrol-assistant-character.webp"
-            alt="Assistente do ImobControl"
-            className="h-full w-full object-contain drop-shadow-[0_10px_16px_rgba(0,0,0,0.20)]"
-          />
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background/10 text-base">
+          🤖
         </span>
+        <span>Posso ajudar?</span>
       </button>
 
       <style>{`
