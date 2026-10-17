@@ -20,7 +20,7 @@ import { AdminHeader } from "@/components/admin-header";
 import { StoreProvider } from "@/lib/store";
 import { AuthGate, AuthProvider } from "@/lib/auth";
 import { TenantProvider } from "@/lib/tenant";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/sonner";\nimport { HelpAssistant } from "@/components/help-assistant";
 
 function NotFoundComponent() {
   return (
