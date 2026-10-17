@@ -65,7 +65,7 @@ export function HelpAssistant() {
             <div className="flex items-center gap-3">
               <div className="relative h-11 w-11 overflow-hidden rounded-xl border border-border bg-background shadow-sm">
                 <img
-                  src="/imobcontrol-assistant-v2.webp"
+                  src="/imobcontrol-assistant-v3.webp"
                   alt="Mascote do ImobControl"
                   className="h-full w-full object-cover"
                 />
@@ -202,7 +202,7 @@ export function HelpAssistant() {
 
         <span className="imob-mascot-character relative block h-[126px] w-[126px] transition-transform duration-300 group-hover:scale-[1.04]">
           <img
-            src="/imobcontrol-assistant-v2.webp"
+            src="/imobcontrol-assistant-v3.webp"
             alt="Assistente do ImobControl"
             className="h-full w-full object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
           />
