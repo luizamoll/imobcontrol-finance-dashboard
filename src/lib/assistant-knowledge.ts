@@ -484,16 +484,33 @@ export const helpTopics: HelpTopic[] = [
     target: { label: "Abrir Corretores e recebedores", href: "/recebedores" }
   },
   {
+    id: "equipe-adicionar-funcionario",
+    title: "Adicionar funcionário / colaborador",
+    questions: [
+      "Como adicionar um funcionário?",
+      "Como cadastrar um colaborador?",
+      "Como criar acesso para um funcionário?",
+      "Como adicionar alguém à equipe?"
+    ],
+    answer:
+      "Abra Equipe e acessos e clique em Novo colaborador. Preencha Nome e E-mail de acesso; Telefone é opcional. Depois escolha as permissões que esse colaborador terá e clique para criar o acesso. O novo usuário fica vinculado somente à empresa atual. O sistema prepara um convite para o primeiro acesso; se o envio de e-mail não estiver disponível ou você quiser liberar o acesso manualmente, use Definir acesso e crie uma senha temporária de pelo menos 8 caracteres. Para cadastrar colaboradores, seu usuário precisa ter permissão para gerenciar a equipe.",
+    keywords: ["funcionario", "funcionário", "colaborador", "empregado", "equipe", "novo colaborador", "adicionar funcionario", "cadastrar funcionario", "criar acesso", "equipe gerenciar"],
+    routes: ["/equipe"],
+    target: { label: "Abrir Equipe e acessos", href: "/equipe" }
+  },
+  {
     id: "equipe",
     title: "Equipe e acessos",
     questions: [
       "Como crio um usuário?",
+      "Como adiciono um funcionário?",
+      "Como cadastro um colaborador?",
       "Como redefino o acesso de alguém?",
       "Como altero as permissões da equipe?"
     ],
     answer:
       "Em Equipe e acessos, administradores podem gerenciar usuários da empresa, seus perfis e permissões. Para alguém que já possui conta e não consegue entrar, prefira redefinir o acesso existente em vez de criar um usuário duplicado.",
-    keywords: ["equipe", "usuario", "usuário", "acesso", "permissão", "redefinir", "senha"],
+    keywords: ["equipe", "usuario", "usuário", "funcionario", "funcionário", "colaborador", "acesso", "permissão", "redefinir", "senha"],
     routes: ["/equipe"],
     target: { label: "Abrir Equipe e acessos", href: "/equipe" }
   },
@@ -571,7 +588,18 @@ export function getContextSuggestions(currentPath: string, limit = 5) {
 
 export function findHelpAnswer(query: string, currentPath: string) {
   const normalizedQuery = normalize(query);
-  const words = normalizedQuery.split(/\s+/).filter((word) => word.length > 2);
+  const stopwords = new Set(["como", "para", "por", "que", "uma", "um", "meu", "minha", "no", "na", "do", "da", "de"]);
+  const synonyms: Record<string, string[]> = {
+    funcionario: ["colaborador", "equipe", "usuario"],
+    empregado: ["colaborador", "equipe"],
+    apagar: ["excluir", "remover"],
+    deletar: ["excluir", "remover"],
+    estornar: ["reverter", "recebimento"],
+  };
+  const baseWords = normalizedQuery
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !stopwords.has(word));
+  const words = [...new Set(baseWords.flatMap((word) => [word, ...(synonyms[word] ?? [])]))];
 
   const ranked = helpTopics
     .map((topic) => {
