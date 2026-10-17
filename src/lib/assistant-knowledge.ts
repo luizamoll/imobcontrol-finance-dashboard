@@ -575,19 +575,148 @@ function routeMatches(topic: HelpTopic, currentPath: string) {
 }
 
 export function getContextSuggestions(currentPath: string, limit = 5) {
-  const contextual = allHelpTopics
-    .filter((topic) => routeMatches(topic, currentPath))
-    .flatMap((topic) => topic.questions);
-
-  const fallback = [
-    "Por onde eu começo?",
-    "Como faço uma venda?",
-    "Como dou baixa em uma parcela?",
-    "Como funciona a correção anual?",
-    "Qual relatório devo usar?"
+  const presets: Array<{ match: (path: string) => boolean; questions: string[] }> = [
+    {
+      match: (path) => path === "/",
+      questions: [
+        "Como cadastrar um empreendimento?",
+        "Como cadastrar um cliente?",
+        "Como criar uma venda?",
+        "Como dar baixa em uma parcela?",
+        "Qual relatório devo escolher?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/equipe"),
+      questions: [
+        "Como adicionar um funcionário?",
+        "Como altero as permissões de um colaborador?",
+        "O funcionário não recebeu o convite, o que faço?",
+        "Como bloquear o acesso de um funcionário?",
+        "Como vejo o que um funcionário enxerga?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/empreendimentos"),
+      questions: [
+        "Como cadastrar um empreendimento?",
+        "Como cadastrar uma gleba?",
+        "Como cadastrar uma quadra?",
+        "Onde configuro comissão do empreendimento?",
+        "Por que não consigo excluir um empreendimento?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/clientes"),
+      questions: [
+        "Como cadastrar um cliente?",
+        "Onde edito um cliente?",
+        "Como localizar um comprador?",
+        "Como criar uma venda para esse cliente?",
+        "Como ver parcelas pagas de um cliente?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/vendas"),
+      questions: [
+        "Como cadastrar uma venda?",
+        "Como editar uma venda?",
+        "Como excluir uma venda?",
+        "Como lançar um acordo?",
+        "Como aplicar a correção anual?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/parcelas"),
+      questions: [
+        "Como procurar uma parcela pelo cliente?",
+        "O que significa parcela em acordo?",
+        "Como reverter uma parcela paga por engano?",
+        "O cliente pagou só uma parte, como registro?",
+        "Por que uma parcela vencida ficou mais cara?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/recebimentos"),
+      questions: [
+        "Como encontro uma parcela para receber?",
+        "Como registrar um pagamento antigo?",
+        "Por que uma parcela vencida ficou mais cara?",
+        "O sistema aceita pagamento parcial?",
+        "Como desfazer uma baixa?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/inadimplencia"),
+      questions: [
+        "Onde vejo clientes em atraso?",
+        "Como o sistema calcula juros por atraso?",
+        "A tolerância interfere no cálculo?",
+        "Como aplicar a correção anual?",
+        "Como lançar um acordo?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/recebedores"),
+      questions: [
+        "Como cadastrar um corretor?",
+        "Onde cadastro um sócio?",
+        "Posso cadastrar chave PIX do corretor?",
+        "Por que não consigo remover um corretor?",
+        "Como sei quanto o corretor tem a receber?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/financeiro"),
+      questions: [
+        "Onde vejo quanto ficou para o sócio?",
+        "Como sei quanto ficou para a empresa?",
+        "Onde acompanho tributos reservados?",
+        "Como vejo as comissões pagas no financeiro?",
+        "O Financeiro recalcula movimentos antigos quando mudo uma regra?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/relatorios"),
+      questions: [
+        "Qual relatório devo escolher?",
+        "Como gerar o relatório de sócios?",
+        "Como ver parcelas pagas de um cliente?",
+        "Como sei quanto o corretor tem a receber?",
+        "Como exportar um relatório em PDF?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/configuracoes"),
+      questions: [
+        "Onde altero os dados da empresa?",
+        "Para que servem as configurações padrão?",
+        "Mudar a configuração altera contratos antigos?",
+        "Como configuro juros e multa de um empreendimento?",
+        "Como funciona a correção anual?"
+      ],
+    },
+    {
+      match: (path) => path.startsWith("/conta"),
+      questions: [
+        "Como altero minha senha?",
+        "Como mudo meu e-mail de acesso?",
+        "Onde atualizo meu nome ou telefone?",
+        "Qual é o tamanho mínimo da nova senha?",
+        "Por que o sistema pede minha senha atual?"
+      ],
+    },
   ];
 
-  return [...new Set([...contextual, ...fallback])].slice(0, limit);
+  const selected = presets.find((preset) => preset.match(currentPath))?.questions ?? [
+    "Como cadastrar um empreendimento?",
+    "Como adicionar um funcionário?",
+    "Como criar uma venda?",
+    "Como registrar um pagamento antigo?",
+    "Qual relatório devo escolher?"
+  ];
+
+  return selected.slice(0, limit);
 }
 
 export function findHelpAnswer(query: string, currentPath: string) {
