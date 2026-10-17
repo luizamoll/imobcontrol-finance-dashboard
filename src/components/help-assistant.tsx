@@ -58,7 +58,7 @@ export function HelpAssistant() {
   return (
     <div className="fixed bottom-5 right-5 z-[80] print:hidden">
       {open ? (
-        <div className="mb-3 flex h-[min(620px,calc(100vh-7rem))] w-[min(390px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border/80 bg-background shadow-2xl shadow-black/20">
+        <div className="mb-3 flex h-[620px] max-h-[calc(100vh-7rem)] w-[390px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-border/80 bg-background shadow-2xl shadow-black/20">
           <div className="flex items-center justify-between border-b border-border/70 bg-muted/30 px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background">
