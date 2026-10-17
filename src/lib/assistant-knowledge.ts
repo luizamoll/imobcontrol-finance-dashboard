@@ -113,6 +113,48 @@ export const helpTopics: HelpTopic[] = [
     target: { label: "Abrir Clientes", href: "/clientes" }
   },
   {
+    id: "venda-excluir",
+    title: "Excluir uma venda",
+    questions: [
+      "Como excluir uma venda?",
+      "Onde excluo uma venda?",
+      "Por que não consigo excluir uma venda?"
+    ],
+    answer:
+      "Abra Vendas, entre na venda que deseja excluir e, no topo da tela, clique em Excluir venda. Confirme em Sim, excluir venda. Ao excluir, a composição e as parcelas dessa venda são removidas e a unidade volta para Disponível. Se a venda já possui histórico de recebimentos, ela não pode ser excluída. Se o botão Excluir venda não aparecer, confirme se o seu usuário possui a permissão VENDAS_EXCLUIR.",
+    keywords: ["excluir venda", "apagar venda", "remover venda", "deletar venda", "vendas excluir", "historico de recebimentos"],
+    routes: ["/vendas"],
+    target: { label: "Abrir Vendas", href: "/vendas" }
+  },
+  {
+    id: "venda-editar",
+    title: "Editar uma venda",
+    questions: [
+      "Como edito uma venda?",
+      "O que posso alterar em uma venda?",
+      "Por que alguns campos da venda estão bloqueados?"
+    ],
+    answer:
+      "Abra Vendas, entre na venda desejada e clique em Editar venda. Antes do primeiro recebimento, é possível ajustar os dados permitidos da venda e sua composição. Depois que existem recebimentos registrados, o comprador, o valor total do contrato e a composição do pagamento ficam bloqueados para preservar o histórico. Corretor, comissão, regras de juros, correção, multa e tolerância continuam ajustáveis para parcelas ainda abertas, conforme as permissões do usuário.",
+    keywords: ["editar venda", "alterar venda", "campos bloqueados", "primeiro recebimento", "composição bloqueada", "comprador bloqueado"],
+    routes: ["/vendas"],
+    target: { label: "Abrir Vendas", href: "/vendas" }
+  },
+  {
+    id: "venda-permissoes",
+    title: "Permissões de vendas",
+    questions: [
+      "Por que não aparece o botão de excluir venda?",
+      "Por que não consigo editar uma venda?",
+      "Quem pode excluir ou editar vendas?"
+    ],
+    answer:
+      "As ações de venda dependem das permissões do usuário. Para editar, o perfil precisa da permissão VENDAS_EDITAR; para excluir, precisa de VENDAS_EXCLUIR. Se o botão não aparece, peça a um administrador para conferir o acesso em Equipe e acessos.",
+    keywords: ["vendas editar", "vendas excluir", "permissão venda", "botão excluir", "botão editar"],
+    routes: ["/vendas", "/equipe"],
+    target: { label: "Ver equipe e acessos", href: "/equipe" }
+  },
+  {
     id: "venda-cadastro",
     title: "Cadastro de venda",
     questions: [
