@@ -193,18 +193,20 @@ export function HelpAssistant() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="group relative ml-auto flex h-[138px] w-[132px] items-end justify-end bg-transparent p-0 outline-none"
+        className="group relative ml-auto flex h-[158px] w-[118px] items-end justify-center bg-transparent p-0 outline-none"
         aria-label="Abrir assistente do ImobControl"
       >
-        <span className="absolute bottom-[116px] right-0 max-w-[118px] whitespace-nowrap rounded-2xl rounded-br-sm border border-border/80 bg-background px-3 py-2 text-center text-xs font-semibold leading-tight text-foreground shadow-lg transition-transform duration-200 group-hover:-translate-y-1">
-          Posso ajudar?
-        </span>
+        {!open && (
+          <span className="pointer-events-none absolute right-1 top-0 rounded-2xl rounded-br-sm border border-border/80 bg-background px-3 py-2 text-xs font-semibold leading-tight text-foreground shadow-lg">
+            Posso ajudar?
+          </span>
+        )}
 
-        <span className="imob-mascot-character relative block h-[126px] w-[126px] transition-transform duration-300 group-hover:scale-[1.04]">
+        <span className="imob-mascot-character relative block h-[142px] w-[104px] transition-transform duration-300 group-hover:scale-[1.04]">
           <img
-            src="/imobcontrol-assistant-v3.webp"
+            src="/imobcontrol-assistant-character.webp"
             alt="Assistente do ImobControl"
-            className="h-full w-full object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+            className="h-full w-full object-contain drop-shadow-[0_10px_16px_rgba(0,0,0,0.20)]"
           />
         </span>
       </button>
