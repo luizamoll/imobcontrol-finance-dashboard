@@ -166,19 +166,35 @@ export function HelpAssistant() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="group ml-auto flex items-center gap-2 rounded-full border border-border bg-foreground py-2 pl-2 pr-4 text-sm font-medium text-background shadow-lg shadow-black/15 transition-all hover:-translate-y-0.5 hover:shadow-xl"
+        className="group relative ml-auto flex h-[132px] w-[132px] items-end justify-center bg-transparent p-0 outline-none"
         aria-label="Abrir assistente do ImobControl"
       >
-        <span className="relative h-11 w-11 overflow-hidden rounded-full border-2 border-background/20 bg-white transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-105">
+        <span className="absolute right-[94px] top-1 whitespace-nowrap rounded-2xl rounded-br-sm border border-border/80 bg-background px-3 py-2 text-xs font-semibold text-foreground shadow-lg transition-transform duration-200 group-hover:-translate-y-1">
+          Posso ajudar?
+        </span>
+
+        <span className="imob-mascot-character relative block h-[122px] w-[122px] transition-transform duration-300 group-hover:scale-[1.04]">
           <img
             src="/imobcontrol-assistant.webp"
-            alt=""
-            className="h-full w-full object-cover"
+            alt="Assistente do ImobControl"
+            className="h-full w-full object-contain mix-blend-multiply drop-shadow-[0_10px_12px_rgba(0,0,0,0.18)]"
           />
-          <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
         </span>
-        <span>Posso ajudar?</span>
       </button>
+
+      <style>{`
+        @keyframes imob-mascot-float {
+          0%, 100% { transform: translateY(0) rotate(-1deg); }
+          50% { transform: translateY(-7px) rotate(1.5deg); }
+        }
+        .imob-mascot-character {
+          animation: imob-mascot-float 3.2s ease-in-out infinite;
+          transform-origin: 50% 100%;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .imob-mascot-character { animation: none; }
+        }
+      `}</style>
     </div>
   );
 }
