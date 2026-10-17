@@ -15,6 +15,7 @@ type HelpMessage = {
   text: string;
   title?: string;
   target?: HelpTarget;
+  relatedQuestions?: string[];
 };
 
 export function HelpAssistant() {
@@ -50,6 +51,7 @@ export function HelpAssistant() {
         title: result.title,
         text: result.answer,
         target: result.target,
+        relatedQuestions: result.relatedQuestions,
       },
     ]);
     setInput("");
@@ -114,26 +116,51 @@ export function HelpAssistant() {
                     <ArrowRight className="h-3.5 w-3.5" />
                   </a>
                 )}
+
+                {message.role === "assistant" &&
+                  message.relatedQuestions &&
+                  message.relatedQuestions.length > 0 && (
+                    <div className="mt-3 border-t border-border/70 pt-3">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Talvez você queira saber também
+                      </p>
+                      <div className="flex flex-col gap-1.5">
+                        {message.relatedQuestions.map((question) => (
+                          <button
+                            type="button"
+                            key={question}
+                            onClick={() => ask(question)}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-background px-2.5 py-2 text-left text-xs text-foreground transition-colors hover:bg-accent"
+                          >
+                            <span>{question}</span>
+                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
               </div>
             ))}
 
-            <div className="pt-1">
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Perguntas sugeridas
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {suggestions.map((question) => (
-                  <button
-                    type="button"
-                    key={question}
-                    onClick={() => ask(question)}
-                    className="rounded-full border border-border bg-background px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-accent"
-                  >
-                    {question}
-                  </button>
-                ))}
+            {messages.length === 1 && (
+              <div className="pt-1">
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Você pode começar por aqui
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {suggestions.map((question) => (
+                    <button
+                      type="button"
+                      key={question}
+                      onClick={() => ask(question)}
+                      className="rounded-full border border-border bg-background px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-accent"
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <form
