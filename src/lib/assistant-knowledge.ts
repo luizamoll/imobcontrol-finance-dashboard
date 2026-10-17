@@ -182,6 +182,103 @@ export const helpTopics: HelpTopic[] = [
     routes: ["/vendas"]
   },
   {
+    id: "recebimentos-encontrar",
+    title: "Encontrar uma parcela para receber",
+    questions: [
+      "Como encontro uma parcela para receber?",
+      "Como procuro um recebimento?",
+      "Posso filtrar os recebimentos?"
+    ],
+    answer:
+      "Na Central de Recebimentos, as parcelas ficam agrupadas por venda. Você pode filtrar por empreendimento, separar Sinal/Entrada de Parcelas e usar a busca por cliente, empreendimento, unidade, matrícula ou corretor. Abra o bloco da venda em Ver parcelas para localizar o recebimento desejado.",
+    keywords: ["encontrar parcela", "buscar recebimento", "filtro recebimento", "matrícula", "unidade", "corretor"],
+    routes: ["/recebimentos"],
+    target: { label: "Abrir Central de Recebimentos", href: "/recebimentos" }
+  },
+  {
+    id: "recebimentos-registrar",
+    title: "Registrar um recebimento",
+    questions: [
+      "Como registrar um recebimento?",
+      "Como receber uma parcela?",
+      "O que acontece quando confirmo um recebimento?"
+    ],
+    answer:
+      "Na Central de Recebimentos, abra a venda, clique em Ver parcelas e depois em Receber na parcela desejada. Confira o valor, informe a data real do recebimento e clique em Confirmar recebimento. Ao confirmar, o sistema registra a quitação e executa a distribuição financeira prevista, reservando imposto, aplicando a comissão do corretor e distribuindo o saldo entre empresa e sócio.",
+    keywords: ["registrar recebimento", "receber parcela", "confirmar recebimento", "distribuição financeira", "imposto", "comissão"],
+    routes: ["/recebimentos"],
+    target: { label: "Abrir Central de Recebimentos", href: "/recebimentos" }
+  },
+  {
+    id: "recebimentos-parcial",
+    title: "Pagamento parcial",
+    questions: [
+      "Posso receber só uma parte da parcela?",
+      "O sistema aceita pagamento parcial?",
+      "Como registrar pagamento parcial?"
+    ],
+    answer:
+      "No momento, pagamento parcial ainda não está habilitado. O recebimento quita a parcela integralmente. Se o cliente pagou apenas parte do valor, não confirme a baixa integral como se estivesse quitada; trate a situação com o responsável pela operação até que o fluxo de pagamento parcial seja disponibilizado.",
+    keywords: ["pagamento parcial", "receber parte", "parte da parcela", "quitação parcial"],
+    routes: ["/recebimentos", "/parcelas"]
+  },
+  {
+    id: "parcelas-reverter",
+    title: "Reverter um recebimento",
+    questions: [
+      "Como reverter um recebimento?",
+      "Marquei uma parcela como paga por engano",
+      "Como desfazer a baixa de uma parcela?"
+    ],
+    answer:
+      "Na tela Parcelas, localize a parcela que está com status Paga e use o botão Reverter. Essa ação desfaz o recebimento registrado para a parcela. Use com cuidado e somente quando a baixa realmente precisar ser corrigida, pois ela altera o histórico financeiro da operação.",
+    keywords: ["reverter recebimento", "desfazer baixa", "parcela paga por engano", "estornar recebimento", "reverter parcela"],
+    routes: ["/parcelas"],
+    target: { label: "Abrir Parcelas", href: "/parcelas" }
+  },
+  {
+    id: "relatorios-filtros",
+    title: "Filtros dos relatórios",
+    questions: [
+      "Como filtro um relatório?",
+      "Posso filtrar relatório por período?",
+      "Posso filtrar parcelas pagas por cliente?"
+    ],
+    answer:
+      "Em Relatórios, escolha o tipo e depois aplique os filtros disponíveis. Você pode filtrar por empreendimento e, na maioria dos relatórios, por data inicial e final. Em Parcelas pagas por cliente também aparece o filtro Cliente. Na Carteira por empreendimento, os campos de período ficam desabilitados porque a visão mostra a posição atual da carteira.",
+    keywords: ["filtro relatório", "período relatório", "data inicial", "data final", "cliente relatório", "carteira"],
+    routes: ["/relatorios"],
+    target: { label: "Abrir Relatórios", href: "/relatorios" }
+  },
+  {
+    id: "relatorio-carteira",
+    title: "Carteira por empreendimento",
+    questions: [
+      "O que mostra Carteira por empreendimento?",
+      "Onde vejo VGV, vendido e saldo?",
+      "Como acompanho a carteira do empreendimento?"
+    ],
+    answer:
+      "O relatório Carteira por empreendimento mostra, para cada empreendimento, o VGV cadastrado, o total em vendas, o total já recebido e o saldo ainda a receber. Essa visão representa a posição atual da carteira, por isso não usa filtro de data.",
+    keywords: ["carteira por empreendimento", "vgv", "vendido", "recebido", "saldo", "posição da carteira"],
+    routes: ["/relatorios"],
+    target: { label: "Abrir Relatórios", href: "/relatorios" }
+  },
+  {
+    id: "relatorio-comissoes-detalhe",
+    title: "Comissões a receber por corretor",
+    questions: [
+      "O que mostra o relatório de comissões?",
+      "Como vejo quanto falta pagar ao corretor?",
+      "Onde vejo comissão já repassada?"
+    ],
+    answer:
+      "No relatório Comissões a receber por corretor, cada corretor aparece com a quantidade de contratos, a comissão total calculada, o valor já repassado e o saldo ainda a receber. Use os filtros do relatório para restringir a consulta quando necessário.",
+    keywords: ["comissão a receber", "comissão total", "já repassado", "saldo corretor", "contratos corretor"],
+    routes: ["/relatorios"],
+    target: { label: "Abrir Relatórios", href: "/relatorios" }
+  },
+  {
     id: "parcelas",
     title: "Parcelas",
     questions: [
