@@ -176,6 +176,16 @@ public class FinanceiroController {
         return service.aplicarReajusteIndice(auth, empresaId, id, body);
     }
 
+    @PostMapping("/empreendimentos/{id}/reajuste-contratos")
+    public int aplicarReajusteDoEmpreendimento(
+            Authentication auth,
+            @RequestHeader(value="X-Empresa-Id", required=false) Long empresaId,
+            @PathVariable Long id
+    ) {
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_EDITAR);
+        return service.aplicarReajusteEmpreendimentoAContratosAtivos(auth, empresaId, id);
+    }
+
     @GetMapping("/vendas/{id}/acordos")
     public List<AcordoResponse> listarAcordos(
             Authentication auth,
