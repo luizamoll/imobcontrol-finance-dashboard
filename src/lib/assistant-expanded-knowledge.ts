@@ -1182,5 +1182,32 @@ export const expandedHelpTopics: ExpandedHelpTopic[] = [
       "label": "Abrir Auditoria",
       "href": "/admin/auditoria"
     }
+  },
+  {
+    "id": "dividendos-terceiros",
+    "title": "Dividendos de imóveis de terceiros",
+    "questions": [
+      "Como controlar dividendos de um imóvel de terceiro?",
+      "Como cadastrar os percentuais da equipe em um imóvel de terceiro?",
+      "Onde vejo quanto cabe a cada participante?",
+      "Os percentuais dos dividendos precisam somar 100%?",
+      "Como editar a divisão de um imóvel de terceiro?"
+    ],
+    "answer": "Abra Dividendos de terceiros no menu Financeiro. Cadastre o imóvel ou operação, informe o valor-base e adicione os participantes com seus percentuais. A divisão precisa totalizar 100% e o ImobControl calcula automaticamente o valor correspondente a cada participante. O cadastro fica compartilhado pela empresa e pode ser editado depois.",
+    "keywords": [
+      "dividendos",
+      "imóveis de terceiros",
+      "imoveis de terceiros",
+      "participantes",
+      "percentuais",
+      "equipe"
+    ],
+    "routes": [
+      "/dividendos"
+    ],
+    "target": {
+      "label": "Abrir Dividendos de terceiros",
+      "href": "/dividendos"
+    }
   }
 ];
