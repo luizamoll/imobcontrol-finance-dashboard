@@ -361,3 +361,14 @@ export async function reverterParcelaRemota(
   });
   return carregarFinanceiro(empresaId);
 }
+
+
+export async function aplicarReajusteEmpreendimentoRemoto(
+  empresaId: number,
+  empreendimentoId: string,
+) {
+  return apiJson<number>(`/api/empreendimentos/${empreendimentoId}/reajuste-contratos`, {
+    method: "POST",
+    empresaId,
+  });
+}
