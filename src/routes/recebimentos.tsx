@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, ChevronDown, ChevronUp, Inbox, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader, PageShell } from "@/components/page-shell";
@@ -149,12 +149,24 @@ function RecebimentosPage() {
     .filter((p) => p.status === "vencida")
     .reduce((a, p) => a + p.valorCobrado, 0);
 
+  const dataComoLocal = (valorData: string) => {
+    const [ano, mes, dia] = valorData.split("-").map(Number);
+    return new Date(ano, Math.max(0, mes - 1), dia, 12, 0, 0, 0);
+  };
+
   const abrirRecebimento = (p: Parcela) => {
-    const calc = inadimplenciaCalc(p, state.config, new Date());
+    const hojeISO = todayISO();
+    const calc = inadimplenciaCalc(p, state.config, dataComoLocal(hojeISO));
     setSelecionada(p);
     setValor(String(calc.diasAtraso > 0 ? calc.atualizado : p.valor));
-    setData(todayISO());
+    setData(hojeISO);
   };
+
+  useEffect(() => {
+    if (!selecionada || !data) return;
+    const calc = inadimplenciaCalc(selecionada, state.config, dataComoLocal(data));
+    setValor(String(calc.diasAtraso > 0 ? calc.atualizado : selecionada.valor));
+  }, [selecionada, data, state.config]);
 
   const confirmar = async () => {
     if (!selecionada) return;
@@ -171,8 +183,8 @@ function RecebimentosPage() {
     }
   };
 
-  const calcSelecionada = selecionada
-    ? inadimplenciaCalc(selecionada, state.config, new Date())
+  const calcSelecionada = selecionada && data
+    ? inadimplenciaCalc(selecionada, state.config, dataComoLocal(data))
     : null;
 
   const alternarGrupo = (vendaId: string) => {
@@ -406,7 +418,15 @@ function RecebimentosPage() {
               </div>
               <div>
                 <Label>Data do recebimento</Label>
-                <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+                <Input
+                  type="date"
+                  value={data}
+                  onChange={(e) => setData(e.target.value)}
+                  max={todayISO()}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  O valor acima é recalculado automaticamente para esta data. Pagamentos históricos não acumulam juros até hoje.
+                </p>
               </div>
               <p className="rounded bg-primary/5 p-2 text-xs text-muted-foreground">
                 Ao confirmar, o sistema reserva o imposto, aplica a comissão do corretor e distribui o saldo entre empresa e sócio.
