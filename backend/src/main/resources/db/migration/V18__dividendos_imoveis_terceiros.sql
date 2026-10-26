@@ -4,7 +4,6 @@ CREATE TABLE dividendos_terceiros (
     imovel VARCHAR(200) NOT NULL,
     valor_base NUMERIC(19,2) NOT NULL DEFAULT 0,
     observacoes TEXT,
-    participantes_json TEXT NOT NULL,
     versao BIGINT NOT NULL DEFAULT 0,
     criado_por_usuario_id BIGINT NOT NULL,
     atualizado_por_usuario_id BIGINT NOT NULL,
@@ -15,5 +14,18 @@ CREATE TABLE dividendos_terceiros (
     CONSTRAINT fk_dividendos_terceiros_atualizado_por FOREIGN KEY (atualizado_por_usuario_id) REFERENCES usuarios(id)
 );
 
+CREATE TABLE dividendos_terceiros_participantes (
+    dividendo_id BIGINT NOT NULL,
+    ordem INTEGER NOT NULL,
+    nome VARCHAR(160) NOT NULL,
+    percentual NUMERIC(7,4) NOT NULL,
+    PRIMARY KEY (dividendo_id, ordem),
+    CONSTRAINT fk_dividendos_participantes_dividendo
+        FOREIGN KEY (dividendo_id) REFERENCES dividendos_terceiros(id) ON DELETE CASCADE
+);
+
 CREATE INDEX idx_dividendos_terceiros_empresa
     ON dividendos_terceiros(empresa_id, atualizado_em DESC);
+
+CREATE INDEX idx_dividendos_participantes_dividendo
+    ON dividendos_terceiros_participantes(dividendo_id);
