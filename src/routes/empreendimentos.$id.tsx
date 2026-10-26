@@ -594,7 +594,9 @@ function QuadraDialog({
       toast.error("Sócio + Empresa precisam totalizar 100% do saldo líquido");
       return;
     }
-    onSave({
+    setSalvando(true);
+    try {
+      await onSave({
       nome: nome.trim(),
       tipoAgrupamento,
       descricao: descricao.trim(),
@@ -857,7 +859,7 @@ function EditUnidadeDialog({
   unidade: Matricula;
   quadras: Quadra[];
   regrasEmpreendimento: RegrasOperacao;
-  onSave: (patch: Partial<Matricula>) => void;
+  onSave: (patch: Partial<Matricula>) => Promise<void> | void;
 }) {
   const [numero, setNumero] = useState(unidade.numero);
   const [nomeUnidade, setNomeUnidade] = useState(unidade.unidade);
@@ -872,13 +874,15 @@ function EditUnidadeDialog({
   const [regras, setRegras] = useState<RegrasOperacao>(
     cloneRegras(unidade.regras ?? quadraInicial?.regras ?? regrasEmpreendimento),
   );
+  const [salvandoUnidade, setSalvandoUnidade] = useState(false);
 
   const regraBase = () => {
     const q = quadras.find((item) => item.id === quadraId);
     return cloneRegras(q?.regras ?? regrasEmpreendimento);
   };
 
-  const salvar = () => {
+  const salvar = async () => {
+    if (salvandoUnidade) return;
     if (!numero.trim() || !nomeUnidade.trim()) {
       toast.error("Informe matrícula e unidade");
       return;
@@ -887,7 +891,9 @@ function EditUnidadeDialog({
       toast.error("Sócio + Empresa precisam totalizar 100% do saldo líquido");
       return;
     }
-    onSave({
+    setSalvandoUnidade(true);
+    try {
+      await onSave({
       numero: numero.trim(),
       unidade: nomeUnidade.trim(),
       unidadeTipo,
@@ -897,7 +903,10 @@ function EditUnidadeDialog({
       status,
       quadraId: quadraId === "sem_quadra" ? undefined : quadraId,
       regras: regraPropria ? regras : undefined,
-    });
+      });
+    } finally {
+      setSalvandoUnidade(false);
+    }
   };
 
   return (
@@ -998,7 +1007,9 @@ function EditUnidadeDialog({
         )}
       </div>
       <DialogFooter>
-        <Button onClick={salvar}>Salvar unidade</Button>
+        <Button onClick={() => void salvar()} disabled={salvandoUnidade}>
+          {salvandoUnidade ? "Salvando..." : "Salvar unidade"}
+        </Button>
       </DialogFooter>
     </DialogContent>
   );
@@ -1013,7 +1024,7 @@ function EditEmpreendimentoDialog({
   emp: Empreendimento;
   regrasAtuais: RegrasOperacao;
   socios: Array<{ nome: string }>;
-  onSave: (patch: Partial<Empreendimento>) => void;
+  onSave: (patch: Partial<Empreendimento>) => Promise<void> | void;
 }) {
   const [nome, setNome] = useState(emp.nome);
   const [spe, setSpe] = useState(emp.spe);
@@ -1031,8 +1042,10 @@ function EditEmpreendimentoDialog({
   const [observacoes, setObservacoes] = useState(emp.observacoes || "");
   const [status, setStatus] = useState<EmpStatus>(emp.status);
   const [regras, setRegras] = useState<RegrasOperacao>(cloneRegras(regrasAtuais));
+  const [salvando, setSalvando] = useState(false);
 
-  const salvar = () => {
+  const salvar = async () => {
+    if (salvando) return;
     if (!nome.trim() || !spe.trim()) {
       toast.error("Informe o nome do empreendimento e a SPE responsável.");
       return;
@@ -1068,7 +1081,10 @@ function EditEmpreendimentoDialog({
         : undefined,
       observacoes: observacoes.trim(),
       status,
-    });
+      });
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
@@ -1166,7 +1182,9 @@ function EditEmpreendimentoDialog({
         <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
       </div>
       <DialogFooter>
-        <Button onClick={salvar}>Salvar alterações</Button>
+        <Button onClick={() => void salvar()} disabled={salvando}>
+          {salvando ? "Salvando..." : "Salvar alterações"}
+        </Button>
       </DialogFooter>
     </DialogContent>
   );
