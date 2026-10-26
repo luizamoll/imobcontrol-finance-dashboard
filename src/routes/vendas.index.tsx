@@ -230,6 +230,16 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [items, setItems] = useState<PagamentoItem[]>([]);
 
   useEffect(() => {
+    const pct = Number(corretorPct) || 0;
+    if (valorImovel > 0 && pct >= 0) {
+      const calculado = Math.round(valorImovel * (pct / 100) * 100) / 100;
+      setCorretagemValor(calculado);
+    } else if (pct === 0) {
+      setCorretagemValor(0);
+    }
+  }, [valorImovel, corretorPct]);
+
+  useEffect(() => {
     if (!empresaAtualId) {
       setClientes([]);
       return;
@@ -471,7 +481,9 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             onValueChange={(value) => {
               setMatId(value);
               const selecionada = state.matriculas.find((m) => m.id === value);
-              setValorNegociado(selecionada?.valorVenda ?? 0);
+              const valorBase = selecionada?.valorVenda ?? 0;
+              setValorNegociado(valorBase);
+              setValorImovel(valorBase);
               setItems([]);
               if (empreendimento && selecionada) {
                 const q = selecionada.quadraId
@@ -572,7 +584,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
             placeholder="Ex.: 288.000,00"
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            Use quando o contrato separar o preço do imóvel de corretagem ou outros componentes.
+            Ao informar o valor do imóvel/gleba e o percentual de comissão, o valor da corretagem é calculado automaticamente.
           </p>
         </div>
 
@@ -581,8 +593,11 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
           <CurrencyInput
             value={corretagemValor}
             onValueChange={setCorretagemValor}
-            placeholder="Ex.: 32.000,00"
+            placeholder="Calculado automaticamente"
           />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Cálculo atual: {brl(valorImovel)} × {Number(corretorPct) || 0}% = {brl(corretagemValor)}. Você ainda pode ajustar o valor manualmente se o contrato prever uma corretagem diferente.
+          </p>
         </div>
 
         <div>
