@@ -5,6 +5,7 @@ import {
   ShoppingCart,
   CalendarClock,
   Landmark,
+  HandCoins,
   Users,
   UserCog,
   UserRound,
@@ -57,6 +58,7 @@ const gestao: Array<{
   permissao: PermissaoUsuario;
 }> = [
   { title: "Financeiro", url: "/financeiro", icon: Landmark, permissao: "FINANCEIRO_VISUALIZAR" },
+  { title: "Dividendos de terceiros", url: "/dividendos", icon: HandCoins, permissao: "FINANCEIRO_VISUALIZAR" },
   { title: "Corretores e recebedores", url: "/recebedores", icon: Users, permissao: "CONFIGURACOES_GERENCIAR" },
   { title: "Relatórios", url: "/relatorios", icon: FileBarChart, permissao: "RELATORIOS_VISUALIZAR" },
   { title: "Configurações", url: "/configuracoes", icon: Settings, permissao: "CONFIGURACOES_GERENCIAR" },
