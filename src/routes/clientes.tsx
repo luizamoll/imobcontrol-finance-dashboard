@@ -153,6 +153,44 @@ function ClientesPage() {
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [form, setForm] = useState<FormCliente>(vazio());
   const [salvando, setSalvando] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+
+  const buscarCep = async () => {
+    const cep = somenteDigitos(form.cep, 8);
+    if (cep.length !== 8) return;
+
+    setBuscandoCep(true);
+    try {
+      const resposta = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (!resposta.ok) throw new Error("Não foi possível consultar o CEP");
+      const dados = await resposta.json() as {
+        erro?: boolean;
+        logradouro?: string;
+        complemento?: string;
+        bairro?: string;
+        localidade?: string;
+        uf?: string;
+      };
+      if (dados.erro) {
+        toast.error("CEP não encontrado");
+        return;
+      }
+      setForm((atual) => ({
+        ...atual,
+        cep,
+        logradouro: dados.logradouro ?? atual.logradouro,
+        complemento: dados.complemento || atual.complemento,
+        bairro: dados.bairro ?? atual.bairro,
+        cidade: dados.localidade ?? atual.cidade,
+        uf: dados.uf ?? atual.uf,
+      }));
+      toast.success("Endereço preenchido pelo CEP");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível consultar o CEP");
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
 
   const carregar = useCallback(async () => {
     if (!empresaAtualId) {
@@ -417,11 +455,27 @@ function ClientesPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
               <div className="sm:col-span-2">
                 <Campo label="CEP">
-                  <Input
-                    value={formatCEP(form.cep)}
-                    onChange={(e) => setForm((s) => ({ ...s, cep: somenteDigitos(e.target.value, 8) }))}
-                    placeholder="00000-000"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      value={formatCEP(form.cep)}
+                      onChange={(e) => {
+                        const cep = somenteDigitos(e.target.value, 8);
+                        setForm((s) => ({ ...s, cep }));
+                      }}
+                      onBlur={() => {
+                        if (somenteDigitos(form.cep, 8).length === 8) void buscarCep();
+                      }}
+                      placeholder="00000-000"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void buscarCep()}
+                      disabled={buscandoCep || somenteDigitos(form.cep, 8).length !== 8}
+                    >
+                      {buscandoCep ? "Buscando..." : "Buscar"}
+                    </Button>
+                  </div>
                 </Campo>
               </div>
               <div className="sm:col-span-3">
