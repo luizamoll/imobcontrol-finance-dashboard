@@ -1058,29 +1058,31 @@ function EditEmpreendimentoDialog({
       toast.error("Sócio + Empresa precisam totalizar 100% do saldo líquido");
       return;
     }
-    onSave({
-      nome: nome.trim(),
-      spe: spe.trim(),
-      cnpj,
-      areaTotal: Number(areaTotal) || 0,
-      tipo,
-      matriculasCount: Number(matriculasCount) || 0,
-      valorTotal,
-      socioNome: socioNome || undefined,
-      socioPct: regras.socioPct,
-      empresaPct: regras.empresaPct,
-      corretorPct: regras.corretorPct,
-      aliquotaTributaria: regras.aliquotaTributaria,
-      entradaPctCorretor: regras.corretorPct,
-      parcelasPctCorretor: regras.corretorPct,
-      repasseComissaoPct: regras.repasseComissaoPct ?? 50,
-      comissaoSobreAcrescimos: regras.comissaoSobreAcrescimos ?? false,
-      inadimplencia: cloneRegras(regras).inadimplencia,
-      reajusteContratual: reajusteContratual.ativo
-        ? { ...reajusteContratual, descricao: reajusteContratual.descricao.trim() }
-        : undefined,
-      observacoes: observacoes.trim(),
-      status,
+    setSalvando(true);
+    try {
+      await onSave({
+        nome: nome.trim(),
+        spe: spe.trim(),
+        cnpj,
+        areaTotal: Number(areaTotal) || 0,
+        tipo,
+        matriculasCount: Number(matriculasCount) || 0,
+        valorTotal,
+        socioNome: socioNome || undefined,
+        socioPct: regras.socioPct,
+        empresaPct: regras.empresaPct,
+        corretorPct: regras.corretorPct,
+        aliquotaTributaria: regras.aliquotaTributaria,
+        entradaPctCorretor: regras.corretorPct,
+        parcelasPctCorretor: regras.corretorPct,
+        repasseComissaoPct: regras.repasseComissaoPct ?? 50,
+        comissaoSobreAcrescimos: regras.comissaoSobreAcrescimos ?? false,
+        inadimplencia: cloneRegras(regras).inadimplencia,
+        reajusteContratual: reajusteContratual.ativo
+          ? { ...reajusteContratual, descricao: reajusteContratual.descricao.trim() }
+          : undefined,
+        observacoes: observacoes.trim(),
+        status,
       });
     } finally {
       setSalvando(false);
