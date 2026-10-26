@@ -651,9 +651,7 @@ function QuadraDialog({
       toast.error("Sócio + Empresa precisam totalizar 100% do saldo líquido");
       return;
     }
-    setSalvando(true);
-    try {
-      await onSave({
+    onSave({
       nome: nome.trim(),
       tipoAgrupamento,
       descricao: descricao.trim(),
