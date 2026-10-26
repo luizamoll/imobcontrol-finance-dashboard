@@ -1,10 +1,14 @@
 package br.com.imobcontrol.dividendos;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -12,6 +16,8 @@ import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "dividendos_terceiros")
@@ -33,8 +39,13 @@ public class DividendoTerceiro {
     @Column
     private String observacoes;
 
-    @Column(name = "participantes_json", nullable = false, columnDefinition = "TEXT")
-    private String participantesJson;
+    @ElementCollection
+    @CollectionTable(
+            name = "dividendos_terceiros_participantes",
+            joinColumns = @JoinColumn(name = "dividendo_id")
+    )
+    @OrderColumn(name = "ordem")
+    private List<ParticipanteDividendoEmbeddable> participantes = new ArrayList<>();
 
     @Version
     @Column(nullable = false)
@@ -73,8 +84,11 @@ public class DividendoTerceiro {
     public void setValorBase(BigDecimal valorBase) { this.valorBase = valorBase; }
     public String getObservacoes() { return observacoes; }
     public void setObservacoes(String observacoes) { this.observacoes = observacoes; }
-    public String getParticipantesJson() { return participantesJson; }
-    public void setParticipantesJson(String participantesJson) { this.participantesJson = participantesJson; }
+    public List<ParticipanteDividendoEmbeddable> getParticipantes() { return participantes; }
+    public void setParticipantes(List<ParticipanteDividendoEmbeddable> participantes) {
+        this.participantes.clear();
+        this.participantes.addAll(participantes);
+    }
     public Long getVersao() { return versao; }
     public Long getCriadoPorUsuarioId() { return criadoPorUsuarioId; }
     public void setCriadoPorUsuarioId(Long criadoPorUsuarioId) { this.criadoPorUsuarioId = criadoPorUsuarioId; }
