@@ -587,6 +587,64 @@ public class FinanceiroService {
         );
     }
 
+    @Transactional
+    public int aplicarReajusteEmpreendimentoAContratosAtivos(
+            Authentication auth,
+            Long empresaSolicitada,
+            Long empreendimentoId
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Empreendimento emp = empreendimento(ctx.empresaId(), empreendimentoId);
+
+        String reajusteJson = texto(emp.getReajusteContratualJson());
+        if (reajusteJson == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Este empreendimento não possui correção contratual configurada"
+            );
+        }
+
+        JsonNode reajuste = ler(reajusteJson);
+        if (!bool(reajuste, "ativo", false)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "A correção contratual deste empreendimento está desativada"
+            );
+        }
+
+        List<Venda> ativas = vendas.findAllByEmpresaIdAndEmpreendimentoIdAndStatus(
+                ctx.empresaId(),
+                empreendimentoId,
+                "ativa"
+        );
+
+        int atualizadas = 0;
+        for (Venda venda : ativas) {
+            JsonNode atual = ler(venda.getRegrasJson());
+            ObjectNode regras = atual != null && atual.isObject()
+                    ? (ObjectNode) atual.deepCopy()
+                    : json.createObjectNode();
+
+            regras.set("reajusteContratual", reajuste.deepCopy());
+            venda.setRegrasJson(escrever(regras));
+            venda.setAtualizadoPorUsuarioId(ctx.usuarioId());
+            vendas.save(venda);
+
+            atualizarRegrasParcelasAbertas(ctx.empresaId(), venda.getId(), regras);
+            registrar(
+                    ctx,
+                    "VENDA",
+                    venda.getId(),
+                    "REAJUSTE_SINCRONIZADO_DO_EMPREENDIMENTO",
+                    "Regra de correção do empreendimento sincronizada com parcelas abertas; recebimentos históricos preservados."
+            );
+            atualizadas++;
+        }
+
+        vendas.flush();
+        return atualizadas;
+    }
+
     @Transactional(readOnly = true)
     public List<AcordoResponse> listarAcordos(
             Authentication auth,
