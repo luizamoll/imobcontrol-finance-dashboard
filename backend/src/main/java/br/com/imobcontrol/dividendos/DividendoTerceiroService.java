@@ -1,9 +1,6 @@
 package br.com.imobcontrol.dividendos;
 
 import br.com.imobcontrol.tenant.TenantContextService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -26,16 +23,13 @@ public class DividendoTerceiroService {
 
     private final DividendoTerceiroRepository repositorio;
     private final TenantContextService tenants;
-    private final ObjectMapper json;
 
     public DividendoTerceiroService(
             DividendoTerceiroRepository repositorio,
-            TenantContextService tenants,
-            ObjectMapper json
+            TenantContextService tenants
     ) {
         this.repositorio = repositorio;
         this.tenants = tenants;
-        this.json = json;
     }
 
     @Transactional(readOnly = true)
@@ -116,19 +110,14 @@ public class DividendoTerceiroService {
         item.setImovel(dados.imovel().trim());
         item.setValorBase(dados.valorBase());
         item.setObservacoes(texto(dados.observacoes()));
-        try {
-            item.setParticipantesJson(json.writeValueAsString(
-                    dados.participantes().stream()
-                            .map(p -> new ParticipanteDividendo(p.nome().trim(), p.percentual()))
-                            .toList()
-            ));
-        } catch (JsonProcessingException e) {
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Não foi possível salvar os participantes",
-                    e
-            );
-        }
+        item.setParticipantes(
+                dados.participantes().stream()
+                        .map(p -> new ParticipanteDividendoEmbeddable(
+                                p.nome().trim(),
+                                p.percentual()
+                        ))
+                        .toList()
+        );
     }
 
     private void validarParticipantes(List<ParticipanteDividendo> participantes) {
@@ -155,29 +144,21 @@ public class DividendoTerceiroService {
     }
 
     private DividendoTerceiroResponse resposta(DividendoTerceiro item) {
-        try {
-            List<ParticipanteDividendo> participantes = json.readValue(
-                    item.getParticipantesJson(),
-                    new TypeReference<List<ParticipanteDividendo>>() {}
-            );
-            return new DividendoTerceiroResponse(
-                    item.getId(),
-                    item.getEmpresaId(),
-                    item.getImovel(),
-                    item.getValorBase(),
-                    item.getObservacoes(),
-                    participantes,
-                    item.getVersao(),
-                    item.getCriadoEm(),
-                    item.getAtualizadoEm()
-            );
-        } catch (JsonProcessingException e) {
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Cadastro de dividendos inválido",
-                    e
-            );
-        }
+        List<ParticipanteDividendo> participantes = item.getParticipantes().stream()
+                .map(p -> new ParticipanteDividendo(p.getNome(), p.getPercentual()))
+                .toList();
+
+        return new DividendoTerceiroResponse(
+                item.getId(),
+                item.getEmpresaId(),
+                item.getImovel(),
+                item.getValorBase(),
+                item.getObservacoes(),
+                participantes,
+                item.getVersao(),
+                item.getCriadoEm(),
+                item.getAtualizadoEm()
+        );
     }
 
     private static String texto(String valor) {
