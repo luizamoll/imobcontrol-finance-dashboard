@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Building2, Layers3, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Building2, Layers3, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -47,6 +47,7 @@ import {
   criarUnidadeRemota,
 } from "@/lib/catalogo-api";
 import { brl, formatCNPJ, num, pct } from "@/lib/format";
+import { aplicarReajusteEmpreendimentoRemoto, carregarFinanceiro } from "@/lib/financeiro-api";
 import {
   DEFAULT_REAJUSTE_CONTRATUAL,
   empTotais,
@@ -89,6 +90,7 @@ function EmpreendimentoDetail() {
   const [editUnidade, setEditUnidade] = useState<Matricula | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [sincronizandoReajuste, setSincronizandoReajuste] = useState(false);
 
   if (!emp) throw notFound();
 
@@ -102,6 +104,48 @@ function EmpreendimentoDetail() {
   const possuiHistoricoFinanceiro =
     vendas.length > 0 || parcelas.length > 0 || movimentos.length > 0;
   const vendidoPct = emp.valorTotal ? Math.min(100, (t.vendido / emp.valorTotal) * 100) : 0;
+
+  const aplicarReajusteAContratos = async () => {
+    if (!empresaAtualId) return;
+    if (!regrasEmp.reajusteContratual?.ativo) {
+      toast.error("Ative e salve uma regra de correção contratual primeiro.");
+      return;
+    }
+
+    const confirmar = window.confirm(
+      "Aplicar a regra de correção deste empreendimento às vendas ativas? Parcelas pagas e recebimentos históricos não serão alterados.",
+    );
+    if (!confirmar) return;
+
+    setSincronizandoReajuste(true);
+    try {
+      const quantidade = await aplicarReajusteEmpreendimentoRemoto(empresaAtualId, emp.id);
+      const financeiro = await carregarFinanceiro(empresaAtualId);
+      setState((s) => ({
+        ...s,
+        vendas: financeiro.vendas,
+        parcelas: financeiro.parcelas,
+        movimentos: financeiro.movimentos,
+      }));
+      toast.success(
+        quantidade === 1
+          ? "Correção aplicada a 1 contrato ativo"
+          : `Correção aplicada a ${quantidade} contratos ativos`,
+        {
+          description:
+            "Somente parcelas abertas foram recalculadas; pagamentos e recebimentos históricos foram preservados.",
+        },
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível aplicar a correção aos contratos ativos",
+      );
+    } finally {
+      setSincronizandoReajuste(false);
+    }
+  };
 
   const excluirEmpreendimento = () => {
     if (possuiHistoricoFinanceiro) {
@@ -250,9 +294,22 @@ function EmpreendimentoDetail() {
               estas regras quando não possuem exceção própria.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            <Pencil className="mr-2 h-4 w-4" /> Editar regras
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {regrasEmp.reajusteContratual?.ativo && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void aplicarReajusteAContratos()}
+                disabled={sincronizandoReajuste}
+              >
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                {sincronizandoReajuste ? "Aplicando..." : "Aplicar correção às vendas ativas"}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" /> Editar regras
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-5">
           <ResumoRegras regras={regrasEmp} />
