@@ -677,6 +677,17 @@ export function getContextSuggestions(currentPath: string, limit = 5) {
       ],
     },
     {
+      match: (path) => path.startsWith("/dividendos"),
+      questions: [
+        "Como controlar dividendos de um imóvel de terceiro?",
+        "Como cadastrar os percentuais da equipe em um imóvel de terceiro?",
+        "Onde vejo quanto cabe a cada participante?",
+        "Os percentuais dos dividendos precisam somar 100%?",
+        "Como editar a divisão de um imóvel de terceiro?"
+      ],
+    },
+
+    {
       match: (path) => path.startsWith("/relatorios"),
       questions: [
         "Qual relatório devo escolher?",
