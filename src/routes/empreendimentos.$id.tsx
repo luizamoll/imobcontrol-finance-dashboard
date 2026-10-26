@@ -80,7 +80,7 @@ export const Route = createFileRoute("/empreendimentos/$id")({
 function EmpreendimentoDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const { state, setState } = useStore();
+  const { state, setState, updateConfig } = useStore();
   const { empresaAtualId } = useTenant();
   const emp = state.empreendimentos.find((e) => e.id === id);
 
@@ -195,6 +195,21 @@ function EmpreendimentoDetail() {
           emp={emp}
           regrasAtuais={regrasEmp}
           socios={state.config.recebedores.filter((item) => item.tipo === "socio")}
+          onCreateSocio={(nome) => {
+            const normalizado = nome.trim();
+            if (!normalizado) return;
+            const existe = state.config.recebedores.some(
+              (item) => item.nome.toLocaleLowerCase("pt-BR") === normalizado.toLocaleLowerCase("pt-BR"),
+            );
+            if (!existe) {
+              updateConfig({
+                recebedores: [
+                  ...state.config.recebedores,
+                  { nome: normalizado, tipo: "socio" },
+                ],
+              });
+            }
+          }}
           onSave={async (patch) => {
             if (!empresaAtualId) return;
             try {
@@ -1074,11 +1089,13 @@ function EditEmpreendimentoDialog({
   emp,
   regrasAtuais,
   socios,
+  onCreateSocio,
   onSave,
 }: {
   emp: Empreendimento;
   regrasAtuais: RegrasOperacao;
   socios: Array<{ nome: string }>;
+  onCreateSocio: (nome: string) => void;
   onSave: (patch: Partial<Empreendimento>) => Promise<void> | void;
 }) {
   const [nome, setNome] = useState(emp.nome);
@@ -1098,6 +1115,7 @@ function EditEmpreendimentoDialog({
   const [status, setStatus] = useState<EmpStatus>(emp.status);
   const [regras, setRegras] = useState<RegrasOperacao>(cloneRegras(regrasAtuais));
   const [salvando, setSalvando] = useState(false);
+  const [novoSocioNome, setNovoSocioNome] = useState("");
 
   const salvar = async () => {
     if (salvando) return;
@@ -1220,6 +1238,30 @@ function EditEmpreendimentoDialog({
               ))}
             </SelectContent>
           </Select>
+          <div className="mt-2 flex gap-2">
+            <Input
+              value={novoSocioNome}
+              onChange={(e) => setNovoSocioNome(e.target.value)}
+              placeholder="Novo sócio sem sair desta tela"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const nomeNovo = novoSocioNome.trim();
+                if (!nomeNovo) {
+                  toast.error("Informe o nome do novo sócio");
+                  return;
+                }
+                onCreateSocio(nomeNovo);
+                setSocioNome(nomeNovo);
+                setNovoSocioNome("");
+                toast.success("Sócio adicionado e selecionado");
+              }}
+            >
+              <Plus className="mr-1 h-4 w-4" /> Novo sócio
+            </Button>
+          </div>
           <p className="mt-1 text-xs text-muted-foreground">
             A troca vale para novos contratos e recebimentos futuros; movimentos já registrados preservam o sócio original.
           </p>
