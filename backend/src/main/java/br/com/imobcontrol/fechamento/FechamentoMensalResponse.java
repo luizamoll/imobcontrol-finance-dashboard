@@ -11,6 +11,7 @@ public record FechamentoMensalResponse(
     int totalGlebas,
     int glebasAdimplentes,
     int glebasInadimplentes,
+    int glebasComPagamentoMes,
     BigDecimal recebidoParcelas,
     BigDecimal outrasReceitas,
     BigDecimal valorTotalRecebido,
@@ -20,11 +21,21 @@ public record FechamentoMensalResponse(
     BigDecimal impostoReservado,
     BigDecimal impostoPago,
     BigDecimal comissaoRegistrada,
+    BigDecimal comissaoEfetivamentePaga,
+    BigDecimal socioEfetivamentePago,
+    BigDecimal empreendedorEfetivamentePago,
     BigDecimal valorDevolvidoDistrato,
     BigDecimal valorRetido,
     BigDecimal saldoDisponivelEstimado,
-    List<Lancamento> lancamentos
+    List<Lancamento> lancamentos,
+    List<UnidadeFechamento> unidades
 ) {
+    public record UnidadeFechamento(
+        Long unidadeId, String unidade, String comprador, boolean pagouNoMes,
+        boolean inadimplenteNoFim, BigDecimal recebidoNoMes, BigDecimal saldoVencido,
+        LocalDate ultimoPagamentoMes
+    ) {}
+
     public record Lancamento(
         Long id, Long empreendimentoId, LocalDate data,
         String tipo, String descricao, BigDecimal valor,
