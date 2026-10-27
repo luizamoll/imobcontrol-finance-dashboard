@@ -207,6 +207,16 @@ type PaginaClientes = {
   content: ClienteVenda[];
 };
 
+type CorretorEmpresa = {
+  id: number;
+  nome: string;
+  documento: string | null;
+  creci: string | null;
+  email: string | null;
+  telefone: string | null;
+  chavePix: string | null;
+};
+
 function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const { state, addVenda } = useStore();
   const { empresaAtualId } = useTenant();
@@ -220,6 +230,12 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [novoClienteCpf, setNovoClienteCpf] = useState("");
   const [novoClienteEmail, setNovoClienteEmail] = useState("");
   const [novoClienteTelefone, setNovoClienteTelefone] = useState("");
+  const [cadastroCompletoAberto, setCadastroCompletoAberto] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [dadosAdicionaisCliente, setDadosAdicionaisCliente] = useState({
+    estadoCivil: "", profissao: "", cep: "", logradouro: "", numero: "",
+    complemento: "", bairro: "", cidade: "", uf: "",
+  });
   const [salvandoCliente, setSalvandoCliente] = useState(false);
   const [valorNegociado, setValorNegociado] = useState(0);
   const [corretagemCompoeTotal, setCorretagemCompoeTotal] = useState<"sim" | "nao">("sim");
@@ -228,6 +244,12 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   >("repasse_recebimentos");
   const [dataContrato, setDataContrato] = useState(todayISO());
   const [corretor, setCorretor] = useState("");
+  const [corretoresEmpresa, setCorretoresEmpresa] = useState<CorretorEmpresa[]>([]);
+  const [novoCorretorAberto, setNovoCorretorAberto] = useState(false);
+  const [novoCorretor, setNovoCorretor] = useState({
+    nome: "", documento: "", creci: "", email: "", telefone: "", chavePix: "",
+  });
+  const [salvandoCorretor, setSalvandoCorretor] = useState(false);
   const [corretorPct, setCorretorPct] = useState("0");
   const [repasseComissaoPct, setRepasseComissaoPct] = useState("50");
   const [comissaoSobreAcrescimos, setComissaoSobreAcrescimos] = useState("nao");
@@ -272,6 +294,92 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
     };
   }, [empresaAtualId]);
 
+  const buscarCepNovoCliente = async () => {
+    const cep = dadosAdicionaisCliente.cep.replace(/\D/g, "").slice(0, 8);
+    if (cep.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const resposta = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (!resposta.ok) throw new Error("Não foi possível consultar o CEP");
+      const dados = await resposta.json() as {
+        erro?: boolean; logradouro?: string; complemento?: string;
+        bairro?: string; localidade?: string; uf?: string;
+      };
+      if (dados.erro) {
+        toast.error("CEP não encontrado");
+        return;
+      }
+      setDadosAdicionaisCliente((atual) => ({
+        ...atual,
+        cep,
+        logradouro: dados.logradouro || atual.logradouro,
+        complemento: dados.complemento || atual.complemento,
+        bairro: dados.bairro || atual.bairro,
+        cidade: dados.localidade || atual.cidade,
+        uf: dados.uf || atual.uf,
+      }));
+      toast.success("Endereço encontrado");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao consultar o CEP");
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!empresaAtualId) {
+      setCorretoresEmpresa([]);
+      return;
+    }
+    let cancelado = false;
+    void apiJson<CorretorEmpresa[]>("/api/corretores", { empresaId: empresaAtualId })
+      .then((dados) => { if (!cancelado) setCorretoresEmpresa(dados); })
+      .catch((error) => {
+        if (!cancelado) toast.error(error instanceof Error ? error.message : "Não foi possível carregar corretores");
+      });
+    return () => { cancelado = true; };
+  }, [empresaAtualId]);
+
+  const cadastrarCorretorRapido = async () => {
+    if (!empresaAtualId) return;
+    const nome = novoCorretor.nome.trim();
+    if (!nome) {
+      toast.error("Informe o nome do corretor");
+      return;
+    }
+    const jaExiste = [...corretoresEmpresa.map((c) => c.nome),
+      ...state.config.recebedores.filter((r) => r.tipo === "corretor").map((r) => r.nome),
+    ].some((atual) => atual.localeCompare(nome, "pt-BR", { sensitivity: "base" }) === 0);
+    if (jaExiste) {
+      toast.error("Esse corretor já está cadastrado. Selecione-o na lista.");
+      return;
+    }
+    setSalvandoCorretor(true);
+    try {
+      const salvo = await apiJson<CorretorEmpresa>("/api/corretores", {
+        method: "POST",
+        empresaId: empresaAtualId,
+        body: JSON.stringify({
+          nome,
+          documento: novoCorretor.documento.trim() || null,
+          creci: novoCorretor.creci.trim() || null,
+          email: novoCorretor.email.trim() || null,
+          telefone: novoCorretor.telefone.trim() || null,
+          chavePix: novoCorretor.chavePix.trim() || null,
+        }),
+      });
+      setCorretoresEmpresa((anteriores) => [...anteriores, salvo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")));
+      setCorretor(salvo.nome);
+      setNovoCorretor({ nome: "", documento: "", creci: "", email: "", telefone: "", chavePix: "" });
+      setNovoCorretorAberto(false);
+      toast.success("Corretor cadastrado e selecionado");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível cadastrar o corretor");
+    } finally {
+      setSalvandoCorretor(false);
+    }
+  };
+
   const cadastrarClienteRapido = async () => {
     if (!empresaAtualId) {
       toast.error("Selecione uma empresa antes de cadastrar o cliente");
@@ -292,15 +400,15 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
           cpf: novoClienteCpf.trim() || null,
           email: novoClienteEmail.trim() || null,
           telefone: novoClienteTelefone.trim() || null,
-          cep: null,
-          logradouro: null,
-          numero: null,
-          complemento: null,
-          bairro: null,
-          cidade: null,
-          uf: null,
-          estadoCivil: null,
-          profissao: null,
+          cep: dadosAdicionaisCliente.cep.replace(/\D/g, "") || null,
+          logradouro: dadosAdicionaisCliente.logradouro.trim() || null,
+          numero: dadosAdicionaisCliente.numero.trim() || null,
+          complemento: dadosAdicionaisCliente.complemento.trim() || null,
+          bairro: dadosAdicionaisCliente.bairro.trim() || null,
+          cidade: dadosAdicionaisCliente.cidade.trim() || null,
+          uf: dadosAdicionaisCliente.uf.trim().toUpperCase() || null,
+          estadoCivil: dadosAdicionaisCliente.estadoCivil.trim() || null,
+          profissao: dadosAdicionaisCliente.profissao.trim() || null,
           versao: null,
         }),
       });
@@ -315,6 +423,11 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       setNovoClienteCpf("");
       setNovoClienteEmail("");
       setNovoClienteTelefone("");
+      setDadosAdicionaisCliente({
+        estadoCivil: "", profissao: "", cep: "", logradouro: "", numero: "",
+        complemento: "", bairro: "", cidade: "", uf: "",
+      });
+      setCadastroCompletoAberto(false);
       setNovoClienteAberto(false);
       toast.success("Cliente cadastrado e selecionado");
     } catch (error) {
@@ -614,7 +727,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                 <p className="text-sm font-semibold">Cadastrar comprador sem sair da venda</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   O cliente será salvo no cadastro da empresa e já ficará selecionado nesta venda.
-                  Você pode completar endereço, estado civil e profissão depois em Clientes.
+                  Preencha os dados essenciais agora ou abra o cadastro completo para incluir endereço,
+                  estado civil e profissão. Tudo será salvo em Clientes da empresa.
                 </p>
               </div>
 
@@ -652,6 +766,75 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                     placeholder="cliente@email.com"
                   />
                 </div>
+              </div>
+
+              <div className="mt-3 border-t border-border/70 pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCadastroCompletoAberto((aberto) => !aberto)}
+                >
+                  {cadastroCompletoAberto ? "Ocultar dados adicionais" : "Preencher cadastro completo"}
+                </Button>
+                {cadastroCompletoAberto && (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-6">
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs">Estado civil</Label>
+                      <Select value={dadosAdicionaisCliente.estadoCivil || "__nao_informado__"} onValueChange={(valor) => setDadosAdicionaisCliente((d) => ({ ...d, estadoCivil: valor === "__nao_informado__" ? "" : valor }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__nao_informado__">Não informado</SelectItem>
+                          {["Solteiro(a)", "Casado(a)", "União estável", "Divorciado(a)", "Separado(a)", "Viúvo(a)"].map((estado) => (
+                            <SelectItem key={estado} value={estado}>{estado}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs">Profissão</Label>
+                      <Input value={dadosAdicionaisCliente.profissao} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, profissao: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">CEP</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={dadosAdicionaisCliente.cep.replace(/^(\d{5})(\d)/, "$1-$2")}
+                          onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, cep: e.target.value.replace(/\D/g, "").slice(0, 8) }))}
+                          onBlur={() => { if (dadosAdicionaisCliente.cep.length === 8) void buscarCepNovoCliente(); }}
+                          placeholder="00000-000"
+                        />
+                        <Button type="button" variant="outline" disabled={buscandoCep || dadosAdicionaisCliente.cep.length !== 8} onClick={() => void buscarCepNovoCliente()}>
+                          {buscandoCep ? "..." : "Buscar"}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs">Logradouro</Label>
+                      <Input value={dadosAdicionaisCliente.logradouro} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, logradouro: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <Label className="text-xs">Número</Label>
+                      <Input value={dadosAdicionaisCliente.numero} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, numero: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Complemento</Label>
+                      <Input value={dadosAdicionaisCliente.complemento} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, complemento: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Bairro</Label>
+                      <Input value={dadosAdicionaisCliente.bairro} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, bairro: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <Label className="text-xs">UF</Label>
+                      <Input maxLength={2} value={dadosAdicionaisCliente.uf} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, uf: e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2) }))} placeholder="MG" />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <Label className="text-xs">Cidade</Label>
+                      <Input value={dadosAdicionaisCliente.cidade} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, cidade: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-3 flex justify-end">
@@ -749,16 +932,78 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
           <Input type="date" value={dataContrato} onChange={(e) => setDataContrato(e.target.value)} />
         </div>
 
-        <div>
-          <Label>Corretor responsável</Label>
-          <Select value={corretor} onValueChange={setCorretor}>
-            <SelectTrigger><SelectValue placeholder="Selecione, se houver" /></SelectTrigger>
+        <div className="sm:col-span-2">
+          <div className="flex items-end justify-between gap-2">
+            <Label>Corretor responsável</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!empresaAtualId}
+              onClick={() => setNovoCorretorAberto((v) => !v)}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              {novoCorretorAberto ? "Fechar cadastro" : "Novo corretor"}
+            </Button>
+          </div>
+          <Select value={corretor || "__sem_corretor__"} onValueChange={(v) => setCorretor(v === "__sem_corretor__" ? "" : v)}>
+            <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o corretor" /></SelectTrigger>
             <SelectContent>
-              {state.config.recebedores
-                .filter((r) => r.tipo === "corretor")
-                .map((r) => <SelectItem key={r.nome} value={r.nome}>{r.nome}</SelectItem>)}
+              <SelectItem value="__sem_corretor__">Sem corretor</SelectItem>
+              {Array.from(new Map([
+                ...state.config.recebedores.filter((r) => r.tipo === "corretor").map((r) => [r.nome.toLocaleLowerCase("pt-BR"), { nome: r.nome, creci: r.creci || null }] as const),
+                ...corretoresEmpresa.map((r) => [r.nome.toLocaleLowerCase("pt-BR"), { nome: r.nome, creci: r.creci }] as const),
+              ]).values()).sort((a,b) => a.nome.localeCompare(b.nome, "pt-BR")).map((r) => (
+                <SelectItem key={r.nome} value={r.nome}>
+                  {r.nome}{r.creci ? ` · CRECI ${r.creci}` : ""}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+          {novoCorretorAberto && (
+            <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <p className="mb-3 text-sm font-semibold">Cadastrar corretor sem sair da venda</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Nome do corretor *</Label>
+                  <Input value={novoCorretor.nome} onChange={(e) => setNovoCorretor((r) => ({ ...r, nome: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">CPF / Documento</Label>
+                  <Input value={novoCorretor.documento} onChange={(e) => setNovoCorretor((r) => ({ ...r, documento: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">CRECI</Label>
+                  <Input value={novoCorretor.creci} onChange={(e) => setNovoCorretor((r) => ({ ...r, creci: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Telefone</Label>
+                  <Input value={novoCorretor.telefone} onChange={(e) => setNovoCorretor((r) => ({ ...r, telefone: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">E-mail</Label>
+                  <Input type="email" value={novoCorretor.email} onChange={(e) => setNovoCorretor((r) => ({ ...r, email: e.target.value }))} />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Chave PIX para repasse</Label>
+                  <Input value={novoCorretor.chavePix} onChange={(e) => setNovoCorretor((r) => ({ ...r, chavePix: e.target.value }))} />
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                O cadastro será compartilhado com os usuários autorizados da empresa.
+              </p>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={salvandoCorretor || !novoCorretor.nome.trim()}
+                  onClick={() => void cadastrarCorretorRapido()}
+                >
+                  {salvandoCorretor ? "Cadastrando..." : "Cadastrar e selecionar"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
