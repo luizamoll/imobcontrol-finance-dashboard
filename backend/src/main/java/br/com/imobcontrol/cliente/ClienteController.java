@@ -67,7 +67,11 @@ public class ClienteController {
             @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
             @Valid @RequestBody ClienteRequest dados
     ) {
-        acesso.exigir(usuario, PermissaoUsuario.CLIENTES_GERENCIAR);
+        acesso.exigirQualquer(
+                usuario,
+                PermissaoUsuario.CLIENTES_GERENCIAR,
+                PermissaoUsuario.VENDAS_CRIAR
+        );
         return service.cadastrar(usuario, empresaId, dados);
     }
 
