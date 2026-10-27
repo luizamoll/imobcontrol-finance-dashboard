@@ -8,6 +8,7 @@ import java.util.Optional;
 
 public interface ClienteRepository extends JpaRepository<Cliente, Long> {
     Page<Cliente> findByEmpresaId(Long empresaId, Pageable pageable);
+    java.util.List<Cliente> findAllByEmpresaId(Long empresaId);
     Optional<Cliente> findByIdAndEmpresaId(Long id, Long empresaId);
     boolean existsByEmpresaIdAndCpf(Long empresaId, String cpf);
     long countByEmpresaId(Long empresaId);
