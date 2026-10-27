@@ -1,9 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Building, Pencil, Plus, Trash2, User, Users, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
+import { apiJson } from "@/lib/api";
+import { useTenant } from "@/lib/tenant";
+import { useAuth } from "@/lib/auth";
+import { temAlgumaPermissao } from "@/lib/permissoes";
+import type { Recebedor } from "@/lib/store";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,8 +45,44 @@ export const Route = createFileRoute("/recebedores")({
   head: () => ({ meta: [{ title: "Recebedores · ImobControl" }] }),
 });
 
+type CorretorCompartilhado = Omit<Recebedor, "tipo"> & {
+  id: number;
+  versao: number;
+};
+
 function RecebedoresPage() {
   const { state, updateConfig } = useStore();
+  const { empresaAtualId } = useTenant();
+  const { usuario } = useAuth();
+  const podeRemoverCorretor = temAlgumaPermissao(usuario, ["VENDAS_GERENCIAR", "CONFIGURACOES_GERENCIAR"]);
+  const [corretoresCompartilhados, setCorretoresCompartilhados] = useState<CorretorCompartilhado[]>([]);
+  const [salvandoRecebedor, setSalvandoRecebedor] = useState(false);
+  const [editandoCorretorId, setEditandoCorretorId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!empresaAtualId) {
+      setCorretoresCompartilhados([]);
+      return;
+    }
+    let cancelado = false;
+    void apiJson<CorretorCompartilhado[]>("/api/corretores", { empresaId: empresaAtualId })
+      .then((dados) => { if (!cancelado) setCorretoresCompartilhados(dados); })
+      .catch((error) => {
+        if (!cancelado) toast.error(error instanceof Error ? error.message : "Não foi possível carregar os corretores");
+      });
+    return () => { cancelado = true; };
+  }, [empresaAtualId]);
+
+  const recebedoresExibidos = useMemo(() => {
+    const porChave = new Map<string, Recebedor & { id?: number; versao?: number }>();
+    for (const item of state.config.recebedores) {
+      porChave.set(`${item.tipo}:${item.nome.toLocaleLowerCase("pt-BR")}`, item);
+    }
+    for (const item of corretoresCompartilhados) {
+      porChave.set(`corretor:${item.nome.toLocaleLowerCase("pt-BR")}`, { ...item, tipo: "corretor" });
+    }
+    return [...porChave.values()];
+  }, [state.config.recebedores, corretoresCompartilhados]);
   const [novoNome, setNovoNome] = useState("");
   const [novoTipo, setNovoTipo] = useState<"socio" | "empresa" | "corretor">("corretor");
   const [novoDocumento, setNovoDocumento] = useState("");
@@ -60,19 +101,19 @@ function RecebedoresPage() {
     setNovoTelefone("");
     setNovaChavePix("");
     setEditandoNomeOriginal(null);
+    setEditandoCorretorId(null);
   };
 
-  const salvarRecebedor = () => {
+  const salvarRecebedor = async () => {
+    if (salvandoRecebedor) return;
     const nome = novoNome.trim();
     if (!nome) {
       toast.error("Informe o nome do recebedor.");
       return;
     }
-
-    const jaExiste = state.config.recebedores.some(
-      (r) =>
-        r.nome.toLowerCase() === nome.toLowerCase()
-        && r.nome !== editandoNomeOriginal,
+    const jaExiste = recebedoresExibidos.some((r) =>
+      r.nome.localeCompare(nome, "pt-BR", { sensitivity: "base" }) === 0
+      && r.nome !== editandoNomeOriginal
     );
     if (jaExiste) {
       toast.error("Já existe um recebedor com esse nome.");
@@ -89,33 +130,49 @@ function RecebedoresPage() {
       chavePix: novaChavePix.trim() || undefined,
     };
 
-    if (editandoNomeOriginal) {
-      updateConfig({
-        recebedores: state.config.recebedores.map((r) =>
-          r.nome === editandoNomeOriginal ? dados : r,
-        ),
-      });
-      toast.success("Cadastro atualizado.", {
-        description:
-          editandoNomeOriginal !== nome
-            ? "Vendas já registradas preservam o corretor gravado no contrato. Para corrigir uma venda específica, use Editar venda."
-            : undefined,
-      });
-    } else {
-      updateConfig({
-        recebedores: [...state.config.recebedores, dados],
-      });
-      toast.success("Recebedor cadastrado.");
+    setSalvandoRecebedor(true);
+    try {
+      // Corretores novos e já compartilhados são escritos no cadastro da empresa.
+      if (editandoCorretorId != null || (novoTipo === "corretor" && !editandoNomeOriginal)) {
+        if (!empresaAtualId) throw new Error("Selecione uma empresa");
+        const anterior = corretoresCompartilhados.find((r) => r.id === editandoCorretorId);
+        const salvo = await apiJson<CorretorCompartilhado>(
+          editandoCorretorId != null ? `/api/corretores/${editandoCorretorId}` : "/api/corretores",
+          {
+            method: editandoCorretorId != null ? "PUT" : "POST",
+            empresaId: empresaAtualId,
+            body: JSON.stringify({ ...dados, versao: anterior?.versao ?? null }),
+          },
+        );
+        setCorretoresCompartilhados((atuais) =>
+          [...atuais.filter((r) => r.id !== salvo.id), salvo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
+        );
+        toast.success("Corretor salvo para a equipe.");
+      } else if (editandoNomeOriginal) {
+        updateConfig({
+          recebedores: state.config.recebedores.map((r) =>
+            r.nome === editandoNomeOriginal ? dados : r,
+          ),
+        });
+        toast.success("Cadastro local atualizado.");
+      } else {
+        updateConfig({ recebedores: [...state.config.recebedores, dados] });
+        toast.success("Recebedor cadastrado.");
+      }
+      limparFormulario();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o recebedor");
+    } finally {
+      setSalvandoRecebedor(false);
     }
-
-    limparFormulario();
   };
 
   const editarRecebedor = (nome: string) => {
-    const recebedor = state.config.recebedores.find((r) => r.nome === nome);
+    const recebedor = recebedoresExibidos.find((r) => r.nome === nome);
     if (!recebedor) return;
 
     setEditandoNomeOriginal(recebedor.nome);
+    setEditandoCorretorId(recebedor.id ?? null);
     setNovoNome(recebedor.nome);
     setNovoTipo(recebedor.tipo);
     setNovoDocumento(recebedor.documento ?? "");
@@ -126,15 +183,32 @@ function RecebedoresPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const removerRecebedor = (nome: string) => {
+  const removerRecebedor = async (nome: string) => {
+    const item = recebedoresExibidos.find((r) => r.nome === nome);
+    if (!item) return;
     const usadoEmVenda = state.vendas.some((v) => v.corretorNome === nome);
     if (usadoEmVenda) {
       toast.error("Este corretor já está vinculado a uma venda e não pode ser removido.");
       return;
     }
-    updateConfig({
-      recebedores: state.config.recebedores.filter((r) => r.nome !== nome),
-    });
+    if (item.id != null) {
+      if (!podeRemoverCorretor || !empresaAtualId) {
+        toast.error("Sem permissão para remover corretores da empresa.");
+        return;
+      }
+      if (!window.confirm(`Remover o corretor "${nome}" da empresa?`)) return;
+      try {
+        await apiJson<void>(`/api/corretores/${item.id}`, {
+          method: "DELETE", empresaId: empresaAtualId,
+        });
+        setCorretoresCompartilhados((atuais) => atuais.filter((r) => r.id !== item.id));
+        toast.success("Corretor removido.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Não foi possível remover");
+      }
+      return;
+    }
+    updateConfig({ recebedores: state.config.recebedores.filter((r) => r.nome !== nome) });
     toast.success("Recebedor removido.");
   };
 
@@ -263,7 +337,7 @@ function RecebedoresPage() {
                   <X className="mr-2 h-4 w-4" /> Cancelar
                 </Button>
               )}
-              <Button className="flex-1" onClick={salvarRecebedor}>
+              <Button className="flex-1" onClick={() => void salvarRecebedor()} disabled={salvandoRecebedor}>
                 {editandoNomeOriginal ? (
                   <>
                     <Pencil className="mr-2 h-4 w-4" /> Salvar alterações
@@ -277,7 +351,7 @@ function RecebedoresPage() {
             </div>
           </div>
 
-          {state.config.recebedores.length === 0 ? (
+          {recebedoresExibidos.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border/80 p-5 text-center text-sm text-muted-foreground">
               Nenhum recebedor cadastrado ainda.
             </div>
@@ -294,11 +368,13 @@ function RecebedoresPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {state.config.recebedores.map((r) => (
+                  {recebedoresExibidos.map((r) => (
                     <TableRow key={`${r.tipo}-${r.nome}`}>
                       <TableCell>
                         <div className="font-medium">{r.nome}</div>
-                        <div className="text-xs capitalize text-muted-foreground">{r.tipo}</div>
+                        <div className="text-xs capitalize text-muted-foreground">
+                          {r.tipo}{r.id != null ? " · compartilhado com a empresa" : ""}
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm">
                         <div>{r.documento || "—"}</div>
@@ -330,7 +406,8 @@ function RecebedoresPage() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() => removerRecebedor(r.nome)}
+                            onClick={() => void removerRecebedor(r.nome)}
+                            disabled={r.id != null && !podeRemoverCorretor}
                             aria-label={`Remover ${r.nome}`}
                           >
                             <Trash2 className="mr-1 h-3.5 w-3.5" />
