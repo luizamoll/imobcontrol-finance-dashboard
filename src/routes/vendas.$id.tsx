@@ -20,6 +20,7 @@ import { CurrencyInput } from "@/components/currency-input";
 import { DistribuicaoFinanceira } from "@/components/distribuicao-financeira";
 import { RegrasInadimplenciaForm } from "@/components/regras-inadimplencia-form";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { composicaoEconomica } from "@/lib/composicao-economica";
 import { apiJson } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { temPermissao } from "@/lib/permissoes";
@@ -1176,8 +1177,7 @@ function EditarVendaDialog({
   const [clienteId, setClienteId] = useState(venda.clienteId ?? "");
   const clienteSelecionado = clientes.find((cliente) => String(cliente.id) === clienteId);
   const [valorTotal, setValorTotal] = useState(venda.valorTotal);
-  const [valorImovel, setValorImovel] = useState(venda.valorImovel ?? 0);
-  const [corretagemValor, setCorretagemValor] = useState(venda.corretagemValor ?? 0);
+
   const [corretagemCompoeTotal, setCorretagemCompoeTotal] = useState<"nao_informado" | "sim" | "nao">(
     venda.corretagemCompoeValorContrato == null
       ? "nao_informado"
@@ -1206,6 +1206,13 @@ function EditarVendaDialog({
   );
 
   const totalVenda = valorTotal;
+  const calculados = composicaoEconomica(
+    totalVenda, Number(corretorPct) || 0, corretagemCompoeTotal,
+  );
+  // Contratos com recebimentos e contratos sem definição anterior mantêm o histórico original.
+  const preservarComposicao = possuiRecebimentos || corretagemCompoeTotal === "nao_informado";
+  const valorImovel = preservarComposicao ? (venda.valorImovel ?? 0) : calculados.valorImovel;
+  const corretagemValor = preservarComposicao ? (venda.corretagemValor ?? 0) : calculados.corretagemValor;
   const totalVendaCentavos = Math.round(totalVenda * 100);
   const totalComposicaoCentavos = composicao.reduce((total, item) => {
     const quantidade = itemParcelado(item.tipo) ? Math.max(1, item.parcelas) : 1;
@@ -1253,15 +1260,6 @@ function EditarVendaDialog({
       toast.error("Os percentuais devem ficar entre 0% e 100%");
       return;
     }
-    if (
-      corretagemCompoeTotal === "sim" &&
-      valorImovel > 0 &&
-      corretagemValor >= 0 &&
-      Math.abs(valorImovel + corretagemValor - totalVenda) > 0.01
-    ) {
-      toast.error("Valor do imóvel + corretagem não fecha com o total do contrato");
-      return;
-    }
     if (!possuiRecebimentos && (totalVenda <= 0 || !composicaoConfere)) {
       toast.error("A composição não fecha com o valor da venda. Diferenças normais de arredondamento de parcelas são ajustadas automaticamente.");
       return;
@@ -1273,8 +1271,8 @@ function EditarVendaDialog({
       ...(!possuiRecebimentos
         ? { valorTotal: totalVenda, composicao }
         : {}),
-      valorImovel: valorImovel > 0 ? valorImovel : undefined,
-      corretagemValor: corretagemValor > 0 ? corretagemValor : undefined,
+      valorImovel: preservarComposicao && venda.valorImovel == null ? undefined : valorImovel,
+      corretagemValor: preservarComposicao && venda.corretagemValor == null ? undefined : corretagemValor,
       corretagemCompoeValorContrato:
         corretagemCompoeTotal === "nao_informado"
           ? undefined
@@ -1337,33 +1335,48 @@ function EditarVendaDialog({
           />
         </div>
         <div>
-          <Label>Valor efetivo do imóvel</Label>
-          <CurrencyInput
-            value={valorImovel}
-            onValueChange={setValorImovel}
-            placeholder="Ex.: 288.000,00"
-          />
-        </div>
-        <div>
-          <Label>Valor da corretagem</Label>
-          <CurrencyInput
-            value={corretagemValor}
-            onValueChange={setCorretagemValor}
-            placeholder="Ex.: 32.000,00"
-          />
-        </div>
-        <div>
-          <Label>A corretagem compõe o total?</Label>
-          <Select value={corretagemCompoeTotal} onValueChange={(value) => setCorretagemCompoeTotal(value as typeof corretagemCompoeTotal)}>
+          <Label>Corretagem incluída no valor do contrato?</Label>
+          <Select
+            value={corretagemCompoeTotal}
+            disabled={possuiRecebimentos}
+            onValueChange={(value) => {
+              const modo = value as "sim" | "nao" | "nao_informado";
+              setCorretagemCompoeTotal(modo);
+              if (modo === "sim") setCorretagemForma("repasse_recebimentos");
+              if (modo === "nao") setCorretagemForma("separada");
+            }}
+          >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="nao_informado">Não informado</SelectItem>
-              <SelectItem value="sim">Sim — está dentro do total</SelectItem>
-              <SelectItem value="nao">Não — é cobrada fora</SelectItem>
+              {corretagemCompoeTotal === "nao_informado" && (
+                <SelectItem value="nao_informado">Não informado no cadastro antigo</SelectItem>
+              )}
+              <SelectItem value="sim">Sim — descontar do contrato</SelectItem>
+              <SelectItem value="nao">Não — cobrada separadamente</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        {corretagemValor > 0 && (
+        <div>
+          <Label>Comissão total</Label>
+          <div className="mt-1 rounded-md border bg-muted/30 px-3 py-2 text-sm font-semibold">{brl(corretagemValor)}</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Base: {brl(totalVenda)} × {Number(corretorPct) || 0}%
+          </p>
+        </div>
+        <div className="sm:col-span-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+          <p className="text-xs text-muted-foreground">
+            {corretagemCompoeTotal === "sim" ? "Valor do imóvel após comissão" : "Valor do imóvel registrado"}
+          </p>
+          <p className="text-lg font-semibold">{brl(valorImovel)}</p>
+          {possuiRecebimentos ? (
+            <p className="mt-1 text-xs text-muted-foreground">Composição econômica preservada: já existem recebimentos nesta venda.</p>
+          ) : corretagemCompoeTotal === "nao_informado" ? (
+            <p className="mt-1 text-xs text-muted-foreground">Escolha se a comissão foi incluída ou cobrada fora para recalcular o valor do imóvel.</p>
+          ) : corretagemCompoeTotal === "nao" ? (
+            <p className="mt-1 text-xs text-muted-foreground">A corretagem é externa e não será descontada dos recebimentos do contrato.</p>
+          ) : null}
+        </div>
+        {corretagemValor > 0 && corretagemCompoeTotal === "sim" && (
           <div>
             <Label>Forma da corretagem</Label>
             <Select value={corretagemForma} onValueChange={(value) => setCorretagemForma(value as typeof corretagemForma)}>
@@ -1417,6 +1430,7 @@ function EditarVendaDialog({
             step="0.01"
             value={corretorPct}
             onChange={(e) => setCorretorPct(e.target.value)}
+            disabled={possuiRecebimentos}
           />
         </div>
         <div>
