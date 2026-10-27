@@ -746,16 +746,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addVenda: async (v) => {
         if (empresaAtualId == null) throw new Error("Selecione uma empresa");
         const criada = await criarVendaRemota(empresaAtualId, v);
-        const financeiro = await carregarFinanceiro(empresaAtualId);
+        // A API confirmou a criação: nunca anunciar falha de registro só porque
+        // a atualização da lista caiu depois. Isso evita novas tentativas que
+        // receberiam 409 (unidade já vendida).
         setStateRaw((s) => ({
           ...s,
-          vendas: financeiro.vendas,
-          parcelas: financeiro.parcelas,
-          movimentos: financeiro.movimentos,
+          vendas: [...s.vendas.filter((item) => item.id !== criada.id), criada],
           matriculas: s.matriculas.map((m) =>
             m.id === criada.matriculaId ? { ...m, status: "vendido" } : m,
           ),
         }));
+        try {
+          const financeiro = await carregarFinanceiro(empresaAtualId);
+          setStateRaw((s) => ({
+            ...s,
+            vendas: financeiro.vendas,
+            parcelas: financeiro.parcelas,
+            movimentos: financeiro.movimentos,
+          }));
+        } catch {
+          // A venda já foi gravada: mantém o estado local confirmado.
+          // A próxima abertura da página sincroniza os dados com a API.
+        }
         return criada;
       },
       updateVenda: async (id, patch) => {
