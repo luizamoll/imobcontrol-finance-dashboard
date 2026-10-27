@@ -10,5 +10,6 @@ public record CorretorEmpresaRequest(
     @Size(max=80) String creci,
     @Email @Size(max=200) String email,
     @Size(max=30) String telefone,
-    @Size(max=200) String chavePix
+    @Size(max=200) String chavePix,
+    Long versao
 ) {}
