@@ -1,0 +1,9 @@
+package br.com.imobcontrol.corretor;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface CorretorEmpresaRepository extends JpaRepository<CorretorEmpresa, Long> {
+    List<CorretorEmpresa> findByEmpresaIdOrderByNomeAsc(Long empresaId);
+    boolean existsByEmpresaIdAndNomeIgnoreCase(Long empresaId, String nome);
+}
