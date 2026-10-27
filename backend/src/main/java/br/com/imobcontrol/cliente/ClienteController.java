@@ -40,7 +40,8 @@ public class ClienteController {
                 usuario,
                 PermissaoUsuario.CLIENTES_VISUALIZAR,
                 PermissaoUsuario.CLIENTES_GERENCIAR,
-                PermissaoUsuario.VENDAS_GERENCIAR
+                PermissaoUsuario.VENDAS_GERENCIAR,
+                PermissaoUsuario.VENDAS_CRIAR
         );
         return service.listar(usuario, empresaId, pagina, tamanho);
     }
