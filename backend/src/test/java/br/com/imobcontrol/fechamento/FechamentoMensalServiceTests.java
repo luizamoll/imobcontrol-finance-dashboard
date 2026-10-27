@@ -1,6 +1,8 @@
 package br.com.imobcontrol.fechamento;
 
 import br.com.imobcontrol.financeiro.*;
+import br.com.imobcontrol.cliente.Cliente;
+import br.com.imobcontrol.cliente.ClienteRepository;
 import br.com.imobcontrol.operacao.*;
 import br.com.imobcontrol.tenant.*;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,7 @@ class FechamentoMensalServiceTests {
     @Autowired UsuarioRepository usuarios;
     @Autowired EmpreendimentoRepository empreendimentos;
     @Autowired UnidadeRepository unidades;
+    @Autowired ClienteRepository clientes;
     @Autowired VendaRepository vendas;
     @Autowired ParcelaRepository parcelas;
     @Autowired MovimentoRepository movimentos;
@@ -82,11 +85,18 @@ class FechamentoMensalServiceTests {
         u.setAtualizadoPorUsuarioId(usuario.getId());
         u = unidades.saveAndFlush(u);
 
+        Cliente cliente = new Cliente();
+        cliente.setEmpresaId(empresa.getId());
+        cliente.setNome("Comprador fechamento");
+        cliente.setCriadoPorUsuarioId(usuario.getId());
+        cliente.setAtualizadoPorUsuarioId(usuario.getId());
+        cliente = clientes.saveAndFlush(cliente);
+
         Venda venda = new Venda();
         venda.setEmpresaId(empresa.getId());
         venda.setEmpreendimentoId(emp.getId());
         venda.setUnidadeId(u.getId());
-        venda.setClienteId(1000L);
+        venda.setClienteId(cliente.getId());
         venda.setValorTotal(new BigDecimal("100.00"));
         venda.setDataContrato(LocalDate.of(2026, 9, 1));
         venda.setCorretorPct(BigDecimal.ZERO);
@@ -102,7 +112,7 @@ class FechamentoMensalServiceTests {
         parcela.setVendaId(venda.getId());
         parcela.setEmpreendimentoId(emp.getId());
         parcela.setUnidadeId(u.getId());
-        parcela.setClienteId(1000L);
+        parcela.setClienteId(cliente.getId());
         parcela.setOrigemTipo("parcelas");
         parcela.setNumero(1);
         parcela.setTotalParcelas(1);
@@ -124,7 +134,7 @@ class FechamentoMensalServiceTests {
         movimento.setParcelaId(parcela.getId());
         movimento.setEmpreendimentoId(emp.getId());
         movimento.setUnidadeId(u.getId());
-        movimento.setClienteId(1000L);
+        movimento.setClienteId(cliente.getId());
         movimento.setOrigem("parcelas");
         movimento.setDataMovimento(LocalDate.of(2026, 10, 20));
         movimento.setUsuarioId(usuario.getId());
