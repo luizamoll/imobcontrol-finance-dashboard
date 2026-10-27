@@ -198,6 +198,8 @@ type ClienteVenda = {
   id: number;
   nome: string;
   cpf: string | null;
+  email?: string | null;
+  telefone?: string | null;
 };
 
 type PaginaClientes = {
@@ -212,6 +214,12 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [clienteId, setClienteId] = useState("");
   const [clientes, setClientes] = useState<ClienteVenda[]>([]);
   const [carregandoClientes, setCarregandoClientes] = useState(false);
+  const [novoClienteAberto, setNovoClienteAberto] = useState(false);
+  const [novoClienteNome, setNovoClienteNome] = useState("");
+  const [novoClienteCpf, setNovoClienteCpf] = useState("");
+  const [novoClienteEmail, setNovoClienteEmail] = useState("");
+  const [novoClienteTelefone, setNovoClienteTelefone] = useState("");
+  const [salvandoCliente, setSalvandoCliente] = useState(false);
   const [valorNegociado, setValorNegociado] = useState(0);
   const [valorImovel, setValorImovel] = useState(0);
   const [corretagemValor, setCorretagemValor] = useState(0);
@@ -270,6 +278,60 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       cancelado = true;
     };
   }, [empresaAtualId]);
+
+  const cadastrarClienteRapido = async () => {
+    if (!empresaAtualId) {
+      toast.error("Selecione uma empresa antes de cadastrar o cliente");
+      return;
+    }
+    if (!novoClienteNome.trim()) {
+      toast.error("Informe o nome do cliente");
+      return;
+    }
+
+    setSalvandoCliente(true);
+    try {
+      const criado = await apiJson<ClienteVenda>("/api/clientes", {
+        method: "POST",
+        empresaId: empresaAtualId,
+        body: JSON.stringify({
+          nome: novoClienteNome.trim(),
+          cpf: novoClienteCpf.trim() || null,
+          email: novoClienteEmail.trim() || null,
+          telefone: novoClienteTelefone.trim() || null,
+          cep: null,
+          logradouro: null,
+          numero: null,
+          complemento: null,
+          bairro: null,
+          cidade: null,
+          uf: null,
+          estadoCivil: null,
+          profissao: null,
+          versao: null,
+        }),
+      });
+
+      setClientes((atuais) =>
+        [...atuais.filter((item) => item.id !== criado.id), criado].sort((a, b) =>
+          a.nome.localeCompare(b.nome, "pt-BR"),
+        ),
+      );
+      setClienteId(String(criado.id));
+      setNovoClienteNome("");
+      setNovoClienteCpf("");
+      setNovoClienteEmail("");
+      setNovoClienteTelefone("");
+      setNovoClienteAberto(false);
+      toast.success("Cliente cadastrado e selecionado");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível cadastrar o cliente",
+      );
+    } finally {
+      setSalvandoCliente(false);
+    }
+  };
 
   const clienteSelecionado = clientes.find(
     (cliente) => String(cliente.id) === clienteId,
@@ -535,15 +597,28 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="sm:col-span-2">
-          <Label>Cliente / Comprador</Label>
+          <div className="flex items-end justify-between gap-3">
+            <Label>Cliente / Comprador</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setNovoClienteAberto((aberto) => !aberto)}
+              disabled={!empresaAtualId}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              {novoClienteAberto ? "Fechar cadastro" : "Novo cliente"}
+            </Button>
+          </div>
+
           <Select value={clienteId} onValueChange={setClienteId}>
-            <SelectTrigger>
+            <SelectTrigger className="mt-1">
               <SelectValue
                 placeholder={
                   carregandoClientes
                     ? "Carregando clientes..."
                     : clientes.length === 0
-                      ? "Cadastre um cliente antes de registrar a venda"
+                      ? "Cadastre um cliente aqui para continuar"
                       : "Selecione o cliente"
                 }
               />
@@ -557,8 +632,68 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
               ))}
             </SelectContent>
           </Select>
+
+          {novoClienteAberto && (
+            <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <div className="mb-3">
+                <p className="text-sm font-semibold">Cadastrar comprador sem sair da venda</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  O cliente será salvo no cadastro da empresa e já ficará selecionado nesta venda.
+                  Você pode completar endereço, estado civil e profissão depois em Clientes.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Nome completo *</Label>
+                  <Input
+                    value={novoClienteNome}
+                    onChange={(e) => setNovoClienteNome(e.target.value)}
+                    placeholder="Nome do comprador"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">CPF</Label>
+                  <Input
+                    value={novoClienteCpf}
+                    onChange={(e) => setNovoClienteCpf(e.target.value)}
+                    placeholder="000.000.000-00"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Telefone</Label>
+                  <Input
+                    value={novoClienteTelefone}
+                    onChange={(e) => setNovoClienteTelefone(e.target.value)}
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">E-mail</Label>
+                  <Input
+                    type="email"
+                    value={novoClienteEmail}
+                    onChange={(e) => setNovoClienteEmail(e.target.value)}
+                    placeholder="cliente@email.com"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void cadastrarClienteRapido()}
+                  disabled={salvandoCliente || !novoClienteNome.trim()}
+                >
+                  {salvandoCliente ? "Cadastrando..." : "Cadastrar e selecionar"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           <p className="mt-1 text-xs text-muted-foreground">
-            O comprador é vinculado ao cadastro de Clientes, evitando duplicidade de CPF e endereço.
+            O comprador continua vinculado ao cadastro de Clientes, evitando cadastros paralelos.
           </p>
         </div>
 
