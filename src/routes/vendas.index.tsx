@@ -207,6 +207,16 @@ type PaginaClientes = {
   content: ClienteVenda[];
 };
 
+type CorretorEmpresa = {
+  id: number;
+  nome: string;
+  documento: string | null;
+  creci: string | null;
+  email: string | null;
+  telefone: string | null;
+  chavePix: string | null;
+};
+
 function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const { state, addVenda } = useStore();
   const { empresaAtualId } = useTenant();
@@ -234,6 +244,12 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   >("repasse_recebimentos");
   const [dataContrato, setDataContrato] = useState(todayISO());
   const [corretor, setCorretor] = useState("");
+  const [corretoresEmpresa, setCorretoresEmpresa] = useState<CorretorEmpresa[]>([]);
+  const [novoCorretorAberto, setNovoCorretorAberto] = useState(false);
+  const [novoCorretor, setNovoCorretor] = useState({
+    nome: "", documento: "", creci: "", email: "", telefone: "", chavePix: "",
+  });
+  const [salvandoCorretor, setSalvandoCorretor] = useState(false);
   const [corretorPct, setCorretorPct] = useState("0");
   const [repasseComissaoPct, setRepasseComissaoPct] = useState("50");
   const [comissaoSobreAcrescimos, setComissaoSobreAcrescimos] = useState("nao");
@@ -307,6 +323,60 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       toast.error(error instanceof Error ? error.message : "Falha ao consultar o CEP");
     } finally {
       setBuscandoCep(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!empresaAtualId) {
+      setCorretoresEmpresa([]);
+      return;
+    }
+    let cancelado = false;
+    void apiJson<CorretorEmpresa[]>("/api/corretores", { empresaId: empresaAtualId })
+      .then((dados) => { if (!cancelado) setCorretoresEmpresa(dados); })
+      .catch((error) => {
+        if (!cancelado) toast.error(error instanceof Error ? error.message : "Não foi possível carregar corretores");
+      });
+    return () => { cancelado = true; };
+  }, [empresaAtualId]);
+
+  const cadastrarCorretorRapido = async () => {
+    if (!empresaAtualId) return;
+    const nome = novoCorretor.nome.trim();
+    if (!nome) {
+      toast.error("Informe o nome do corretor");
+      return;
+    }
+    const jaExiste = [...corretoresEmpresa.map((c) => c.nome),
+      ...state.config.recebedores.filter((r) => r.tipo === "corretor").map((r) => r.nome),
+    ].some((atual) => atual.localeCompare(nome, "pt-BR", { sensitivity: "base" }) === 0);
+    if (jaExiste) {
+      toast.error("Esse corretor já está cadastrado. Selecione-o na lista.");
+      return;
+    }
+    setSalvandoCorretor(true);
+    try {
+      const salvo = await apiJson<CorretorEmpresa>("/api/corretores", {
+        method: "POST",
+        empresaId: empresaAtualId,
+        body: JSON.stringify({
+          nome,
+          documento: novoCorretor.documento.trim() || null,
+          creci: novoCorretor.creci.trim() || null,
+          email: novoCorretor.email.trim() || null,
+          telefone: novoCorretor.telefone.trim() || null,
+          chavePix: novoCorretor.chavePix.trim() || null,
+        }),
+      });
+      setCorretoresEmpresa((anteriores) => [...anteriores, salvo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")));
+      setCorretor(salvo.nome);
+      setNovoCorretor({ nome: "", documento: "", creci: "", email: "", telefone: "", chavePix: "" });
+      setNovoCorretorAberto(false);
+      toast.success("Corretor cadastrado e selecionado");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível cadastrar o corretor");
+    } finally {
+      setSalvandoCorretor(false);
     }
   };
 
@@ -862,16 +932,78 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
           <Input type="date" value={dataContrato} onChange={(e) => setDataContrato(e.target.value)} />
         </div>
 
-        <div>
-          <Label>Corretor responsável</Label>
-          <Select value={corretor} onValueChange={setCorretor}>
-            <SelectTrigger><SelectValue placeholder="Selecione, se houver" /></SelectTrigger>
+        <div className="sm:col-span-2">
+          <div className="flex items-end justify-between gap-2">
+            <Label>Corretor responsável</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!empresaAtualId}
+              onClick={() => setNovoCorretorAberto((v) => !v)}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              {novoCorretorAberto ? "Fechar cadastro" : "Novo corretor"}
+            </Button>
+          </div>
+          <Select value={corretor || "__sem_corretor__"} onValueChange={(v) => setCorretor(v === "__sem_corretor__" ? "" : v)}>
+            <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o corretor" /></SelectTrigger>
             <SelectContent>
-              {state.config.recebedores
-                .filter((r) => r.tipo === "corretor")
-                .map((r) => <SelectItem key={r.nome} value={r.nome}>{r.nome}</SelectItem>)}
+              <SelectItem value="__sem_corretor__">Sem corretor</SelectItem>
+              {Array.from(new Map([
+                ...state.config.recebedores.filter((r) => r.tipo === "corretor").map((r) => [r.nome.toLocaleLowerCase("pt-BR"), { nome: r.nome, creci: r.creci || null }] as const),
+                ...corretoresEmpresa.map((r) => [r.nome.toLocaleLowerCase("pt-BR"), { nome: r.nome, creci: r.creci }] as const),
+              ]).values()).sort((a,b) => a.nome.localeCompare(b.nome, "pt-BR")).map((r) => (
+                <SelectItem key={r.nome} value={r.nome}>
+                  {r.nome}{r.creci ? ` · CRECI ${r.creci}` : ""}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+          {novoCorretorAberto && (
+            <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <p className="mb-3 text-sm font-semibold">Cadastrar corretor sem sair da venda</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Nome do corretor *</Label>
+                  <Input value={novoCorretor.nome} onChange={(e) => setNovoCorretor((r) => ({ ...r, nome: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">CPF / Documento</Label>
+                  <Input value={novoCorretor.documento} onChange={(e) => setNovoCorretor((r) => ({ ...r, documento: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">CRECI</Label>
+                  <Input value={novoCorretor.creci} onChange={(e) => setNovoCorretor((r) => ({ ...r, creci: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Telefone</Label>
+                  <Input value={novoCorretor.telefone} onChange={(e) => setNovoCorretor((r) => ({ ...r, telefone: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">E-mail</Label>
+                  <Input type="email" value={novoCorretor.email} onChange={(e) => setNovoCorretor((r) => ({ ...r, email: e.target.value }))} />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Chave PIX para repasse</Label>
+                  <Input value={novoCorretor.chavePix} onChange={(e) => setNovoCorretor((r) => ({ ...r, chavePix: e.target.value }))} />
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                O cadastro será compartilhado com os usuários autorizados da empresa.
+              </p>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={salvandoCorretor || !novoCorretor.nome.trim()}
+                  onClick={() => void cadastrarCorretorRapido()}
+                >
+                  {salvandoCorretor ? "Cadastrando..." : "Cadastrar e selecionar"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
