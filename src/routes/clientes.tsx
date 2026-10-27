@@ -153,6 +153,7 @@ function ClientesPage() {
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [form, setForm] = useState<FormCliente>(vazio());
   const [salvando, setSalvando] = useState(false);
+  const [conflitoEdicao, setConflitoEdicao] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
 
   const buscarCep = async () => {
@@ -234,18 +235,21 @@ function ClientesPage() {
   }, [clientes, busca]);
 
   const abrirNovo = () => {
+    setConflitoEdicao(false);
     setEditando(null);
     setForm(vazio());
     setDialogAberto(true);
   };
 
   const abrirEdicao = (cliente: Cliente) => {
+    setConflitoEdicao(false);
     setEditando(cliente);
     setForm(doCliente(cliente));
     setDialogAberto(true);
   };
 
   const salvar = async () => {
+    if (salvando || conflitoEdicao) return;
     if (!empresaAtualId) {
       toast.error("Selecione uma empresa antes de cadastrar o cliente");
       return;
@@ -293,9 +297,17 @@ function ClientesPage() {
       await carregar();
     } catch (error) {
       const mensagem = error instanceof Error ? error.message : "Não foi possível salvar o cliente";
-      toast.error(mensagem);
-      if ((error as Error & { status?: number })?.status === 409) {
+      if ((error as Error & { status?: number })?.status === 409 && editando) {
+        setConflitoEdicao(true);
+        toast.error("Este cadastro mudou desde que foi aberto.", {
+          description: "Suas alterações não foram gravadas. Feche o formulário e reabra o cliente atualizado antes de editar.",
+        });
         await carregar();
+      } else {
+        toast.error(mensagem);
+        if ((error as Error & { status?: number })?.status === 409) {
+          await carregar();
+        }
       }
     } finally {
       setSalvando(false);
@@ -524,8 +536,8 @@ function ClientesPage() {
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogAberto(false)}>Cancelar</Button>
-            <Button onClick={() => void salvar()} disabled={salvando}>
-              {salvando ? "Salvando..." : editando ? "Salvar alterações" : "Cadastrar cliente"}
+            <Button onClick={() => void salvar()} disabled={salvando || conflitoEdicao}>
+              {salvando ? "Salvando..." : conflitoEdicao ? "Reabra o cadastro para editar" : editando ? "Salvar alterações" : "Cadastrar cliente"}
             </Button>
           </DialogFooter>
         </DialogContent>

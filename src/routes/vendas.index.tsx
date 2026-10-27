@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Calculator, Plus, ShoppingCart, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { apiJson } from "@/lib/api";
 import { composicaoEconomica } from "@/lib/composicao-economica";
+import { carregarCatalogo } from "@/lib/catalogo-api";
 import { useAuth } from "@/lib/auth";
 import { temPermissao } from "@/lib/permissoes";
 import { Button } from "@/components/ui/button";
@@ -218,7 +219,7 @@ type CorretorEmpresa = {
 };
 
 function NewVendaDialog({ onClose }: { onClose: () => void }) {
-  const { state, addVenda } = useStore();
+  const { state, setState, addVenda } = useStore();
   const { empresaAtualId } = useTenant();
   const [empId, setEmpId] = useState("");
   const [matId, setMatId] = useState("");
@@ -250,6 +251,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
     nome: "", documento: "", creci: "", email: "", telefone: "", chavePix: "",
   });
   const [salvandoCorretor, setSalvandoCorretor] = useState(false);
+  const [registrandoVenda, setRegistrandoVenda] = useState(false);
+  const envioEmAndamento = useRef(false);
   const [corretorPct, setCorretorPct] = useState("0");
   const [repasseComissaoPct, setRepasseComissaoPct] = useState("50");
   const [comissaoSobreAcrescimos, setComissaoSobreAcrescimos] = useState("nao");
@@ -529,6 +532,7 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   };
 
   const submit = async () => {
+    if (envioEmAndamento.current) return;
     if (!empId || !matId || !clienteId || !clienteSelecionado) {
       toast.error("Preencha empreendimento, unidade e cliente");
       return;
@@ -558,6 +562,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       return;
     }
 
+    envioEmAndamento.current = true;
+    setRegistrandoVenda(true);
     try {
       await addVenda({
         empreendimentoId: empId,
@@ -582,9 +588,36 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       toast.success("Venda registrada");
       onClose();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Não foi possível registrar a venda",
-      );
+      const status = (error as Error & { status?: number })?.status;
+      const mensagem = error instanceof Error ? error.message : "Não foi possível registrar a venda";
+      if (status === 409 && empresaAtualId != null) {
+        // O backend bloqueia duas vendas da mesma unidade. Atualizamos a lista
+        // em vez de incentivar novas tentativas com uma unidade já vendida.
+        try {
+          const catalogo = await carregarCatalogo(empresaAtualId);
+          setState((atual) => ({ ...atual, ...catalogo }));
+          const escolhida = catalogo.matriculas.find((m) => m.id === matId);
+          if (!escolhida || escolhida.status !== "disponivel") {
+            setMatId("");
+            toast.error("Esta unidade já não está disponível.", {
+              description: "A lista foi atualizada. Escolha uma unidade disponível; nenhum pagamento foi lançado por esta tentativa.",
+            });
+          } else {
+            toast.error(mensagem, {
+              description: "Os dados do empreendimento foram atualizados. Confira as informações antes de tentar novamente.",
+            });
+          }
+        } catch {
+          toast.error(mensagem, {
+            description: "Não repita o registro sem antes conferir se a unidade já possui uma venda.",
+          });
+        }
+      } else {
+        toast.error(mensagem);
+      }
+    } finally {
+      envioEmAndamento.current = false;
+      setRegistrandoVenda(false);
     }
   };
 
@@ -1314,7 +1347,9 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
 
       <DialogFooter>
         <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-        <Button onClick={submit}>Registrar venda</Button>
+        <Button onClick={() => void submit()} disabled={registrandoVenda}>
+          {registrandoVenda ? "Registrando..." : "Registrar venda"}
+        </Button>
       </DialogFooter>
     </DialogContent>
   );
