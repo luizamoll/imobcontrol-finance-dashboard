@@ -7,5 +7,6 @@ import java.util.Optional;
 
 public interface UnidadeRepository extends JpaRepository<Unidade, Long> {
     List<Unidade> findAllByEmpresaIdAndEmpreendimentoIdOrderByNumeroAsc(Long empresaId, Long empreendimentoId);
+    List<Unidade> findAllByEmpresaId(Long empresaId);
     Optional<Unidade> findByIdAndEmpresaId(Long id, Long empresaId);
 }
