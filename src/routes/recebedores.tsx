@@ -279,7 +279,7 @@ function RecebedoresPage() {
             </div>
             <div>
               <Label>Tipo</Label>
-              <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as typeof novoTipo)}>
+              <Select value={novoTipo} disabled={editandoCorretorId != null} onValueChange={(v) => setNovoTipo(v as typeof novoTipo)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="socio">Sócio</SelectItem>
