@@ -220,6 +220,12 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
   const [novoClienteCpf, setNovoClienteCpf] = useState("");
   const [novoClienteEmail, setNovoClienteEmail] = useState("");
   const [novoClienteTelefone, setNovoClienteTelefone] = useState("");
+  const [cadastroCompletoAberto, setCadastroCompletoAberto] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [dadosAdicionaisCliente, setDadosAdicionaisCliente] = useState({
+    estadoCivil: "", profissao: "", cep: "", logradouro: "", numero: "",
+    complemento: "", bairro: "", cidade: "", uf: "",
+  });
   const [salvandoCliente, setSalvandoCliente] = useState(false);
   const [valorNegociado, setValorNegociado] = useState(0);
   const [corretagemCompoeTotal, setCorretagemCompoeTotal] = useState<"sim" | "nao">("sim");
@@ -272,6 +278,38 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
     };
   }, [empresaAtualId]);
 
+  const buscarCepNovoCliente = async () => {
+    const cep = dadosAdicionaisCliente.cep.replace(/\D/g, "").slice(0, 8);
+    if (cep.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const resposta = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (!resposta.ok) throw new Error("Não foi possível consultar o CEP");
+      const dados = await resposta.json() as {
+        erro?: boolean; logradouro?: string; complemento?: string;
+        bairro?: string; localidade?: string; uf?: string;
+      };
+      if (dados.erro) {
+        toast.error("CEP não encontrado");
+        return;
+      }
+      setDadosAdicionaisCliente((atual) => ({
+        ...atual,
+        cep,
+        logradouro: dados.logradouro || atual.logradouro,
+        complemento: dados.complemento || atual.complemento,
+        bairro: dados.bairro || atual.bairro,
+        cidade: dados.localidade || atual.cidade,
+        uf: dados.uf || atual.uf,
+      }));
+      toast.success("Endereço encontrado");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao consultar o CEP");
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
+
   const cadastrarClienteRapido = async () => {
     if (!empresaAtualId) {
       toast.error("Selecione uma empresa antes de cadastrar o cliente");
@@ -292,15 +330,15 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
           cpf: novoClienteCpf.trim() || null,
           email: novoClienteEmail.trim() || null,
           telefone: novoClienteTelefone.trim() || null,
-          cep: null,
-          logradouro: null,
-          numero: null,
-          complemento: null,
-          bairro: null,
-          cidade: null,
-          uf: null,
-          estadoCivil: null,
-          profissao: null,
+          cep: dadosAdicionaisCliente.cep.replace(/\D/g, "") || null,
+          logradouro: dadosAdicionaisCliente.logradouro.trim() || null,
+          numero: dadosAdicionaisCliente.numero.trim() || null,
+          complemento: dadosAdicionaisCliente.complemento.trim() || null,
+          bairro: dadosAdicionaisCliente.bairro.trim() || null,
+          cidade: dadosAdicionaisCliente.cidade.trim() || null,
+          uf: dadosAdicionaisCliente.uf.trim().toUpperCase() || null,
+          estadoCivil: dadosAdicionaisCliente.estadoCivil.trim() || null,
+          profissao: dadosAdicionaisCliente.profissao.trim() || null,
           versao: null,
         }),
       });
@@ -315,6 +353,11 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
       setNovoClienteCpf("");
       setNovoClienteEmail("");
       setNovoClienteTelefone("");
+      setDadosAdicionaisCliente({
+        estadoCivil: "", profissao: "", cep: "", logradouro: "", numero: "",
+        complemento: "", bairro: "", cidade: "", uf: "",
+      });
+      setCadastroCompletoAberto(false);
       setNovoClienteAberto(false);
       toast.success("Cliente cadastrado e selecionado");
     } catch (error) {
@@ -614,7 +657,8 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                 <p className="text-sm font-semibold">Cadastrar comprador sem sair da venda</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   O cliente será salvo no cadastro da empresa e já ficará selecionado nesta venda.
-                  Você pode completar endereço, estado civil e profissão depois em Clientes.
+                  Preencha os dados essenciais agora ou abra o cadastro completo para incluir endereço,
+                  estado civil e profissão. Tudo será salvo em Clientes da empresa.
                 </p>
               </div>
 
@@ -652,6 +696,75 @@ function NewVendaDialog({ onClose }: { onClose: () => void }) {
                     placeholder="cliente@email.com"
                   />
                 </div>
+              </div>
+
+              <div className="mt-3 border-t border-border/70 pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCadastroCompletoAberto((aberto) => !aberto)}
+                >
+                  {cadastroCompletoAberto ? "Ocultar dados adicionais" : "Preencher cadastro completo"}
+                </Button>
+                {cadastroCompletoAberto && (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-6">
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs">Estado civil</Label>
+                      <Select value={dadosAdicionaisCliente.estadoCivil || "__nao_informado__"} onValueChange={(valor) => setDadosAdicionaisCliente((d) => ({ ...d, estadoCivil: valor === "__nao_informado__" ? "" : valor }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__nao_informado__">Não informado</SelectItem>
+                          {["Solteiro(a)", "Casado(a)", "União estável", "Divorciado(a)", "Separado(a)", "Viúvo(a)"].map((estado) => (
+                            <SelectItem key={estado} value={estado}>{estado}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs">Profissão</Label>
+                      <Input value={dadosAdicionaisCliente.profissao} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, profissao: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">CEP</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={dadosAdicionaisCliente.cep.replace(/^(\d{5})(\d)/, "$1-$2")}
+                          onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, cep: e.target.value.replace(/\D/g, "").slice(0, 8) }))}
+                          onBlur={() => { if (dadosAdicionaisCliente.cep.length === 8) void buscarCepNovoCliente(); }}
+                          placeholder="00000-000"
+                        />
+                        <Button type="button" variant="outline" disabled={buscandoCep || dadosAdicionaisCliente.cep.length !== 8} onClick={() => void buscarCepNovoCliente()}>
+                          {buscandoCep ? "..." : "Buscar"}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs">Logradouro</Label>
+                      <Input value={dadosAdicionaisCliente.logradouro} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, logradouro: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <Label className="text-xs">Número</Label>
+                      <Input value={dadosAdicionaisCliente.numero} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, numero: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Complemento</Label>
+                      <Input value={dadosAdicionaisCliente.complemento} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, complemento: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Bairro</Label>
+                      <Input value={dadosAdicionaisCliente.bairro} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, bairro: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <Label className="text-xs">UF</Label>
+                      <Input maxLength={2} value={dadosAdicionaisCliente.uf} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, uf: e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2) }))} placeholder="MG" />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <Label className="text-xs">Cidade</Label>
+                      <Input value={dadosAdicionaisCliente.cidade} onChange={(e) => setDadosAdicionaisCliente((d) => ({ ...d, cidade: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-3 flex justify-end">
