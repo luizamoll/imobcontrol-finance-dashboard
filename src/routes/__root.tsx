@@ -48,6 +48,8 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const mensagem = error instanceof Error ? error.message : String(error);
+  const versaoDesatualizada = /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|unable to preload css|loading chunk .* failed|chunkloaderror/i.test(mensagem);
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
@@ -56,20 +58,26 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          Esta página não carregou
+          {versaoDesatualizada ? "Uma versão nova do ImobControl está disponível" : "Esta página não carregou"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Algo deu errado. Tente novamente ou volte ao início.
+          {versaoDesatualizada
+            ? "O navegador ainda estava usando arquivos da versão anterior. Atualize a página para carregar a versão nova."
+            : "Ocorreu uma falha ao carregar esta tela. Você pode tentar novamente ou voltar ao início."}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
+              if (versaoDesatualizada) {
+                window.location.reload();
+                return;
+              }
               router.invalidate();
               reset();
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Tentar novamente
+            {versaoDesatualizada ? "Atualizar ImobControl" : "Tentar novamente"}
           </button>
           <a
             href="/"
