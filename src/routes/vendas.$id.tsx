@@ -546,7 +546,13 @@ function VendaDetail() {
             />
             <FlowItem
               icon={Building2}
-              label="Valor efetivo do imóvel"
+              label={
+                 v.corretagemCompoeValorContrato === true
+                   ? "Valor do imóvel após comissão"
+                   : v.corretagemCompoeValorContrato === false
+                     ? "Valor do imóvel (comissão externa)"
+                     : "Valor do imóvel cadastrado"
+               }
               value={v.valorImovel == null ? "—" : brl(v.valorImovel)}
             />
             <FlowItem
@@ -632,12 +638,17 @@ function VendaDetail() {
             </div>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            Regra deste contrato: a comissão total é {v.corretorPct}% da venda ({brl(c.total)}).
-            A cada entrada ou parcela, {(v.repasseComissaoPct ?? regras.repasseComissaoPct ?? 50)}% do valor-base
-            é destinado ao corretor até atingir esse teto. Depois da quitação, os próximos recebimentos
-            geram comissão de R$ 0. Acréscimos por atraso: {(v.comissaoSobreAcrescimos ?? regras.comissaoSobreAcrescimos)
-              ? "entram na base do repasse"
-              : "não entram na base do repasse"}.
+            {v.corretagemCompoeValorContrato === false ? (
+              <>Comissão externa de {brl(c.total)}: não é descontada das parcelas desta venda.
+              O pagamento externo exige controle separado; aqui aparece como saldo não liquidado
+              enquanto não houver um lançamento próprio.</>
+            ) : (
+              <>Regra deste contrato: a comissão total é {v.corretorPct}% da venda ({brl(c.total)}).
+              A cada entrada ou parcela, {(v.repasseComissaoPct ?? regras.repasseComissaoPct ?? 50)}% do valor-base
+              é destinado ao corretor até atingir esse teto. Depois da quitação, os próximos recebimentos
+              geram comissão de R$ 0. Acréscimos por atraso: {(v.comissaoSobreAcrescimos ?? regras.comissaoSobreAcrescimos)
+                ? "entram na base do repasse" : "não entram na base do repasse"}.</>
+            )}
           </p>
         </CardContent>
       </Card>
