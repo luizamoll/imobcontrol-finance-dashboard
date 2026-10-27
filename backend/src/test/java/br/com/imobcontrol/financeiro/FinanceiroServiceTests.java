@@ -113,6 +113,94 @@ class FinanceiroServiceTests {
     }
 
     @Test
+    void comissaoIncluidaUsaPrecoContratadoESubtraiDoImovel() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento emp = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, emp);
+        Cliente cliente = criarCliente(empresa, usuario);
+        LocalDate data = LocalDate.of(2026, 10, 20);
+
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario), null,
+                vendaEconomica(emp, unidade, cliente, data,
+                        "310000.00", "294500.00", "15500.00", true)
+        );
+
+        assertDinheiro("310000.00", venda.valorTotal());
+        assertDinheiro("294500.00", venda.valorImovel());
+        assertDinheiro("15500.00", venda.corretagemValor());
+
+        ParcelaResponse parcela = service.listarParcelas(autenticacao(usuario), null).stream()
+                .filter(p -> p.vendaId().equals(venda.id())).findFirst().orElseThrow();
+        MovimentoResponse movimento = service.receber(
+                autenticacao(usuario), null, parcela.id(),
+                new RecebimentoRequest(new BigDecimal("310000.00"), data)
+        );
+        assertDinheiro("15500.00", movimento.comissaoPaga());
+    }
+
+    @Test
+    void comissaoForaNaoSaiDosRecebimentosNemAlteraValorContratado() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento emp = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, emp);
+        Cliente cliente = criarCliente(empresa, usuario);
+        LocalDate data = LocalDate.of(2026, 10, 20);
+
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario), null,
+                vendaEconomica(emp, unidade, cliente, data,
+                        "310000.00", "310000.00", "15500.00", false)
+        );
+
+        ParcelaResponse parcela = service.listarParcelas(autenticacao(usuario), null).stream()
+                .filter(p -> p.vendaId().equals(venda.id())).findFirst().orElseThrow();
+        MovimentoResponse movimento = service.receber(
+                autenticacao(usuario), null, parcela.id(),
+                new RecebimentoRequest(new BigDecimal("310000.00"), data)
+        );
+        assertDinheiro("310000.00", venda.valorTotal());
+        assertDinheiro("0.00", movimento.comissaoPaga());
+        assertDinheiro("0.00", movimento.comissaoBaseCalculo());
+    }
+
+    @Test
+    void rejeitaComissaoInconsistenteComPercentualEValorDaVenda() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento emp = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, emp);
+        Cliente cliente = criarCliente(empresa, usuario);
+        LocalDate data = LocalDate.of(2026, 10, 20);
+
+        assertThrows(ResponseStatusException.class, () -> service.criarVenda(
+                autenticacao(usuario), null,
+                vendaEconomica(emp, unidade, cliente, data,
+                        "310000.00", "310000.00", "15500.00", true)
+        ));
+    }
+
+    private VendaRequest vendaEconomica(
+            Empreendimento emp, Unidade unidade, Cliente cliente, LocalDate data,
+            String total, String valorImovel, String comissao, boolean incluida
+    ) {
+        return new VendaRequest(
+                emp.getId(), unidade.getId(), cliente.getId(),
+                new BigDecimal(total), new BigDecimal(valorImovel), new BigDecimal(comissao),
+                incluida, incluida ? "repasse_recebimentos" : "separada",
+                data, "Corretor teste", new BigDecimal("5"), new BigDecimal("50"),
+                false, null,
+                List.of(new VendaRequest.PagamentoRequest(
+                        "avista", "Pagamento integral", new BigDecimal(total),
+                        1, data, "pendente"
+                )),
+                null, null
+        );
+    }
+
+    @Test
     void recebimentoUsaSocioEParticipacaoAtuaisDoEmpreendimento() {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
