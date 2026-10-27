@@ -41,7 +41,7 @@ public class CorretorEmpresaController {
         acesso.exigirQualquer(
             usuario, PermissaoUsuario.VENDAS_CRIAR, PermissaoUsuario.VENDAS_VISUALIZAR,
             PermissaoUsuario.VENDAS_EDITAR, PermissaoUsuario.VENDAS_GERENCIAR,
-            PermissaoUsuario.CONFIGURACOES_GERENCIAR
+            PermissaoUsuario.FINANCEIRO_VISUALIZAR, PermissaoUsuario.CONFIGURACOES_GERENCIAR
         );
         var ctx = tenants.resolver(usuario, empresaId);
         return repo.findByEmpresaIdOrderByNomeAsc(ctx.empresaId())
