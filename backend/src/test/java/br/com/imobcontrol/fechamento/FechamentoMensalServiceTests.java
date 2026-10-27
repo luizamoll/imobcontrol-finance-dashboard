@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Transactional
 class FechamentoMensalServiceTests {
     @Autowired FechamentoMensalService service;
+    @Autowired FechamentoArquivoService arquivoService;
     @Autowired EmpresaRepository empresas;
     @Autowired UsuarioRepository usuarios;
     @Autowired EmpreendimentoRepository empreendimentos;
@@ -154,6 +155,10 @@ class FechamentoMensalServiceTests {
 
         var finalizado = service.consultar(auth, null, "2026-10", emp.getId());
         assertEquals(1, finalizado.glebasAdimplentes());
+        assertEquals(1, finalizado.glebasComPagamentoMes());
+        assertEquals(1, finalizado.unidades().size());
+        assertEquals("Comprador fechamento", finalizado.unidades().get(0).comprador());
+        assertTrue(finalizado.unidades().get(0).pagouNoMes());
         assertEquals(0, finalizado.glebasInadimplentes());
         dinheiro("100.00", finalizado.recebidoParcelas());
         dinheiro("200.00", finalizado.valorTotalRecebido());
@@ -162,6 +167,21 @@ class FechamentoMensalServiceTests {
         dinheiro("45.00", finalizado.valorSocio());
         dinheiro("45.00", finalizado.valorEmpreendedor());
         dinheiro("150.00", finalizado.saldoDisponivelEstimado());
+
+        // Setembro pode ser fechado, outubro ainda está em curso.
+        var arquivado = arquivoService.arquivar(
+            auth, null, new FechamentoArquivoRequest("2026-09", emp.getId())
+        );
+        dinheiro("0.00", arquivado.relatorio().custoEmpreendimento());
+        service.cadastrar(auth, null, new FechamentoLancamentoRequest(
+            emp.getId(), LocalDate.of(2026, 9, 15),
+            "CUSTO_EMPREENDIMENTO", "Nota fiscal retroativa", new BigDecimal("20.00")
+        ));
+        dinheiro("20.00", service.consultar(auth, null, "2026-09", emp.getId()).custoEmpreendimento());
+        dinheiro("0.00", arquivoService.buscar(auth, null, arquivado.id()).relatorio().custoEmpreendimento());
+        assertThrows(ResponseStatusException.class, () -> arquivoService.arquivar(
+            auth, null, new FechamentoArquivoRequest("2026-09", emp.getId())
+        ));
 
         service.estornar(auth, null, retencao.id());
         var depois = service.consultar(auth, null, "2026-10", emp.getId());
