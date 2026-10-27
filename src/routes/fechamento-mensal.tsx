@@ -285,9 +285,9 @@ function FechamentoMensalPage() {
       ["Fechamento", mes],
       ["Empresa", empresaAtual?.nome || ""],
       ["Empreendimento", empreendimento === "todos" ? "Todos" : nomeEmpreendimento(Number(empreendimento))],
-      ["Glebas com venda ativa", String(exibido.totalGlebas)],
-      ["Glebas adimplentes", String(exibido.glebasAdimplentes)],
-      ["Glebas inadimplentes", String(exibido.glebasInadimplentes)],
+      ["Unidades com contrato", String(exibido.totalGlebas)],
+      ["Unidades adimplentes", String(exibido.glebasAdimplentes)],
+      ["Unidades inadimplentes", String(exibido.glebasInadimplentes)],
       ["Unidades que pagaram no mês", String(exibido.glebasComPagamentoMes)],
       ["Valor recebido de parcelas", exibido.recebidoParcelas.toFixed(2)],
       ["Outras receitas", exibido.outrasReceitas.toFixed(2)],
@@ -865,7 +865,7 @@ function FechamentoMensalPage() {
         <section className="hidden print:block bg-white p-2 text-black">
           <header className="mb-5 border-b-2 border-black pb-3">
             <p className="text-sm font-bold tracking-wide">IMOBCONTROL | FECHAMENTO MENSAL</p>
-            <h1 className="mt-1 text-2xl font-bold">{nomeEmpreendimento(Number(empreendimento))}</h1>
+            <h1 className="mt-1 text-2xl font-bold">{empreendimento === "todos" ? "Todos os empreendimentos" : nomeEmpreendimento(Number(empreendimento))}</h1>
             <p className="text-sm">Empresa: {empresaAtual?.nome || "-"} | Referência: {mes}</p>
             <p className="mt-1 text-xs">
               {arquivoAberto
