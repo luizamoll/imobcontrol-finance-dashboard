@@ -8,6 +8,7 @@ import java.util.List;
 
 public interface VendaRepository extends JpaRepository<Venda, Long> {
     Page<Venda> findByEmpresaId(Long empresaId, Pageable pageable);
+    List<Venda> findAllByEmpresaId(Long empresaId);
     Optional<Venda> findByIdAndEmpresaId(Long id, Long empresaId);
     boolean existsByEmpresaIdAndUnidadeIdAndStatus(Long empresaId, Long unidadeId, String status);
     boolean existsByEmpresaIdAndCorretorNomeIgnoreCase(Long empresaId, String corretorNome);
