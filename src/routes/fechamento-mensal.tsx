@@ -317,6 +317,7 @@ function FechamentoMensalPage() {
 
   return (
     <PageShell>
+      <div className="print:hidden">
       <PageHeader
         eyebrow="Tesouraria e relatórios"
         title="Fechamento mensal"
@@ -326,11 +327,25 @@ function FechamentoMensalPage() {
             <Button variant="outline" size="sm" onClick={() => void carregar()} disabled={carregando}>
               <RefreshCw className={`mr-2 h-4 w-4 ${carregando ? "animate-spin" : ""}`} /> Atualizar
             </Button>
-            <Button variant="outline" size="sm" disabled={!fechamento} onClick={exportarCsv}>
+            <Button variant="outline" size="sm" disabled={!exibido} onClick={exportarCsv}>
               <Download className="mr-2 h-4 w-4" /> Exportar CSV
             </Button>
+            <Button variant="outline" size="sm" disabled={!exibido} onClick={() => window.print()}>
+              <Printer className="mr-2 h-4 w-4" /> Imprimir / salvar PDF
+            </Button>
+            {podeArquivar && !arquivoAberto && !arquivadoNesteMes && mesEncerrado && (
+              <Button size="sm" onClick={() => void arquivar()} disabled={!fechamento || empreendimento === "todos" || arquivando}>
+                <Archive className="mr-2 h-4 w-4" />
+                {arquivando ? "Arquivando..." : "Arquivar fechamento"}
+              </Button>
+            )}
+            {arquivoAberto && (
+              <Button variant="outline" size="sm" onClick={() => setArquivoAberto(null)}>
+                Ver prévia atual
+              </Button>
+            )}
             {podeLancar && (
-              <Button size="sm" onClick={abrirLancamento} disabled={empreendimento === "todos" || !empresaAtualId}>
+              <Button size="sm" onClick={abrirLancamento} disabled={empreendimento === "todos" || !empresaAtualId || !!arquivoAberto}>
                 <Plus className="mr-2 h-4 w-4" /> Novo lançamento
               </Button>
             )}
@@ -345,12 +360,12 @@ function FechamentoMensalPage() {
             type="month"
             className="mt-1"
             value={mes}
-            onChange={(e) => { if (e.target.value) setMes(e.target.value); }}
+            onChange={(e) => { if (e.target.value) { setMes(e.target.value); setArquivoAberto(null); setFormAberto(false); } }}
           />
         </div>
         <div>
           <Label>Empreendimento</Label>
-          <Select value={empreendimento} onValueChange={setEmpreendimento}>
+          <Select value={empreendimento} onValueChange={(value) => { setEmpreendimento(value); setArquivoAberto(null); setFormAberto(false); }}>
             <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os empreendimentos</SelectItem>
@@ -361,12 +376,47 @@ function FechamentoMensalPage() {
       </div>
 
       <div className="rounded-lg border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
-        <strong className="text-foreground">Critérios:</strong> adimplência conta somente unidades do tipo
-        Gleba/Gleba rural com venda atualmente ativa e com contrato até o fim do mês.
-        Uma gleba fica inadimplente quando há parcela vencida ainda não quitada até aquela data.
-        O histórico é reconstruído com os dados atuais: cancelamentos, acordos, reajustes e
-        estornos posteriores podem mudar o resultado de meses anteriores. Não é um fechamento contábil congelado.
+        <strong className="text-foreground">Critérios:</strong> inclui unidades/glebas com contrato ativo
+        ou quitado no cadastro atual. "Pagou no mês" significa que houve entrada no período;
+        "adimplente" significa não ter saldo vencido no último dia, mesmo que não tenha pago naquele mês.
+        Fechamentos em prévia são reconstruídos com os dados atuais, sujeitos a alterações retroativas.
+        Para preservar a fotografia de um mês encerrado, use "Arquivar fechamento".
       </div>
+
+      {arquivoAberto && (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
+          <strong>Visualizando fechamento arquivado #{arquivoAberto.id}</strong> —
+          referência {arquivoAberto.mes}, salvo em {new Date(arquivoAberto.criadoEm).toLocaleString("pt-BR")}.
+          Os números não mudam com atualizações posteriores.
+        </div>
+      )}
+
+      <Card className="border-border/70">
+        <CardHeader><CardTitle className="text-base">Fechamentos arquivados</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {arquivos.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Nenhum fechamento foi arquivado ainda. Um gestor pode concluir meses já encerrados.
+            </p>
+          )}
+          {arquivos.map((arquivo) => (
+            <div key={arquivo.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 py-2 text-sm">
+              <div>
+                <strong>{arquivo.mes} · {nomeEmpreendimento(arquivo.empreendimentoId)}</strong>
+                <p className="text-xs text-muted-foreground">
+                  Arquivo #{arquivo.id} · registrado em {new Date(arquivo.criadoEm).toLocaleString("pt-BR")}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => {
+                setMes(arquivo.mes);
+                setEmpreendimento(String(arquivo.empreendimentoId));
+                setFormAberto(false);
+                setArquivoAberto(arquivo);
+              }}>Abrir relatório</Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {erro && <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">{erro}</div>}
       {carregando && <p className="text-sm text-muted-foreground">Calculando indicadores...</p>}
@@ -394,6 +444,44 @@ function FechamentoMensalPage() {
             <Indicador titulo="Valores retidos" valor={brlSeguro(exibido.valorRetido)} subtitulo="Reservas não disponíveis para distribuição" />
             <Indicador titulo="Saldo disponível estimado" valor={brlSeguro(exibido.saldoDisponivelEstimado)} subtitulo="Entradas menos custos, impostos pagos, devoluções e retenções. Não representa saldo bancário." destaque />
           </div>
+
+          <Card className="border-border/70">
+            <CardHeader>
+              <CardTitle className="text-base">Unidades — pagaram e ficaram inadimplentes</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Separação entre pagamento realizado dentro do mês e situação ao encerramento.
+              </p>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Unidade</TableHead>
+                  <TableHead>Comprador</TableHead>
+                  <TableHead>Pagou no mês?</TableHead>
+                  <TableHead>Fim do mês</TableHead>
+                  <TableHead className="text-right">Recebido</TableHead>
+                  <TableHead className="text-right">Em atraso</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {exibido.unidades.length === 0 && (
+                    <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                      Nenhuma unidade com contrato ativo/quitado encontrada.
+                    </TableCell></TableRow>
+                  )}
+                  {exibido.unidades.map((u) => (
+                    <TableRow key={u.unidadeId}>
+                      <TableCell className="font-medium">{u.unidade}</TableCell>
+                      <TableCell>{u.comprador}</TableCell>
+                      <TableCell>{u.pagouNoMes ? "Sim" : "Não"}</TableCell>
+                      <TableCell>{u.inadimplenteNoFim ? "Inadimplente" : "Em dia"}</TableCell>
+                      <TableCell className="text-right">{brlSeguro(u.recebidoNoMes)}</TableCell>
+                      <TableCell className="text-right">{brlSeguro(u.saldoVencido)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
 
           <Card className="border-border/70">
             <CardHeader>
@@ -493,6 +581,94 @@ function FechamentoMensalPage() {
             </CardContent>
           </Card>
         </>
+      )}
+      </div>
+      {exibido && (
+        <section className="hidden print:block bg-white p-2 text-black">
+          <header className="mb-5 border-b-2 border-black pb-3">
+            <p className="text-sm font-bold tracking-wide">IMOBCONTROL | FECHAMENTO MENSAL</p>
+            <h1 className="mt-1 text-2xl font-bold">{nomeEmpreendimento(Number(empreendimento))}</h1>
+            <p className="text-sm">Empresa: {empresaAtual?.nome || "-"} | Referência: {mes}</p>
+            <p className="mt-1 text-xs">
+              {arquivoAberto
+                ? `Arquivo #${arquivoAberto.id} · Emitido em ${new Date(arquivoAberto.criadoEm).toLocaleString("pt-BR")} · versão arquivada`
+                : "PRÉVIA DINÂMICA — NÃO ARQUIVADA"}
+            </p>
+          </header>
+          <h2 className="mb-2 text-lg font-bold">Situação das unidades</h2>
+          <table className="mb-5 w-full border-collapse text-sm">
+            <tbody>
+              <tr><td>Total com contrato</td><td className="text-right">{exibido.totalGlebas}</td></tr>
+              <tr><td>Unidades que pagaram no mês</td><td className="text-right">{exibido.glebasComPagamentoMes}</td></tr>
+              <tr><td>Adimplentes no último dia</td><td className="text-right">{exibido.glebasAdimplentes}</td></tr>
+              <tr><td>Inadimplentes no último dia</td><td className="text-right">{exibido.glebasInadimplentes}</td></tr>
+            </tbody>
+          </table>
+          <h2 className="mb-2 text-lg font-bold">Resumo financeiro</h2>
+          <table className="mb-5 w-full border-collapse text-sm">
+            <tbody>
+              {([
+                ["Recebido em parcelas", exibido.recebidoParcelas],
+                ["Outras entradas", exibido.outrasReceitas],
+                ["Total recebido", exibido.valorTotalRecebido],
+                ["Comissão atribuída", exibido.comissaoRegistrada],
+                ["Comissão efetivamente paga", exibido.comissaoEfetivamentePaga],
+                ["Imposto reservado", exibido.impostoReservado],
+                ["Imposto efetivamente pago", exibido.impostoPago],
+                ["Custos de empreendimento", exibido.custoEmpreendimento],
+                ["Devoluções em distrato", exibido.valorDevolvidoDistrato],
+                ["Retenções e reservas", exibido.valorRetido],
+                ["Destinado ao sócio", exibido.valorSocio],
+                ["Efetivamente pago ao sócio", exibido.socioEfetivamentePago],
+                ["Destinado ao empreendedor", exibido.valorEmpreendedor],
+                ["Efetivamente pago ao empreendedor", exibido.empreendedorEfetivamentePago],
+                ["Saldo disponível estimado", exibido.saldoDisponivelEstimado],
+              ] as Array<[string, number]>).map(([nome, quantia]) =>
+                <tr key={nome} className="border-b border-neutral-200">
+                  <td className="py-1">{nome}</td>
+                  <td className="py-1 text-right tabular-nums">{brlSeguro(quantia)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <h2 className="mb-2 text-lg font-bold">Relação de unidades</h2>
+          <table className="mb-5 w-full border-collapse text-xs">
+            <thead><tr className="border-b border-black text-left">
+              <th className="py-1">Unidade</th><th>Comprador</th>
+              <th>Pagou no mês</th><th>Fim do mês</th>
+              <th className="text-right">Recebido</th><th className="text-right">Vencido</th>
+            </tr></thead>
+            <tbody>{exibido.unidades.map((u) =>
+              <tr key={u.unidadeId} className="border-b border-neutral-200">
+                <td className="py-1">{u.unidade}</td><td>{u.comprador}</td>
+                <td>{u.pagouNoMes ? "Sim" : "Não"}</td>
+                <td>{u.inadimplenteNoFim ? "Inadimplente" : "Adimplente"}</td>
+                <td className="text-right">{brlSeguro(u.recebidoNoMes)}</td>
+                <td className="text-right">{brlSeguro(u.saldoVencido)}</td>
+              </tr>
+            )}</tbody>
+          </table>
+          <h2 className="mb-2 text-lg font-bold">Despesas e outros lançamentos</h2>
+          <table className="w-full border-collapse text-xs">
+            <thead><tr className="border-b border-black text-left">
+              <th>Data</th><th>Descrição</th><th>Tipo</th>
+              <th className="text-right">Valor</th>
+            </tr></thead>
+            <tbody>{exibido.lancamentos.map((l) =>
+              <tr key={l.id} className="border-b border-neutral-200">
+                <td>{formatDate(l.data)}</td>
+                <td>{l.descricao}{l.estornado ? " (estornado)" : ""}</td>
+                <td>{tipos[l.tipo] || l.tipo}</td>
+                <td className="text-right">{brlSeguro(l.valor)}</td>
+              </tr>
+            )}</tbody>
+          </table>
+          <footer className="mt-5 border-t border-neutral-400 pt-2 text-xs">
+            Critério: valores recebidos por data efetiva; distribuídos ≠ pagos.
+            Posição histórica de adimplência reconstruída conforme dados disponíveis.
+            Arquivos mensais preservam a fotografia da apuração no momento do arquivamento.
+          </footer>
+        </section>
       )}
     </PageShell>
   );
