@@ -1,5 +1,7 @@
 package br.com.imobcontrol.fechamento;
 
+import br.com.imobcontrol.cliente.Cliente;
+import br.com.imobcontrol.cliente.ClienteRepository;
 import br.com.imobcontrol.financeiro.Movimento;
 import br.com.imobcontrol.financeiro.MovimentoRepository;
 import br.com.imobcontrol.financeiro.Parcela;
@@ -24,6 +26,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -33,7 +36,8 @@ import java.util.stream.Collectors;
 public class FechamentoMensalService {
     private static final Set<String> TIPOS = Set.of(
         "CUSTO_EMPREENDIMENTO", "IMPOSTO_PAGO", "DISTRATO_DEVOLUCAO",
-        "RETENCAO", "OUTRA_RECEITA"
+        "RETENCAO", "OUTRA_RECEITA", "COMISSAO_PAGA",
+        "REPASSE_SOCIO_PAGO", "REPASSE_EMPREENDEDOR_PAGO"
     );
     private static final BigDecimal ZERO = new BigDecimal("0.00");
 
@@ -44,6 +48,7 @@ public class FechamentoMensalService {
     private final ParcelaRepository parcelas;
     private final MovimentoRepository movimentos;
     private final FechamentoLancamentoRepository lancamentos;
+    private final ClienteRepository clientes;
 
     public FechamentoMensalService(
         TenantContextService tenants,
@@ -52,7 +57,8 @@ public class FechamentoMensalService {
         VendaRepository vendas,
         ParcelaRepository parcelas,
         MovimentoRepository movimentos,
-        FechamentoLancamentoRepository lancamentos
+        FechamentoLancamentoRepository lancamentos,
+        ClienteRepository clientes
     ) {
         this.tenants = tenants;
         this.empreendimentos = empreendimentos;
@@ -61,6 +67,7 @@ public class FechamentoMensalService {
         this.parcelas = parcelas;
         this.movimentos = movimentos;
         this.lancamentos = lancamentos;
+        this.clientes = clientes;
     }
 
     @Transactional(readOnly = true)
@@ -98,22 +105,32 @@ public class FechamentoMensalService {
         BigDecimal impostoPago = somaLancamentos(lancamentosMes, "IMPOSTO_PAGO");
         BigDecimal devolvido = somaLancamentos(lancamentosMes, "DISTRATO_DEVOLUCAO");
         BigDecimal retido = somaLancamentos(lancamentosMes, "RETENCAO");
+        BigDecimal comissaoEfetivamentePaga = somaLancamentos(lancamentosMes, "COMISSAO_PAGA");
+        BigDecimal socioEfetivamentePago = somaLancamentos(lancamentosMes, "REPASSE_SOCIO_PAGO");
+        BigDecimal empreendedorEfetivamentePago = somaLancamentos(lancamentosMes, "REPASSE_EMPREENDEDOR_PAGO");
 
         // Só movimentações reais do período entram no total recebido.
         // Retenções são reservas, não saídas de caixa: subtraímos apenas do disponível.
         BigDecimal totalRecebido = recebidoParcelas.add(outrasReceitas);
         BigDecimal disponivel = totalRecebido
-            .subtract(custo).subtract(impostoPago).subtract(devolvido).subtract(retido);
+            .subtract(custo).subtract(impostoPago).subtract(devolvido).subtract(retido)
+            .subtract(comissaoEfetivamentePaga).subtract(socioEfetivamentePago)
+            .subtract(empreendedorEfetivamentePago);
 
         List<Venda> vendasAtivas = vendas.findAllByEmpresaId(ctx.empresaId()).stream()
-            .filter(v -> "ativa".equalsIgnoreCase(v.getStatus()))
+            // Também considerar vendas quitadas: elas podem ter pago no mês.
+            .filter(v -> "ativa".equalsIgnoreCase(v.getStatus())
+                || "quitada".equalsIgnoreCase(v.getStatus()))
             .filter(v -> !v.getDataContrato().isAfter(fim))
             .filter(v -> empreendimentoId == null || empreendimentoId.equals(v.getEmpreendimentoId()))
             .toList();
-        Map<Long, Unidade> glebas = unidades.findAllByEmpresaId(ctx.empresaId()).stream()
-            .filter(u -> u.getUnidadeTipo() != null
-                && u.getUnidadeTipo().toLowerCase(Locale.ROOT).contains("gleba"))
+
+        // Abrange todas as unidades com contrato, inclusive cadastros legados sem tipo.
+        Map<Long, Unidade> unidadesPorId = unidades.findAllByEmpresaId(ctx.empresaId()).stream()
             .collect(Collectors.toMap(Unidade::getId, Function.identity()));
+        Map<Long, String> clientesPorId = clientes.findAllByEmpresaId(ctx.empresaId()).stream()
+            .collect(Collectors.toMap(Cliente::getId, Cliente::getNome));
+
         List<Parcela> todasParcelas = parcelas.findAllByEmpresaIdOrderByVencimentoAscIdAsc(ctx.empresaId());
         Map<Long, List<Parcela>> parcelasPorVenda = todasParcelas.stream()
             .collect(Collectors.groupingBy(Parcela::getVendaId));
@@ -123,25 +140,48 @@ public class FechamentoMensalService {
                 Movimento::getParcelaId,
                 Collectors.reducing(ZERO, Movimento::getValorRecebido, BigDecimal::add)
             ));
+        Map<Long, List<Movimento>> movimentosPorUnidade = filtrados.stream()
+            .collect(Collectors.groupingBy(Movimento::getUnidadeId));
 
-        // Cada gleba entra uma vez. Sem parcela vencida e não quitada até o corte,
-        // consideramos adimplente. Parcela em acordo/cancelada não é duplicada.
-        Map<Long, Boolean> situacoes = vendasAtivas.stream()
-            .filter(v -> glebas.containsKey(v.getUnidadeId()))
-            .collect(Collectors.toMap(
-                Venda::getUnidadeId,
-                v -> parcelasPorVenda.getOrDefault(v.getId(), List.of()).stream()
+        // Uma linha para cada unidade/gleba, indicando pagamento no mês e adimplência
+        // na data de corte, que são conceitos distintos.
+        List<FechamentoMensalResponse.UnidadeFechamento> unidadesFechamento = vendasAtivas.stream()
+            .filter(v -> unidadesPorId.containsKey(v.getUnidadeId()))
+            .collect(Collectors.toMap(Venda::getUnidadeId, Function.identity(),
+                (anterior, atual) -> anterior.getId() > atual.getId() ? anterior : atual))
+            .values().stream()
+            .map(v -> {
+                Unidade unidade = unidadesPorId.get(v.getUnidadeId());
+                List<Movimento> movs = movimentosPorUnidade.getOrDefault(v.getUnidadeId(), List.of());
+                BigDecimal saldoVencido = parcelasPorVenda.getOrDefault(v.getId(), List.of()).stream()
                     .filter(p -> !p.getVencimento().isAfter(fim))
                     .filter(p -> !"cancelada".equalsIgnoreCase(p.getStatus())
                         && !"em_acordo".equalsIgnoreCase(p.getStatus())
                         && !"original".equalsIgnoreCase(p.getAcordoPapel()))
-                    .anyMatch(p -> recebidoPorParcelaAteFim.getOrDefault(p.getId(), ZERO)
-                        .compareTo(p.getValor()) < 0),
-                (anterior, atual) -> anterior || atual
-            ));
+                    .map(p -> p.getValor().subtract(
+                        recebidoPorParcelaAteFim.getOrDefault(p.getId(), ZERO)).max(ZERO))
+                    .reduce(ZERO, BigDecimal::add);
+                BigDecimal recebidoMes = somaMovimentos(movs, Movimento::getValorRecebido);
+                LocalDate ultimo = movs.stream().map(Movimento::getDataMovimento)
+                    .max(LocalDate::compareTo).orElse(null);
+                return new FechamentoMensalResponse.UnidadeFechamento(
+                    unidade.getId(),
+                    unidade.getUnidade() == null || unidade.getUnidade().isBlank()
+                        ? unidade.getNumero() : unidade.getUnidade(),
+                    clientesPorId.getOrDefault(v.getClienteId(), "Cliente não localizado"),
+                    recebidoMes.compareTo(ZERO) > 0,
+                    saldoVencido.compareTo(ZERO) > 0,
+                    recebidoMes, saldoVencido, ultimo
+                );
+            })
+            .sorted(Comparator.comparing(FechamentoMensalResponse.UnidadeFechamento::unidade))
+            .toList();
 
-        int inadimplentes = (int) situacoes.values().stream().filter(Boolean::booleanValue).count();
-        int adimplentes = situacoes.size() - inadimplentes;
+        int inadimplentes = (int) unidadesFechamento.stream()
+            .filter(FechamentoMensalResponse.UnidadeFechamento::inadimplenteNoFim).count();
+        int adimplentes = unidadesFechamento.size() - inadimplentes;
+        int pagaramMes = (int) unidadesFechamento.stream()
+            .filter(FechamentoMensalResponse.UnidadeFechamento::pagouNoMes).count();
 
         var detalhes = lancamentosMes.stream()
             .map(l -> new FechamentoMensalResponse.Lancamento(
@@ -153,11 +193,12 @@ public class FechamentoMensalService {
 
         return new FechamentoMensalResponse(
             mes, empreendimentoId,
-            situacoes.size(), adimplentes, inadimplentes,
+            unidadesFechamento.size(), adimplentes, inadimplentes, pagaramMes,
             recebidoParcelas, outrasReceitas, totalRecebido,
             custo, valorSocio, valorEmpreendedor, impostoReservado,
-            impostoPago, comissaoRegistrada, devolvido, retido,
-            disponivel, detalhes
+            impostoPago, comissaoRegistrada, comissaoEfetivamentePaga,
+            socioEfetivamentePago, empreendedorEfetivamentePago,
+            devolvido, retido, disponivel, detalhes, unidadesFechamento
         );
     }
 
