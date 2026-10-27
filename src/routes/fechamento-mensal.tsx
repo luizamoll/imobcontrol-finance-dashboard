@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Download, Plus, RotateCcw, RefreshCw, Wallet } from "lucide-react";
+import { Archive, CalendarDays, Download, Plus, Printer, RotateCcw, RefreshCw, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader, PageShell } from "@/components/page-shell";
@@ -33,6 +33,9 @@ const tipos = {
   DISTRATO_DEVOLUCAO: "Valor devolvido em distrato",
   RETENCAO: "Valor retido / reservado",
   OUTRA_RECEITA: "Outra entrada recebida",
+  COMISSAO_PAGA: "Comissão efetivamente paga ao corretor",
+  REPASSE_SOCIO_PAGO: "Repasse efetivamente pago ao sócio",
+  REPASSE_EMPREENDEDOR_PAGO: "Repasse efetivamente pago à empresa",
 } as const;
 
 type TipoLancamento = keyof typeof tipos;
@@ -48,12 +51,24 @@ type Lancamento = {
   criadoEm: string;
 };
 
+type UnidadeFechamento = {
+  unidadeId: number;
+  unidade: string;
+  comprador: string;
+  pagouNoMes: boolean;
+  inadimplenteNoFim: boolean;
+  recebidoNoMes: number;
+  saldoVencido: number;
+  ultimoPagamentoMes: string | null;
+};
+
 type Fechamento = {
   mes: string;
   empreendimentoId: number | null;
   totalGlebas: number;
   glebasAdimplentes: number;
   glebasInadimplentes: number;
+  glebasComPagamentoMes: number;
   recebidoParcelas: number;
   outrasReceitas: number;
   valorTotalRecebido: number;
@@ -63,10 +78,23 @@ type Fechamento = {
   impostoReservado: number;
   impostoPago: number;
   comissaoRegistrada: number;
+  comissaoEfetivamentePaga: number;
+  socioEfetivamentePago: number;
+  empreendedorEfetivamentePago: number;
   valorDevolvidoDistrato: number;
   valorRetido: number;
   saldoDisponivelEstimado: number;
   lancamentos: Lancamento[];
+  unidades: UnidadeFechamento[];
+};
+
+type Arquivo = {
+  id: number;
+  mes: string;
+  empreendimentoId: number;
+  criadoEm: string;
+  criadoPorUsuarioId: number;
+  relatorio: Fechamento;
 };
 
 const brlSeguro = (n: number | null | undefined) => brl(Number(n || 0));
@@ -77,9 +105,13 @@ function FechamentoMensalPage() {
   const { usuario } = useAuth();
   const podeLancar = temAlgumaPermissao(usuario, ["RECEBIMENTOS_REGISTRAR", "CONFIGURACOES_GERENCIAR"]);
   const podeEstornar = temAlgumaPermissao(usuario, ["RECEBIMENTOS_ESTORNAR", "CONFIGURACOES_GERENCIAR"]);
+  const podeArquivar = temAlgumaPermissao(usuario, ["CONFIGURACOES_GERENCIAR"]);
   const [mes, setMes] = useState(() => todayISO().slice(0, 7));
   const [empreendimento, setEmpreendimento] = useState("todos");
   const [fechamento, setFechamento] = useState<Fechamento | null>(null);
+  const [arquivos, setArquivos] = useState<Arquivo[]>([]);
+  const [arquivoAberto, setArquivoAberto] = useState<Arquivo | null>(null);
+  const [arquivando, setArquivando] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
   const [formAberto, setFormAberto] = useState(false);
@@ -120,6 +152,50 @@ function FechamentoMensalPage() {
   }, [empresaAtualId, mes, empreendimento]);
 
   useEffect(() => { void carregar(); }, [carregar]);
+
+  const carregarArquivos = useCallback(async () => {
+    if (!empresaAtualId) {
+      setArquivos([]);
+      return;
+    }
+    try {
+      const lista = await apiJson<Arquivo[]>("/api/fechamento-mensal/arquivos", {
+        empresaId: empresaAtualId,
+      });
+      setArquivos(lista);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível carregar os arquivos");
+    }
+  }, [empresaAtualId]);
+
+  useEffect(() => { void carregarArquivos(); }, [carregarArquivos]);
+
+  const exibido = arquivoAberto?.relatorio ?? fechamento;
+  const arquivadoNesteMes = arquivos.some((item) =>
+    item.mes === mes && String(item.empreendimentoId) === empreendimento
+  );
+  const mesEncerrado = mes < todayISO().slice(0, 7);
+
+  const arquivar = async () => {
+    if (!empresaAtualId || empreendimento === "todos" || !fechamento || !mesEncerrado) return;
+    if (!window.confirm(
+      `Arquivar definitivamente o fechamento de ${mes} para ${nomeEmpreendimento(Number(empreendimento))}? Os números guardados não serão alterados mesmo após correções futuras.`
+    )) return;
+    setArquivando(true);
+    try {
+      const salvo = await apiJson<Arquivo>("/api/fechamento-mensal/arquivos", {
+        method: "POST", empresaId: empresaAtualId,
+        body: JSON.stringify({ mes, empreendimentoId: Number(empreendimento) }),
+      });
+      setArquivoAberto(salvo);
+      await carregarArquivos();
+      toast.success("Fechamento arquivado. Pode ser consultado ou impresso depois.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível arquivar");
+    } finally {
+      setArquivando(false);
+    }
+  };
 
   const nomeEmpreendimento = (id: number) =>
     empreendimentos.find((e) => String(e.id) === String(id))?.nome ?? `Empreendimento #${id}`;
@@ -187,36 +263,50 @@ function FechamentoMensalPage() {
   };
 
   const exportarCsv = () => {
-    if (!fechamento) return;
+    if (!exibido) return;
     const linhas: Array<[string, string]> = [
+      ["Situação do relatório", arquivoAberto ? "Arquivado em " + arquivoAberto.criadoEm : "Prévia dinâmica"],
       ["Fechamento", mes],
       ["Empresa", empresaAtual?.nome || ""],
       ["Empreendimento", empreendimento === "todos" ? "Todos" : nomeEmpreendimento(Number(empreendimento))],
-      ["Glebas com venda ativa", String(fechamento.totalGlebas)],
-      ["Glebas adimplentes", String(fechamento.glebasAdimplentes)],
-      ["Glebas inadimplentes", String(fechamento.glebasInadimplentes)],
-      ["Valor recebido de parcelas", fechamento.recebidoParcelas.toFixed(2)],
-      ["Outras receitas", fechamento.outrasReceitas.toFixed(2)],
-      ["Valor total recebido", fechamento.valorTotalRecebido.toFixed(2)],
-      ["Custo com empreendimento", fechamento.custoEmpreendimento.toFixed(2)],
-      ["Valor destinado ao sócio", fechamento.valorSocio.toFixed(2)],
-      ["Valor destinado ao empreendedor", fechamento.valorEmpreendedor.toFixed(2)],
-      ["Imposto reservado", fechamento.impostoReservado.toFixed(2)],
-      ["Imposto efetivamente pago", fechamento.impostoPago.toFixed(2)],
-      ["Comissões registradas", fechamento.comissaoRegistrada.toFixed(2)],
-      ["Valor devolvido em distrato", fechamento.valorDevolvidoDistrato.toFixed(2)],
-      ["Valor retido", fechamento.valorRetido.toFixed(2)],
-      ["Disponível estimado após saídas/reservas", fechamento.saldoDisponivelEstimado.toFixed(2)],
+      ["Glebas com venda ativa", String(exibido.totalGlebas)],
+      ["Glebas adimplentes", String(exibido.glebasAdimplentes)],
+      ["Glebas inadimplentes", String(exibido.glebasInadimplentes)],
+      ["Unidades que pagaram no mês", String(exibido.glebasComPagamentoMes)],
+      ["Valor recebido de parcelas", exibido.recebidoParcelas.toFixed(2)],
+      ["Outras receitas", exibido.outrasReceitas.toFixed(2)],
+      ["Valor total recebido", exibido.valorTotalRecebido.toFixed(2)],
+      ["Custo com empreendimento", exibido.custoEmpreendimento.toFixed(2)],
+      ["Valor destinado ao sócio", exibido.valorSocio.toFixed(2)],
+      ["Valor destinado ao empreendedor", exibido.valorEmpreendedor.toFixed(2)],
+      ["Imposto reservado", exibido.impostoReservado.toFixed(2)],
+      ["Imposto efetivamente pago", exibido.impostoPago.toFixed(2)],
+      ["Comissões atribuídas", exibido.comissaoRegistrada.toFixed(2)],
+      ["Comissões efetivamente pagas", exibido.comissaoEfetivamentePaga.toFixed(2)],
+      ["Repasses efetivos ao sócio", exibido.socioEfetivamentePago.toFixed(2)],
+      ["Repasses efetivos ao empreendedor", exibido.empreendedorEfetivamentePago.toFixed(2)],
+      ["Valor devolvido em distrato", exibido.valorDevolvidoDistrato.toFixed(2)],
+      ["Valor retido", exibido.valorRetido.toFixed(2)],
+      ["Disponível estimado após saídas/reservas", exibido.saldoDisponivelEstimado.toFixed(2)],
     ];
     const escapar = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const csv = "\uFEFF" + linhas.map(([a, b]) => `${escapar(a)};${escapar(b)}`).join("\r\n") +
       "\r\n\r\n" + ["Data", "Empreendimento", "Tipo", "Motivo", "Valor", "Situação"].join(";") +
-      "\r\n" + fechamento.lancamentos.map((l) =>
+      "\r\n" + exibido.lancamentos.map((l) =>
         [l.data, nomeEmpreendimento(l.empreendimentoId), tipos[l.tipo], l.descricao,
           Number(l.valor).toFixed(2), l.estornado ? "Estornado" : "Ativo"]
           .map(escapar).join(";")
       ).join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const detalhes = "\r\n\r\n" +
+      ["Unidade", "Comprador", "Pagou no mês", "Situação no encerramento", "Recebido no mês", "Saldo vencido", "Último pagamento no mês"]
+        .map(escapar).join(";") + "\r\n" +
+      exibido.unidades.map((u) =>
+        [u.unidade, u.comprador, u.pagouNoMes ? "Sim" : "Não",
+          u.inadimplenteNoFim ? "Inadimplente" : "Adimplente",
+          Number(u.recebidoNoMes).toFixed(2), Number(u.saldoVencido).toFixed(2),
+          u.ultimoPagamentoMes || ""].map(escapar).join(";")
+      ).join("\r\n");
+    const blob = new Blob([csv + detalhes], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -280,25 +370,29 @@ function FechamentoMensalPage() {
 
       {erro && <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">{erro}</div>}
       {carregando && <p className="text-sm text-muted-foreground">Calculando indicadores...</p>}
-      {fechamento && (
+      {exibido && (
         <>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Indicador titulo="Glebas adimplentes" valor={String(fechamento.glebasAdimplentes)} subtitulo={`de ${fechamento.totalGlebas} glebas ativas`} />
-            <Indicador titulo="Glebas inadimplentes" valor={String(fechamento.glebasInadimplentes)} subtitulo="Com pendências até o fim do mês" />
-            <Indicador titulo="Total recebido no mês" valor={brlSeguro(fechamento.valorTotalRecebido)} subtitulo="Parcelas + outras entradas efetivas" destaque />
+            <Indicador titulo="Unidades adimplentes" valor={String(exibido.glebasAdimplentes)} subtitulo={`de ${exibido.totalGlebas} unidades com contrato`} />
+            <Indicador titulo="Unidades inadimplentes" valor={String(exibido.glebasInadimplentes)} subtitulo="Com pendências até o fim do mês" />
+            <Indicador titulo="Unidades que pagaram no mês" valor={String(exibido.glebasComPagamentoMes)} subtitulo="Independente da situação no último dia" />
+            <Indicador titulo="Total recebido no mês" valor={brlSeguro(exibido.valorTotalRecebido)} subtitulo="Parcelas + outras entradas efetivas" destaque />
           </div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Indicador titulo="Recebido em parcelas" valor={brlSeguro(fechamento.recebidoParcelas)} />
-            <Indicador titulo="Outras entradas" valor={brlSeguro(fechamento.outrasReceitas)} />
-            <Indicador titulo="Custo com empreendimento" valor={brlSeguro(fechamento.custoEmpreendimento)} />
-            <Indicador titulo="Valor destinado ao sócio" valor={brlSeguro(fechamento.valorSocio)} subtitulo="Distribuição registrada, não comprova transferência" />
-            <Indicador titulo="Valor destinado ao empreendedor" valor={brlSeguro(fechamento.valorEmpreendedor)} subtitulo="Distribuição registrada, não comprova transferência" />
-            <Indicador titulo="Imposto reservado" valor={brlSeguro(fechamento.impostoReservado)} subtitulo="Previsto nos recebimentos" />
-            <Indicador titulo="Imposto efetivamente pago" valor={brlSeguro(fechamento.impostoPago)} subtitulo="Com base nos lançamentos de pagamento" />
-            <Indicador titulo="Comissão registrada" valor={brlSeguro(fechamento.comissaoRegistrada)} />
-            <Indicador titulo="Devolvido em distrato" valor={brlSeguro(fechamento.valorDevolvidoDistrato)} />
-            <Indicador titulo="Valores retidos" valor={brlSeguro(fechamento.valorRetido)} subtitulo="Reservas não disponíveis para distribuição" />
-            <Indicador titulo="Saldo disponível estimado" valor={brlSeguro(fechamento.saldoDisponivelEstimado)} subtitulo="Entradas menos custos, impostos pagos, devoluções e retenções. Não representa saldo bancário." destaque />
+            <Indicador titulo="Recebido em parcelas" valor={brlSeguro(exibido.recebidoParcelas)} />
+            <Indicador titulo="Outras entradas" valor={brlSeguro(exibido.outrasReceitas)} />
+            <Indicador titulo="Custo com empreendimento" valor={brlSeguro(exibido.custoEmpreendimento)} />
+            <Indicador titulo="Valor destinado ao sócio" valor={brlSeguro(exibido.valorSocio)} subtitulo="Distribuição registrada, não comprova transferência" />
+            <Indicador titulo="Valor destinado ao empreendedor" valor={brlSeguro(exibido.valorEmpreendedor)} subtitulo="Distribuição registrada, não comprova transferência" />
+            <Indicador titulo="Imposto reservado" valor={brlSeguro(exibido.impostoReservado)} subtitulo="Previsto nos recebimentos" />
+            <Indicador titulo="Imposto efetivamente pago" valor={brlSeguro(exibido.impostoPago)} subtitulo="Com base nos lançamentos de pagamento" />
+            <Indicador titulo="Comissão atribuída" valor={brlSeguro(exibido.comissaoRegistrada)} subtitulo="Separada dos pagamentos bancários" />
+            <Indicador titulo="Comissão efetivamente paga" valor={brlSeguro(exibido.comissaoEfetivamentePaga)} />
+            <Indicador titulo="Repasse pago ao sócio" valor={brlSeguro(exibido.socioEfetivamentePago)} />
+            <Indicador titulo="Repasse pago ao empreendedor" valor={brlSeguro(exibido.empreendedorEfetivamentePago)} />
+            <Indicador titulo="Devolvido em distrato" valor={brlSeguro(exibido.valorDevolvidoDistrato)} />
+            <Indicador titulo="Valores retidos" valor={brlSeguro(exibido.valorRetido)} subtitulo="Reservas não disponíveis para distribuição" />
+            <Indicador titulo="Saldo disponível estimado" valor={brlSeguro(exibido.saldoDisponivelEstimado)} subtitulo="Entradas menos custos, impostos pagos, devoluções e retenções. Não representa saldo bancário." destaque />
           </div>
 
           <Card className="border-border/70">
@@ -306,24 +400,26 @@ function FechamentoMensalPage() {
               <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-4 w-4" /> Reconciliação do mês</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <Linha titulo="Recebimentos de parcelas" valor={fechamento.recebidoParcelas} />
-              <Linha titulo="(+) Outras entradas" valor={fechamento.outrasReceitas} />
-              <Linha titulo="(=) Valor total recebido" valor={fechamento.valorTotalRecebido} forte />
-              <Linha titulo="(-) Custos do empreendimento" valor={fechamento.custoEmpreendimento} />
-              <Linha titulo="(-) Impostos efetivamente pagos" valor={fechamento.impostoPago} />
-              <Linha titulo="(-) Devoluções em distrato" valor={fechamento.valorDevolvidoDistrato} />
-              <Linha titulo="(-) Reservas e retenções" valor={fechamento.valorRetido} />
-              <div className="border-t pt-3"><Linha titulo="Disponível estimado" valor={fechamento.saldoDisponivelEstimado} forte /></div>
+              <Linha titulo="Recebimentos de parcelas" valor={exibido.recebidoParcelas} />
+              <Linha titulo="(+) Outras entradas" valor={exibido.outrasReceitas} />
+              <Linha titulo="(=) Valor total recebido" valor={exibido.valorTotalRecebido} forte />
+              <Linha titulo="(-) Custos do empreendimento" valor={exibido.custoEmpreendimento} />
+              <Linha titulo="(-) Impostos efetivamente pagos" valor={exibido.impostoPago} />
+              <Linha titulo="(-) Devoluções em distrato" valor={exibido.valorDevolvidoDistrato} />
+              <Linha titulo="(-) Reservas e retenções" valor={exibido.valorRetido} />
+              <Linha titulo="(-) Comissões efetivamente pagas" valor={exibido.comissaoEfetivamentePaga} />
+              <Linha titulo="(-) Repasse efetivo ao sócio" valor={exibido.socioEfetivamentePago} />
+              <Linha titulo="(-) Repasse efetivo ao empreendedor" valor={exibido.empreendedorEfetivamentePago} />
+              <div className="border-t pt-3"><Linha titulo="Disponível estimado" valor={exibido.saldoDisponivelEstimado} forte /></div>
               <p className="text-xs text-muted-foreground">
-                Os valores de sócio, empreendedor, comissão e tributos reservados são apresentados
-                separadamente: já fazem parte da distribuição dos recebimentos e não devem ser
-                subtraídos novamente desta reconciliação sem comprovar uma saída efetiva.
-                Não registre a mesma despesa duas vezes.
+                A distribuição atribuída a sócios, empreendedor e corretor não representa
+                pagamento bancário. Somente lançamentos explícitos de pagamentos efetivos
+                entram como saída; não registre uma saída duas vezes. Retenções são reservas.
               </p>
             </CardContent>
           </Card>
 
-          {formAberto && podeLancar && (
+          {formAberto && podeLancar && !arquivoAberto && (
             <Card className="border-primary/30">
               <CardHeader><CardTitle className="flex items-center gap-2 text-base"><CalendarDays className="h-4 w-4" /> Lançamento do mês</CardTitle></CardHeader>
               <CardContent className="space-y-4">
@@ -379,8 +475,8 @@ function FechamentoMensalPage() {
                   <TableHead>Situação</TableHead><TableHead className="text-right">Ações</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {fechamento.lancamentos.length === 0 && <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Ainda não há lançamentos adicionais neste mês.</TableCell></TableRow>}
-                  {fechamento.lancamentos.map((l) => <TableRow key={l.id}>
+                  {exibido.lancamentos.length === 0 && <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Ainda não há lançamentos adicionais neste mês.</TableCell></TableRow>}
+                  {exibido.lancamentos.map((l) => <TableRow key={l.id}>
                     <TableCell>{formatDate(l.data)}</TableCell>
                     <TableCell>{nomeEmpreendimento(l.empreendimentoId)}</TableCell>
                     <TableCell><div className="font-medium">{tipos[l.tipo] ?? l.tipo}</div><div className="text-xs text-muted-foreground">{l.descricao}</div></TableCell>
