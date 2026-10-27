@@ -218,6 +218,16 @@ public class FinanceiroService {
                         "A venda já possui recebimentos. Cliente, valor e parcelas não podem ser reescritos."
                 );
             }
+            // A distribuição já começou: não reclassificar retroativamente a corretagem.
+            if (!Objects.equals(atual.getValorImovel(), moedaOpcional(body.valorImovel()))
+                    || !Objects.equals(atual.getCorretagemValor(), moedaOpcional(body.corretagemValor()))
+                    || !Objects.equals(atual.getCorretagemCompoeValorContrato(), body.corretagemCompoeValorContrato())
+                    || atual.getCorretorPct().compareTo(percentual(body.corretorPct())) != 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "A venda já possui recebimentos. Valor do imóvel, comissão e modalidade não podem ser alterados."
+                );
+            }
         } else {
             validarComposicao(body);
             validarComposicaoEconomica(body);
@@ -399,10 +409,15 @@ public class FinanceiroService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal saldoComissaoAntes = maxZero(comissaoTotal.subtract(comissaoJaPaga));
         BigDecimal acrescimos = maxZero(recebido.subtract(parcela.getValor()));
-        BigDecimal baseComissao = venda.isComissaoSobreAcrescimos()
-                ? recebido
-                : recebido.min(parcela.getValor());
-        BigDecimal comissaoTeorica = porcentagem(baseComissao, venda.getRepasseComissaoPct());
+        // Comissões externas não são pagas com os recebimentos deste contrato.
+        // Modalidade nula: mantém a regra histórica para vendas antigas.
+        boolean corretagemExterna = Boolean.FALSE.equals(venda.getCorretagemCompoeValorContrato());
+        BigDecimal baseComissao = corretagemExterna
+                ? BigDecimal.ZERO
+                : venda.isComissaoSobreAcrescimos() ? recebido : recebido.min(parcela.getValor());
+        BigDecimal comissaoTeorica = corretagemExterna
+                ? BigDecimal.ZERO.setScale(2)
+                : porcentagem(baseComissao, venda.getRepasseComissaoPct());
         BigDecimal comissao = comissaoTeorica.min(saldoComissaoAntes);
         BigDecimal limiteDepoisImposto = maxZero(recebido.subtract(imposto));
         if (comissao.compareTo(limiteDepoisImposto) > 0) comissao = limiteDepoisImposto;
@@ -1331,18 +1346,25 @@ public class FinanceiroService {
     }
 
     private void validarComposicaoEconomica(VendaRequest body) {
-        BigDecimal valorImovel = moedaOpcional(body.valorImovel());
-        BigDecimal corretagem = moedaOpcional(body.corretagemValor());
-        if (Boolean.TRUE.equals(body.corretagemCompoeValorContrato())
-                && valorImovel != null
-                && corretagem != null) {
-            BigDecimal soma = moeda(valorImovel.add(corretagem));
-            if (soma.compareTo(moeda(body.valorTotal())) != 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Valor do imóvel + corretagem deve fechar com o valor total do contrato"
-                );
-            }
+        // Cadastros antigos podem ter modalidade nula; não reinterpretar dados legados.
+        if (body.corretagemCompoeValorContrato() == null) return;
+
+        BigDecimal total = moeda(body.valorTotal());
+        BigDecimal comissaoEsperada = porcentagem(total, percentual(body.corretorPct()));
+        BigDecimal imovelEsperado = Boolean.TRUE.equals(body.corretagemCompoeValorContrato())
+                ? moeda(total.subtract(comissaoEsperada))
+                : total;
+
+        BigDecimal comissaoInformada = moedaOpcional(body.corretagemValor());
+        BigDecimal imovelInformado = moedaOpcional(body.valorImovel());
+        if (comissaoInformada == null || imovelInformado == null
+                || comissaoInformada.compareTo(comissaoEsperada) != 0
+                || imovelInformado.compareTo(imovelEsperado) != 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Comissão deve ser calculada sobre o valor do contrato; "
+                    + "o valor do imóvel precisa considerar se a comissão está incluída ou cobrada fora."
+            );
         }
     }
 

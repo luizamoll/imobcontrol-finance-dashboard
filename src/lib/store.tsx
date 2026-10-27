@@ -1103,10 +1103,13 @@ export function distribuicaoPrevista(
     const regra = regrasContrato(v, emp, cfg);
     const previsto = v.valorTotal;
     const imp = previsto * (regra.aliquotaTributaria / 100);
-    const com = Math.min(
-      Math.max(0, previsto - imp),
-      v.valorTotal * ((v.corretorPct || 0) / 100),
-    );
+    // Comissões externas não consomem os recebimentos nem o líquido da venda.
+    const com = v.corretagemCompoeValorContrato === false
+      ? 0
+      : Math.min(
+          Math.max(0, previsto - imp),
+          v.valorTotal * ((v.corretorPct || 0) / 100),
+        );
     const restante = Math.max(0, previsto - imp - com);
     const totalPct = regra.socioPct + regra.empresaPct;
 
