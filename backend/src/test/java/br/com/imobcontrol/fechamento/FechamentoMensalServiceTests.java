@@ -179,8 +179,9 @@ class FechamentoMensalServiceTests {
         ));
         dinheiro("20.00", service.consultar(auth, null, "2026-09", emp.getId()).custoEmpreendimento());
         dinheiro("0.00", arquivoService.buscar(auth, null, arquivado.id()).relatorio().custoEmpreendimento());
+        Long empIdFixo = emp.getId();
         assertThrows(ResponseStatusException.class, () -> arquivoService.arquivar(
-            auth, null, new FechamentoArquivoRequest("2026-09", emp.getId())
+            auth, null, new FechamentoArquivoRequest("2026-09", empIdFixo)
         ));
 
         service.estornar(auth, null, retencao.id());
