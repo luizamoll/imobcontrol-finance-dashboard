@@ -2,141 +2,61 @@
 
 [![Backend CI](https://github.com/luizamoll/imobcontrol-finance-dashboard/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/luizamoll/imobcontrol-finance-dashboard/actions/workflows/backend-ci.yml)
 
-Sistema web para controle financeiro de empreendimentos imobiliários, com foco no acompanhamento de vendas, parcelas, recebimentos, impostos, comissões e distribuição de repasses.
+Sistema web para gestão de empreendimentos imobiliários, vendas, clientes, parcelas, recebimentos, comissões, dividendos de terceiros e fechamento mensal.
 
-O projeto nasceu de uma necessidade real de organizar regras financeiras que ficam difíceis de acompanhar em planilhas conforme aumentam o número de empreendimentos, unidades e pagamentos.
+## Estado atual — outubro/2026
 
-> **Demonstração:** nomes, CNPJs, valores, compradores, empreendimentos e demais dados exibidos no projeto são fictícios e foram criados apenas para simular cenários de uso.
+O ImobControl já possui **frontend React/TypeScript**, **API Java 21/Spring Boot**, **PostgreSQL**, autenticação e publicação da branch `production` no **Railway**. Módulos operacionais principais utilizam a API e o banco, com migrações Flyway (até a V21 na revisão documental de 28/10/2026).
 
-## Status
+**O sistema está em evolução e homologação contínua com cliente real.** Nem toda entrega publicada foi necessariamente validada em todos os cenários de negócio. Parte das configurações e compatibilidades pode continuar no navegador; verificar por módulo antes de alterar.
 
-**Interface funcional · autenticação Java/PostgreSQL ativa · dados operacionais ainda em migração**
+### Acessos do ambiente de produção
+- [Frontend ImobControl](https://imobcontrol-web-preview-production.up.railway.app/)
+- [Fechamento mensal](https://imobcontrol-web-preview-production.up.railway.app/fechamento-mensal)
+- [GitHub Actions](https://github.com/luizamoll/imobcontrol-finance-dashboard/actions)
 
-A aplicação já possui autenticação e estrutura de usuários/empresas no back-end Java com persistência em banco. O fluxo financeiro da interface continua funcional, mas empreendimentos, unidades, vendas, parcelas, recebimentos, movimentos e configurações financeiras ainda são persistidos no `localStorage` do navegador.
+## Tecnologia
+- Frontend: React 19, TypeScript, TanStack Start/Router, Vite, Tailwind CSS e Bun.
+- Backend: Java 21, Spring Boot 4.1, Spring Data JPA, validações, autorização por empresa e Flyway.
+- Banco: PostgreSQL; deploy: Railway; CI: GitHub Actions.
 
-Por isso, a versão atual é adequada para desenvolvimento e homologação, mas a migração desses dados operacionais para a API Java/PostgreSQL é requisito antes de uso produtivo com dados financeiros reais.
+## Fluxo funcional
+Empreendimentos e unidades → Clientes e corretores → Vendas → Parcelas e recebimentos → Relatórios/Fechamento Mensal.
 
-## Funcionalidades atuais
+Relatórios financeiros devem distinguir **valor previsto/atribuído** de **pagamento efetivamente realizado**. O fechamento mensal pode gerar uma prévia dinâmica e um arquivo histórico para um mês encerrado.
 
-- Dashboard com visão geral financeira
-- Cadastro e acompanhamento de empreendimentos
-- Controle de unidades e status de venda
-- Registro de vendas e composição de pagamento
-- Geração e acompanhamento de parcelas
-- Registro de recebimentos
-- Cálculo de imposto reservado
-- Controle de comissão de corretagem
-- Distribuição de valores entre empresa e sócio
-- Acompanhamento de inadimplência
-- Cadastro de recebedores
-- Configurações de percentuais, juros, mora e tolerância
-- Relatórios e acompanhamento financeiro
+## Comece pela documentação
+- **[Guia do projeto e rotina de manutenção](docs/GUIA_DO_PROJETO.md)** — índice central e método para evitar documentação repetitiva.
+- [Regras de negócio e limitações](docs/REGRAS_DE_NEGOCIO.md)
+- [Evolução resumida e PRs](docs/EVOLUCAO_RESUMIDA.md)
+- [Pendências e prioridades](docs/ROADMAP.md)
+- [Arquitetura](docs/ARQUITETURA.md)
+- [Infraestrutura/PostgreSQL](docs/PRODUCAO_POSTGRESQL.md)
+- [Etapa jurídica futura: contrato, termos e aceite](docs/PRE_LANCAMENTO_JURIDICO.md)
 
-## Regras de negócio
-
-O sistema trabalha com percentuais configuráveis por empreendimento e registra a distribuição financeira de cada recebimento.
-
-No fluxo atual, um valor recebido pode ser separado em:
-
-1. imposto reservado;
-2. comissão aplicável;
-3. saldo distribuído entre empresa e sócio conforme os percentuais do empreendimento.
-
-Também existem configurações para correção, juros, mora, dias de tolerância e formas de pagamento.
-
-## Tecnologias
-
-### Interface atual
-
-`TypeScript` · `React 19` · `TanStack Start` · `TanStack Router` · `TanStack Query` · `Vite` · `Tailwind CSS` · `Radix UI` · `React Hook Form` · `Zod` · `Recharts` · `Bun`
-
-### Back-end em construção
-
-`Java 21` · `Spring Boot 4.1` · `Spring Web` · `Bean Validation` · `Spring Boot Actuator` · `Maven`
-
-O início da API está documentado em [`backend/README.md`](backend/README.md).
-
-## Evolução da arquitetura
-
-```mermaid
-flowchart LR
-    A["Interface React + TypeScript"] --> B["API Java + Spring Boot"]
-    B --> C[("PostgreSQL")]
-    A -. "dados operacionais ainda locais" .-> D[("localStorage")]
-```
-
-Autenticação e identidade já passam pela API/banco. A próxima etapa estrutural é mover o estado operacional financeiro do navegador para serviços Java e PostgreSQL, com isolamento por empresa.
-
-## Estrutura do repositório
-
-```text
-.
-├── backend/       # API Java/Spring Boot em evolução
-├── docs/          # arquitetura e roadmap técnico
-└── src/           # aplicação web atual
-    ├── components/
-    ├── hooks/
-    ├── lib/
-    └── routes/
-```
-
-As entidades centrais incluem empreendimentos, unidades, vendas, parcelas, movimentos financeiros e configurações.
-
-## Qualidade e automação
-
-O back-end possui um workflow de **GitHub Actions** que executa os testes Maven em pull requests e alterações da `main` relacionadas à API.
-
-A intenção é ampliar essa validação conforme surgirem regras de domínio, persistência e testes unitários específicos para os cálculos financeiros.
-
-## Executando a interface
-
-Requisito: Bun instalado.
+## Desenvolvimento
+Na raiz, com Bun instalado:
 
 ```bash
 bun install
 bun run dev
-```
-
-Build de produção:
-
-```bash
 bun run build
 ```
 
-Lint:
-
-```bash
-bun run lint
-```
-
-## Executando o back-end
-
-Com Java 21 e Maven instalados:
+Backend:
 
 ```bash
 cd backend
+mvn test
 mvn spring-boot:run
 ```
 
-Endpoints iniciais:
+O backend depende da configuração correta de ambiente/banco. Consulte [backend/README.md](backend/README.md), [DEPLOY.md](DEPLOY.md) e os arquivos de configuração antes de executar.
 
-```text
-GET /api
-GET /actuator/health
-```
+## Segurança e contribuição
+- Nunca versionar senhas, variáveis sigilosas, dumps ou dados pessoais reais.
+- Abrir PR, passar CI e verificar o deploy/healthcheck antes de declarar publicação concluída.
+- Registrar aceite do cliente **separadamente** do status de teste automatizado.
+- Não reescrever histórico Git conectado ao Lovable e não modificar registros financeiros históricos sem um fluxo auditado.
 
-## Documentação
-
-- [Arquitetura e domínio](docs/ARQUITETURA.md)
-- [Roadmap técnico](docs/ROADMAP.md)
-- [Documentação do back-end](backend/README.md)
-- [Preparação para hospedagem](deploy/README.md)
-
-## Objetivo técnico
-
-Além de resolver um problema de negócio, o ImobControl é usado para praticar modelagem de domínio, regras financeiras, organização de aplicações web, testes e evolução gradual para uma arquitetura full-stack com back-end Java.
-
----
-
-**Maria Luiza Mol**  
-Análise e Desenvolvimento de Sistemas · foco em Back-end Java
+**Projeto desenvolvido por Maria Luiza Mol.**

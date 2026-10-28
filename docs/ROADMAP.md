@@ -1,56 +1,35 @@
-# Roadmap técnico — ImobControl
+# ImobControl — prioridades e pendências
 
-Este roadmap organiza a evolução do ImobControl sem apresentar como concluído o que ainda está em desenvolvimento.
+**Revisado em 28/10/2026.** Não confundir *implementado*, *publicado* e *homologado com o cliente*. Este arquivo contém apenas trabalho pendente ou que exige verificação, não a lista histórica de commits.
 
-## Concluído
+## Prioridade 1 — confiabilidade financeira
+- [ ] Homologar com o cliente um mês real do **Fechamento Mensal**: conciliar recebimentos, comissão, repasses, despesas, impostos, distratos e inadimplência com comprovantes.
+- [ ] Validar correção anual em vendas ativas e verificar impactos por empreendimento, venda e parcelas; impedir alterações retroativas incorretas.
+- [ ] Verificar recebimentos retroativos, pagamentos parciais, juros/multa e data efetiva nos relatórios.
+- [ ] Conferir tratamento de acordos, distratos, cancelamentos e vendas quitadas na carteira e nos fechamentos históricos.
+- [ ] Definir e testar fluxo de pagamento **de comissão externa** (a comissão fora do preço não é descontada das parcelas da venda).
+- [ ] Confirmar que os lançamentos de repasses efetivamente pagos não gerem dupla contagem no disponível estimado.
 
-- [x] Interface web para o fluxo financeiro de demonstração
-- [x] Organização inicial da documentação técnica
-- [x] Estrutura inicial da API com Java 21 e Spring Boot
-- [x] Endpoint básico da aplicação
-- [x] Health check com Spring Boot Actuator
-- [x] Teste de carregamento do contexto Spring
-- [x] CI do back-end com GitHub Actions
+## Prioridade 2 — operação e segurança
+- [ ] Validar cadastro completo de comprador/corretor/sócio em usuários e navegadores distintos.
+- [ ] Revisar permissões para superadmin, admin e colaborador em todas as ações críticas e relatórios.
+- [ ] Validar backups, restauração e exportação de dados com o responsável técnico.
+- [ ] Monitorar conflitos 409 e ações duplicadas; revisar casos remanescentes com logs e reprodução.
+- [ ] Revisar inconsistências entre cadastros compartilhados e configurações legadas locais.
 
-## Em andamento
+## Prioridade 3 — experiência e entrega
+- [ ] Testar a versão responsiva do fechamento no computador/celular e sua impressão/PDF com o cliente.
+- [ ] Conferir assistente de ajuda/mascote e orientar pelas telas e regras realmente existentes.
+- [ ] Criar manual objetivo do usuário e vídeo/roteiro de demonstração após estabilização.
+- [ ] Consolidar e simplificar a documentação por releases, mantendo rastreabilidade por PR.
 
-- [ ] Modelar `Empreendimento` no back-end
-- [ ] Criar o primeiro CRUD da API
-- [ ] Definir validações de entrada
-- [ ] Separar regras de aplicação e regras de domínio
+## Etapa final — jurídica e comercial (adiada intencionalmente)
+- [ ] Definir e revisar **contrato comercial** da fornecedora com a empresa contratante.
+- [ ] Definir/revisar **Termos de Uso**, aviso de privacidade/LGPD e regras de suporte.
+- [ ] **Depois** dos textos aprovados, implementar **aceite versionado no próprio software**, com registro auditável por usuário/empresa.
+- [ ] Homologar primeiro acesso, recusa, nova versão e assinatura contratual à parte.
 
-## Próxima etapa
+Checklist: [PRE_LANCAMENTO_JURIDICO.md](PRE_LANCAMENTO_JURIDICO.md).
 
-- [ ] Adicionar PostgreSQL
-- [ ] Adicionar Spring Data JPA
-- [ ] Criar migrações versionadas de banco
-- [ ] Modelar unidades e vínculos com empreendimentos
-- [ ] Criar testes de integração para persistência
-
-## Regras financeiras
-
-- [ ] Modelar vendas e composição de pagamento
-- [ ] Modelar parcelas e recebimentos
-- [ ] Levar o cálculo de imposto para o back-end
-- [ ] Levar o cálculo de comissão para o back-end
-- [ ] Implementar distribuição de repasses entre empresa e sócio
-- [ ] Criar testes unitários para cenários financeiros
-
-## Segurança e produção
-
-- [ ] Autenticação
-- [ ] Perfis de acesso e autorização
-- [ ] Auditoria de alterações financeiras
-- [ ] Tratamento padronizado de erros da API
-- [ ] Configuração de ambientes
-- [ ] Estratégia de deploy
-
-## Integração
-
-- [ ] Conectar a interface React à API Java
-- [ ] Remover gradualmente dependências do estado local para dados de negócio
-- [ ] Validar fluxos completos entre interface, API e banco
-
----
-
-O roadmap é atualizado conforme houver implementação real no repositório. Itens não devem ser marcados apenas por planejamento ou estudo teórico.
+## Entregas já publicadas
+Consultar [EVOLUCAO_RESUMIDA.md](EVOLUCAO_RESUMIDA.md). Não duplicar aqui o histórico completo.
