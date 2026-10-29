@@ -491,6 +491,66 @@ class FinanceiroServiceTests {
     }
 
     @Test
+    void editarVendaComRecebimentoEstornadoNaoApagaParcelasNemRetornaErro500() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento emp = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, emp);
+        Cliente cliente = criarCliente(empresa, usuario);
+        Authentication auth = autenticacao(usuario);
+        LocalDate data = LocalDate.of(2026, 9, 1);
+
+        var composicaoOriginal = List.of(new VendaRequest.PagamentoRequest(
+                "parcelas", "Parcela única", new BigDecimal("100.00"),
+                1, data.plusMonths(1), "pendente"
+        ));
+        VendaResponse venda = service.criarVenda(auth, null, new VendaRequest(
+                emp.getId(), unidade.getId(), cliente.getId(),
+                new BigDecimal("100.00"), data, "Corretor",
+                new BigDecimal("5"), new BigDecimal("50"),
+                false, "Observações originais", composicaoOriginal, null
+        ));
+        ParcelaResponse original = service.listarParcelas(auth, null).stream()
+                .filter(p -> p.vendaId().equals(venda.id())).findFirst().orElseThrow();
+
+        service.receber(auth, null, original.id(),
+                new RecebimentoRequest(new BigDecimal("100.00"), data.plusMonths(1)));
+        service.reverterRecebimento(auth, null, original.id());
+
+        // Agora somente há movimento estornado, que ainda referencia a parcela.
+        // Antes da correção, a edição tentava apagar a parcela e estourava SQLState 23503/HTTP 500.
+        long versao = service.detalharVenda(auth, null, venda.id()).versao();
+        ResponseStatusException conflito = assertThrows(ResponseStatusException.class, () ->
+                service.atualizarVenda(auth, null, venda.id(), new VendaRequest(
+                        emp.getId(), unidade.getId(), cliente.getId(),
+                        new BigDecimal("120.00"), data, "Corretor",
+                        new BigDecimal("5"), new BigDecimal("50"),
+                        false, "Tentativa de alterar parcelas",
+                        List.of(new VendaRequest.PagamentoRequest(
+                                "parcelas", "Parcela alterada", new BigDecimal("120.00"),
+                                1, data.plusMonths(1), "pendente"
+                        )), versao
+                )));
+        assertEquals(409, conflito.getStatusCode().value());
+
+        // Alterar apenas observações, sem recriar parcelas, continua permitido.
+        VendaResponse atualizada = service.atualizarVenda(auth, null, venda.id(), new VendaRequest(
+                emp.getId(), unidade.getId(), cliente.getId(),
+                new BigDecimal("100.00"), data, "Corretor",
+                new BigDecimal("5"), new BigDecimal("50"),
+                false, "Revisão sem mudar parcelas", composicaoOriginal, versao
+        ));
+        assertEquals("Revisão sem mudar parcelas", atualizada.observacoes());
+        ParcelaResponse preservada = service.listarParcelas(auth, null).stream()
+                .filter(p -> p.vendaId().equals(venda.id())).findFirst().orElseThrow();
+        assertEquals(original.id(), preservada.id());
+        assertEquals(1, service.listarParcelas(auth, null).stream()
+                .filter(p -> p.vendaId().equals(venda.id())).count());
+        assertThrows(ResponseStatusException.class, () ->
+                service.reverterRecebimento(auth, null, original.id()));
+    }
+
+    @Test
     void percentualFixoReajustaParcelasNoAniversarioDoContrato() throws Exception {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
