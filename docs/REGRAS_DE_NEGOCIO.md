@@ -19,6 +19,9 @@ Este é um índice de regras **observadas no código e/ou acordadas com o client
 - Correção periódica: regras podem variar por empreendimento/venda; verificar nos testes antes de prometer aplicação automática em cada cenário.
 - Acordos/renegociações: preservar parcelas originais e seu histórico, identificar parcelas em acordo e vincular novas obrigações. Não apagar histórico financeiro.
 - Bloquear concorrência/dobro de envio; conflito 409 não autoriza repetir uma operação sem verificar se ela já foi gravada.
+- **Revisão financeira após estorno integral**: somente venda ativa, com histórico de movimentos inteiramente estornados, sem acordos/reajustes nem saldo pago em parcelas. Exige permissão VENDAS_EDITAR, versão atual, motivo com pelo menos 15 caracteres e confirmação explícita.
+- A revisão não apaga parcelas nem movimentos: cancela as parcelas antigas, marca itens antigos como substituídos, cria nova composição e guarda os dados anterior/novo em registro de auditoria. Não altera comprador, unidade, empreendimento ou data original do contrato.
+- Pagamentos ainda ativos ou relações com acordos/reajustes requerem outro fluxo de ajuste: o sistema bloqueia em vez de apagar histórico.
 
 ## Fechamento mensal
 - Período e empreendimento são filtros fundamentais.
