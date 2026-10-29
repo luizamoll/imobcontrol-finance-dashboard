@@ -52,6 +52,7 @@ public class FinanceiroService {
     private final ClienteRepository clientes;
     private final UsuarioRepository usuarios;
     private final AuditoriaOperacionalRepository auditoria;
+    private final RevisaoFinanceiraVendaRepository revisoes;
     private final TenantContextService tenants;
     private final JsonMapper json;
 
@@ -68,6 +69,7 @@ public class FinanceiroService {
             ClienteRepository clientes,
             UsuarioRepository usuarios,
             AuditoriaOperacionalRepository auditoria,
+            RevisaoFinanceiraVendaRepository revisoes,
             TenantContextService tenants,
             JsonMapper json
     ) {
@@ -83,6 +85,7 @@ public class FinanceiroService {
         this.clientes = clientes;
         this.usuarios = usuarios;
         this.auditoria = auditoria;
+        this.revisoes = revisoes;
         this.tenants = tenants;
         this.json = json;
     }
@@ -274,15 +277,134 @@ public class FinanceiroService {
         return toVendaResponse(ctx.empresaId(), salva);
     }
 
+    /**
+     * Revisão excepcional após estorno integral de todos os recebimentos.
+     * Preserva tanto as parcelas como os pagamentos originais; não apaga FKs.
+     */
+    @Transactional
+    public VendaResponse revisarComposicaoFinanceira(
+            Authentication auth, Long empresaSolicitada, Long id,
+            RevisaoFinanceiraVendaRequest revisao
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Venda atual = venda(ctx.empresaId(), id);
+        VendaRequest body = revisao.venda();
+        exigirVersao(body.versao(), atual.getVersao());
+        if (!revisao.confirmarRevisao()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Confirme a revisão financeira");
+        }
+        String justificativa = texto(revisao.justificativa());
+        if (justificativa == null || justificativa.length() < 15) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Descreva a justificativa da revisão com pelo menos 15 caracteres");
+        }
+        if (!"ativa".equalsIgnoreCase(atual.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Somente vendas ativas podem passar por revisão financeira");
+        }
+        if (!Objects.equals(atual.getEmpreendimentoId(), body.empreendimentoId())
+                || !Objects.equals(atual.getUnidadeId(), body.unidadeId())
+                || !Objects.equals(atual.getClienteId(), body.clienteId())
+                || !Objects.equals(atual.getDataContrato(), body.dataContrato())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cliente, unidade, empreendimento e data do contrato não podem mudar nesta revisão");
+        }
+        if (!movimentos.existsByEmpresaIdAndVendaId(ctx.empresaId(), id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Esta venda não tem histórico de recebimentos. Utilize Editar venda");
+        }
+        if (movimentos.existsByEmpresaIdAndVendaIdAndEstornadoFalse(ctx.empresaId(), id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ainda há recebimentos ativos. Estorne-os pelo fluxo autorizado antes da revisão");
+        }
+        if (!acordos.findAllByEmpresaIdAndVendaIdOrderByDataAcordoDescIdDesc(ctx.empresaId(), id).isEmpty()
+                || !reajustesVenda.findAllByEmpresaIdAndVendaIdOrderByDataReferenciaDescIdDesc(ctx.empresaId(), id).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Há acordos ou reajustes registrados. Essa venda requer análise financeira específica");
+        }
+        List<Parcela> antigas = parcelas.findAllByEmpresaIdAndVendaIdOrderByVencimentoAscIdAsc(ctx.empresaId(), id);
+        if (antigas.stream().anyMatch(p -> p.getValorPago().signum() != 0
+                || p.getAcordoId() != null || "paga".equalsIgnoreCase(p.getStatus()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Existem parcelas com saldo pago ou vinculadas a acordo. Concilie antes de revisar");
+        }
+        validarComposicao(body);
+        validarComposicaoEconomica(body);
+        JsonNode regrasAtualizadas = aplicarInadimplencia(ler(atual.getRegrasJson()), body.regrasInadimplencia());
+        Long versaoAnterior = atual.getVersao();
+        String resumoAnterior = "Contrato " + dinheiro(atual.getValorTotal())
+                + " · composição " + resumoComposicaoAtual(ctx.empresaId(), id)
+                + " · parcelas históricas " + antigas.stream().map(p -> String.valueOf(p.getId())).toList();
+
+        // Os itens históricos e parcelas permanecem gravados, marcados como substituídos.
+        List<PagamentoItem> itensAntigos = pagamentos.findAllByEmpresaIdAndVendaIdOrderByIdAsc(ctx.empresaId(), id);
+        itensAntigos.stream().filter(p -> !"substituida_revisao".equalsIgnoreCase(p.getStatus()))
+                .forEach(p -> p.setStatus("substituida_revisao"));
+        pagamentos.saveAll(itensAntigos);
+        for (Parcela p : antigas) {
+            if (!"cancelada".equalsIgnoreCase(p.getStatus())) p.setStatus("cancelada");
+        }
+        parcelas.saveAll(antigas);
+        parcelas.flush();
+
+        atual.setValorTotal(moeda(body.valorTotal()));
+        atual.setValorImovel(moedaOpcional(body.valorImovel()));
+        atual.setCorretagemValor(moedaOpcional(body.corretagemValor()));
+        atual.setCorretagemCompoeValorContrato(body.corretagemCompoeValorContrato());
+        atual.setCorretagemFormaPagamento(texto(body.corretagemFormaPagamento()));
+        atual.setCorretorNome(texto(body.corretorNome()));
+        atual.setCorretorPct(percentual(body.corretorPct()));
+        atual.setRepasseComissaoPct(percentual(body.repasseComissaoPct()));
+        atual.setComissaoSobreAcrescimos(body.comissaoSobreAcrescimos());
+        atual.setObservacoes(texto(body.observacoes()));
+        atual.setRegrasJson(escrever(regrasAtualizadas));
+        atual.setAtualizadoPorUsuarioId(ctx.usuarioId());
+
+        Venda salva = vendas.saveAndFlush(atual);
+        criarComposicaoEParcelas(ctx.empresaId(), salva, body.composicao(), regrasAtualizadas);
+
+        RevisaoFinanceiraVenda registro = new RevisaoFinanceiraVenda();
+        registro.setEmpresaId(ctx.empresaId());
+        registro.setVendaId(id);
+        registro.setUsuarioId(ctx.usuarioId());
+        registro.setJustificativa(justificativa);
+        registro.setVersaoAnterior(versaoAnterior);
+        registro.setVersaoNova(salva.getVersao());
+        registro.setResumoAnterior(resumoAnterior);
+        registro.setResumoNovo("Contrato " + dinheiro(salva.getValorTotal())
+                + " · composição " + resumoComposicaoNova(body.composicao()));
+        revisoes.saveAndFlush(registro);
+        registrar(ctx, "VENDA", id, "REVISAO_FINANCEIRA",
+                "Revisão #" + registro.getId() + " · motivo: " + justificativa
+                        + "\nAntes: " + resumoAnterior + "\nDepois: " + registro.getResumoNovo());
+        return toVendaResponse(ctx.empresaId(), salva);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RevisaoFinanceiraVendaResponse> listarRevisoesFinanceiras(
+            Authentication auth, Long empresaSolicitada, Long vendaId
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        venda(ctx.empresaId(), vendaId);
+        return revisoes.findAllByEmpresaIdAndVendaIdOrderByIdDesc(ctx.empresaId(), vendaId)
+                .stream()
+                .map(r -> new RevisaoFinanceiraVendaResponse(
+                        r.getId(), r.getUsuarioId(),
+                        usuarios.findById(r.getUsuarioId()).map(u -> u.getNome()).orElse("Usuário #" + r.getUsuarioId()),
+                        r.getJustificativa(), r.getVersaoAnterior(), r.getVersaoNova(),
+                        r.getResumoAnterior(), r.getResumoNovo(), r.getCriadoEm()
+                ))
+                .toList();
+    }
+
     @Transactional
     public void excluirVenda(Authentication auth, Long empresaSolicitada, Long id) {
         var ctx = tenants.resolver(auth, empresaSolicitada);
         Venda atual = venda(ctx.empresaId(), id);
 
-        if (movimentos.existsByEmpresaIdAndVendaId(ctx.empresaId(), atual.getId())) {
+        if (movimentos.existsByEmpresaIdAndVendaId(ctx.empresaId(), atual.getId())
+                || !revisoes.findAllByEmpresaIdAndVendaIdOrderByIdDesc(ctx.empresaId(), atual.getId()).isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Esta venda possui histórico de recebimentos e não pode ser excluída. Reverta os recebimentos e preserve o histórico financeiro."
+                    "Esta venda possui histórico de recebimentos ou revisões e não pode ser excluída."
             );
         }
 
@@ -999,6 +1121,9 @@ public class FinanceiroService {
     ) {
         List<PagamentoItem> atual =
                 pagamentos.findAllByEmpresaIdAndVendaIdOrderByIdAsc(empresaId, vendaId);
+        atual = atual.stream()
+                .filter(p -> !"substituida_revisao".equalsIgnoreCase(p.getStatus()))
+                .toList();
         if (atual.size() != nova.size()) return false;
         for (int i = 0; i < atual.size(); i++) {
             PagamentoItem a = atual.get(i);
@@ -1166,6 +1291,7 @@ public class FinanceiroService {
         List<VendaResponse.PagamentoResponse> composicao =
                 pagamentos.findAllByEmpresaIdAndVendaIdOrderByIdAsc(empresaId, v.getId())
                         .stream()
+                        .filter(p -> !"substituida_revisao".equalsIgnoreCase(p.getStatus()))
                         .map(p -> new VendaResponse.PagamentoResponse(
                                 p.getId(), p.getTipo(), p.getDescricao(), p.getValor(),
                                 p.getParcelas(), p.getPrimeiroVencimento(), p.getStatus()
@@ -1550,6 +1676,7 @@ public class FinanceiroService {
     private String resumoComposicaoAtual(Long empresaId, Long vendaId) {
         return pagamentos.findAllByEmpresaIdAndVendaIdOrderByIdAsc(empresaId, vendaId)
                 .stream()
+                .filter(item -> !"substituida_revisao".equalsIgnoreCase(item.getStatus()))
                 .map(item -> resumoPagamento(
                         item.getTipo(),
                         item.getDescricao(),
