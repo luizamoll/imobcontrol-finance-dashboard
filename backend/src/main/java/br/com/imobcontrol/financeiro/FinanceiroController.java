@@ -97,6 +97,16 @@ public class FinanceiroController {
         return service.atualizarVenda(auth, empresaId, id, body);
     }
 
+    @GetMapping("/vendas/{id}/revisoes-financeiras/elegibilidade")
+    public RevisaoFinanceiraElegibilidade elegibilidadeRevisao(
+            Authentication auth,
+            @RequestHeader(value = "X-Empresa-Id", required = false) Long empresaId,
+            @PathVariable Long id
+    ) {
+        acesso.exigir(auth, PermissaoUsuario.VENDAS_EDITAR);
+        return service.elegibilidadeRevisao(auth, empresaId, id);
+    }
+
     @PostMapping("/vendas/{id}/revisoes-financeiras")
     @ResponseStatus(HttpStatus.CREATED)
     public VendaResponse revisarVenda(
