@@ -324,6 +324,26 @@ export async function atualizarVendaRemota(
   return vendaFromApi(salva);
 }
 
+export async function revisarVendaFinanceiraRemota(
+  empresaId: number,
+  atual: Venda,
+  patch: VendaUpdatePatch,
+  justificativa: string,
+) {
+  const { regrasInadimplencia, ...alteracoes } = patch;
+  const proxima = { ...atual, ...alteracoes };
+  const salva = await apiJson<VendaApi>(`/api/vendas/${atual.id}/revisoes-financeiras`, {
+    method: "POST",
+    empresaId,
+    body: JSON.stringify({
+      venda: vendaBody(proxima, regrasInadimplencia ?? atual.regras?.inadimplencia),
+      justificativa: justificativa.trim(),
+      confirmarRevisao: true,
+    }),
+  });
+  return vendaFromApi(salva);
+}
+
 export async function excluirVendaRemota(
   empresaId: number,
   vendaId: string,
