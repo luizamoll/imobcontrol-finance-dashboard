@@ -379,6 +379,33 @@ public class FinanceiroService {
     }
 
     @Transactional(readOnly = true)
+    public RevisaoFinanceiraElegibilidade elegibilidadeRevisao(
+            Authentication auth, Long empresaSolicitada, Long vendaId
+    ) {
+        var ctx = tenants.resolver(auth, empresaSolicitada);
+        Venda atual = venda(ctx.empresaId(), vendaId);
+        boolean historico = movimentos.existsByEmpresaIdAndVendaId(ctx.empresaId(), vendaId);
+        if (!historico) return new RevisaoFinanceiraElegibilidade(false, false,
+                "Não há histórico de recebimentos; utilize Editar venda");
+        if (!"ativa".equalsIgnoreCase(atual.getStatus())) return new RevisaoFinanceiraElegibilidade(true, false,
+                "A revisão é permitida apenas em vendas ativas");
+        if (movimentos.existsByEmpresaIdAndVendaIdAndEstornadoFalse(ctx.empresaId(), vendaId))
+            return new RevisaoFinanceiraElegibilidade(true, false,
+                    "Há recebimentos ativos. Somente após estorno integral é possível revisar");
+        if (!acordos.findAllByEmpresaIdAndVendaIdOrderByDataAcordoDescIdDesc(ctx.empresaId(), vendaId).isEmpty()
+                || !reajustesVenda.findAllByEmpresaIdAndVendaIdOrderByDataReferenciaDescIdDesc(ctx.empresaId(), vendaId).isEmpty())
+            return new RevisaoFinanceiraElegibilidade(true, false,
+                    "Há acordos ou reajustes; é necessária análise financeira específica");
+        boolean saldos = parcelas.findAllByEmpresaIdAndVendaIdOrderByVencimentoAscIdAsc(ctx.empresaId(), vendaId)
+                .stream().anyMatch(p -> p.getValorPago().signum() != 0
+                        || p.getAcordoId() != null || "paga".equalsIgnoreCase(p.getStatus()));
+        if (saldos) return new RevisaoFinanceiraElegibilidade(true, false,
+                "Há parcelas com saldo pago ou vinculadas a acordo");
+        return new RevisaoFinanceiraElegibilidade(true, true,
+                "Todos os recebimentos foram estornados. É possível revisar mediante justificativa");
+    }
+
+    @Transactional(readOnly = true)
     public List<RevisaoFinanceiraVendaResponse> listarRevisoesFinanceiras(
             Authentication auth, Long empresaSolicitada, Long vendaId
     ) {
