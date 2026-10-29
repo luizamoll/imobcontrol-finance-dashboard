@@ -190,8 +190,11 @@ public class FinanceiroService {
         }
 
         Cliente clienteAtualizado = cliente(ctx.empresaId(), body.clienteId());
-        boolean possuiRecebimentos =
-                movimentos.existsByEmpresaIdAndVendaIdAndEstornadoFalse(ctx.empresaId(), atual.getId());
+        // Inclui movimentos estornados: o estorno cancela o efeito financeiro,
+        // mas NÃO remove o histórico nem a FK movimentos.parcela_id.
+        // Recriar parcelas nesse caso causa violação fk_movimentos_parcela (HTTP 500).
+        boolean possuiHistoricoRecebimentos =
+                movimentos.existsByEmpresaIdAndVendaId(ctx.empresaId(), atual.getId());
         JsonNode regrasAtuais = ler(atual.getRegrasJson());
         JsonNode regrasAtualizadas = aplicarInadimplencia(
                 regrasAtuais,
@@ -209,13 +212,15 @@ public class FinanceiroService {
                 composicaoAlterada
         );
 
-        if (possuiRecebimentos) {
+        if (possuiHistoricoRecebimentos) {
             if (!Objects.equals(atual.getClienteId(), body.clienteId())
                     || atual.getValorTotal().compareTo(moeda(body.valorTotal())) != 0
                     || composicaoAlterada) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
-                        "A venda já possui recebimentos. Cliente, valor e parcelas não podem ser reescritos."
+                        "Esta venda já possui histórico de recebimentos, inclusive estornados. "
+                        + "Para preservar a auditoria, não é possível reescrever cliente, valor ou parcelas. "
+                        + "Você pode alterar dados não financeiros."
                 );
             }
             // A distribuição já começou: não reclassificar retroativamente a corretagem.
@@ -225,7 +230,8 @@ public class FinanceiroService {
                     || atual.getCorretorPct().compareTo(percentual(body.corretorPct())) != 0) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
-                        "A venda já possui recebimentos. Valor do imóvel, comissão e modalidade não podem ser alterados."
+                        "Esta venda possui histórico de recebimentos, inclusive estornados. "
+                        + "Valor do imóvel, comissão e modalidade não podem ser alterados diretamente."
                 );
             }
         } else {
