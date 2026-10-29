@@ -24,7 +24,7 @@ import { composicaoEconomica } from "@/lib/composicao-economica";
 import { apiJson } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { temPermissao } from "@/lib/permissoes";
-import { carregarFinanceiro, type VendaUpdatePatch } from "@/lib/financeiro-api";
+import { carregarFinanceiro, revisarVendaFinanceiraRemota, type VendaUpdatePatch } from "@/lib/financeiro-api";
 import { ParcelaStatusBadge, VendaStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import {
@@ -105,6 +105,21 @@ type PaginaClientesEdicao = {
   content: ClienteEdicao[];
 };
 
+type RevisaoElegibilidade = {
+  possuiHistoricoRecebimentos: boolean;
+  permitido: boolean;
+  motivo: string;
+};
+
+type RevisaoFinanceiraItem = {
+  id: number;
+  usuarioNome: string;
+  justificativa: string;
+  resumoAnterior: string;
+  resumoNovo: string;
+  criadoEm: string;
+};
+
 type HistoricoVendaItem = {
   id: number;
   usuarioId: number;
@@ -148,6 +163,10 @@ function VendaDetail() {
   const podeVerHistorico = temPermissao(usuario, "VENDAS_HISTORICO_VISUALIZAR");
   const navigate = Route.useNavigate();
   const [editarAberta, setEditarAberta] = useState(false);
+  const [revisaoAberta, setRevisaoAberta] = useState(false);
+  const [elegibilidade, setElegibilidade] = useState<RevisaoElegibilidade | null>(null);
+  const [revisoesFinanceiras, setRevisoesFinanceiras] = useState<RevisaoFinanceiraItem[]>([]);
+  const [salvandoRevisao, setSalvandoRevisao] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [clientes, setClientes] = useState<ClienteEdicao[]>([]);
   const [historico, setHistorico] = useState<HistoricoVendaItem[]>([]);
@@ -241,6 +260,36 @@ function VendaDetail() {
       cancelado = true;
     };
   }, [empresaAtualId, id, historicoRefresh]);
+
+  useEffect(() => {
+    if (!empresaAtualId || !podeEditarVenda) {
+      setElegibilidade(null);
+      return;
+    }
+    let cancelado = false;
+    void apiJson<RevisaoElegibilidade>(`/api/vendas/${id}/revisoes-financeiras/elegibilidade`, {
+      empresaId: empresaAtualId,
+    }).then((dados) => {
+      if (!cancelado) setElegibilidade(dados);
+    }).catch(() => {
+      if (!cancelado) setElegibilidade(null);
+    });
+    return () => { cancelado = true; };
+  }, [empresaAtualId, id, podeEditarVenda, historicoRefresh]);
+
+  useEffect(() => {
+    if (!empresaAtualId || !podeVerHistorico) {
+      setRevisoesFinanceiras([]);
+      return;
+    }
+    let cancelado = false;
+    void apiJson<RevisaoFinanceiraItem[]>(`/api/vendas/${id}/revisoes-financeiras`, {
+      empresaId: empresaAtualId,
+    }).then((dados) => {
+      if (!cancelado) setRevisoesFinanceiras(dados);
+    }).catch(() => { if (!cancelado) setRevisoesFinanceiras([]); });
+    return () => { cancelado = true; };
+  }, [empresaAtualId, id, podeVerHistorico, historicoRefresh]);
 
   const v = state.vendas.find((x) => x.id === id);
   if (!v) throw notFound();
@@ -443,6 +492,18 @@ function VendaDetail() {
                 <Pencil className="mr-1 h-3.5 w-3.5" /> Editar venda
               </Button>
             )}
+            {podeEditarVenda && elegibilidade?.possuiHistoricoRecebimentos && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!elegibilidade.permitido}
+                title={elegibilidade.motivo}
+                onClick={() => setRevisaoAberta(true)}
+              >
+                <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                Revisar composição
+              </Button>
+            )}
             {podeExcluirVenda && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -496,7 +557,7 @@ function VendaDetail() {
           venda={v}
           clientes={clientes}
           corretores={state.config.recebedores.filter((item) => item.tipo === "corretor")}
-          possuiRecebimentos={movs.length > 0}
+          possuiRecebimentos={movs.length > 0 || elegibilidade?.possuiHistoricoRecebimentos !== false}
           onSalvar={async (patch) => {
             try {
               await updateVenda(v.id, patch);
@@ -512,6 +573,67 @@ function VendaDetail() {
           onClose={() => setEditarAberta(false)}
         />
       </Dialog>
+
+      <Dialog open={revisaoAberta} onOpenChange={(open) => { if (!salvandoRevisao) setRevisaoAberta(open); }}>
+        <EditarVendaDialog
+          key={`revisao-${v.id}-${v.versao}`}
+          venda={v}
+          clientes={clientes}
+          corretores={state.config.recebedores.filter((item) => item.tipo === "corretor")}
+          possuiRecebimentos={false}
+          modoRevisao
+          salvando={salvandoRevisao}
+          onSalvar={async (patch, justificativa) => {
+            if (!empresaAtualId || !justificativa) return;
+            setSalvandoRevisao(true);
+            try {
+              await revisarVendaFinanceiraRemota(empresaAtualId, v, patch, justificativa);
+              // A operação já está gravada; falha de sincronização não autoriza repeti-la.
+              setRevisaoAberta(false);
+              toast.success("Revisão financeira registrada, parcelas anteriores preservadas");
+              try {
+                const atualizado = await carregarFinanceiro(empresaAtualId);
+                setState((atual) => ({ ...atual, ...atualizado }));
+              } catch {
+                toast.warning("Revisão salva. Atualize a página para carregar as novas parcelas.");
+              }
+              setHistoricoRefresh((valor) => valor + 1);
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Falha ao revisar venda");
+              setHistoricoRefresh((valor) => valor + 1);
+            } finally {
+              setSalvandoRevisao(false);
+            }
+          }}
+          onClose={() => setRevisaoAberta(false)}
+        />
+      </Dialog>
+
+      {podeEditarVenda && elegibilidade?.possuiHistoricoRecebimentos && !elegibilidade.permitido && (
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm">
+          <strong>Revisão financeira indisponível:</strong> {elegibilidade.motivo}
+        </div>
+      )}
+
+      {podeVerHistorico && revisoesFinanceiras.length > 0 && (
+        <Card className="border-border/70">
+          <CardHeader><CardTitle className="text-base">Revisões financeiras registradas</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {revisoesFinanceiras.map((registro) => (
+              <div key={registro.id} className="rounded-lg border border-border/70 p-3 text-sm">
+                <p className="font-medium">
+                  Revisão #{registro.id} · {registro.usuarioNome} · {formatLocalDateTime(registro.criadoEm)}
+                </p>
+                <p className="mt-1 text-muted-foreground">{registro.justificativa}</p>
+                <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                  <p><strong>Antes:</strong> {registro.resumoAnterior}</p>
+                  <p><strong>Depois:</strong> {registro.resumoNovo}</p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border/70">
         <CardContent className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-5">
@@ -1177,13 +1299,17 @@ function EditarVendaDialog({
   possuiRecebimentos,
   onSalvar,
   onClose,
+  modoRevisao = false,
+  salvando = false,
 }: {
   venda: Venda;
   clientes: ClienteEdicao[];
   corretores: Recebedor[];
   possuiRecebimentos: boolean;
-  onSalvar: (patch: VendaUpdatePatch) => void;
+  onSalvar: (patch: VendaUpdatePatch, justificativa?: string) => void;
   onClose: () => void;
+  modoRevisao?: boolean;
+  salvando?: boolean;
 }) {
   const [clienteId, setClienteId] = useState(venda.clienteId ?? "");
   const clienteSelecionado = clientes.find((cliente) => String(cliente.id) === clienteId);
@@ -1212,6 +1338,8 @@ function EditarVendaDialog({
       ...(venda.regras?.inadimplencia ?? {}),
     });
   const [observacoes, setObservacoes] = useState(venda.observacoes ?? "");
+  const [justificativaRevisao, setJustificativaRevisao] = useState("");
+  const [confirmaRevisao, setConfirmaRevisao] = useState(false);
   const [composicao, setComposicao] = useState<PagamentoItem[]>(() =>
     venda.composicao.map((item) => ({ ...item })),
   );
@@ -1261,6 +1389,15 @@ function EditarVendaDialog({
   };
 
   const salvar = () => {
+    if (salvando) return;
+    if (modoRevisao && (justificativaRevisao.trim().length < 15 || !confirmaRevisao)) {
+      toast.error("Explique o motivo (mínimo 15 caracteres) e confirme a revisão financeira.");
+      return;
+    }
+    if (modoRevisao && (clienteId !== venda.clienteId || dataContrato !== venda.dataContrato)) {
+      toast.error("O comprador e a data original do contrato não podem mudar nesta revisão.");
+      return;
+    }
     const comissao = Number(corretorPct) || 0;
     const repasse = Number(repassePct) || 0;
     if (!clienteId || !clienteSelecionado) {
@@ -1296,17 +1433,17 @@ function EditarVendaDialog({
       comissaoSobreAcrescimos: sobreAcrescimos === "sim",
       regrasInadimplencia,
       observacoes,
-    });
+    }, modoRevisao ? justificativaRevisao.trim() : undefined);
   };
 
   return (
     <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Editar venda</DialogTitle>
+        <DialogTitle>{modoRevisao ? "Revisão financeira da venda" : "Editar venda"}</DialogTitle>
         <DialogDescription>
-          Corrija comprador, corretor, comissão e regras desta venda. Valor e composição das parcelas
-          ficam bloqueados após o primeiro recebimento, mas corretor, comissão, juros, correção, multa
-          e tolerância continuam editáveis para as parcelas ainda abertas.
+          {modoRevisao
+            ? "Substitua a composição após estorno total dos recebimentos. As parcelas antigas não serão excluídas: ficam canceladas no histórico. A operação exige justificativa."
+            : "Atualize os dados da venda. Se houve recebimentos, o histórico financeiro é preservado e a composição deve ser revista pelo fluxo específico."}
         </DialogDescription>
       </DialogHeader>
 
@@ -1316,7 +1453,7 @@ function EditarVendaDialog({
           <Select
             value={clienteId}
             onValueChange={setClienteId}
-            disabled={possuiRecebimentos}
+            disabled={possuiRecebimentos || modoRevisao}
           >
             <SelectTrigger>
               <SelectValue placeholder="Selecione o cliente" />
@@ -1403,7 +1540,7 @@ function EditarVendaDialog({
         )}
         <div>
           <Label>Data do contrato</Label>
-          <Input type="date" value={dataContrato} onChange={(e) => setDataContrato(e.target.value)} />
+          <Input type="date" value={dataContrato} disabled={modoRevisao} onChange={(e) => setDataContrato(e.target.value)} />
         </div>
         <div className="sm:col-span-2">
           <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
@@ -1609,9 +1746,37 @@ function EditarVendaDialog({
         </div>
       </div>
 
+      {modoRevisao && (
+        <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+          <p className="text-sm font-semibold">Confirmação da revisão</p>
+          <p className="text-xs text-muted-foreground">
+            Os pagamentos já estornados continuarão registrados. As parcelas antigas serão
+            canceladas e novas parcelas serão criadas. Não é uma exclusão de histórico.
+          </p>
+          <Label htmlFor="motivo-revisao">Motivo da revisão (obrigatório)</Label>
+          <Textarea
+            id="motivo-revisao"
+            maxLength={1000}
+            value={justificativaRevisao}
+            onChange={(e) => setJustificativaRevisao(e.target.value)}
+            placeholder="Ex.: corrigir número de parcelas após estorno integral, conforme documento de revisão aprovado..."
+          />
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 shrink-0 accent-primary"
+              checked={confirmaRevisao}
+              onChange={(e) => setConfirmaRevisao(e.target.checked)}
+            />
+            Confirmo a substituição da composição e a preservação do histórico.
+          </label>
+        </div>
+      )}
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-        <Button onClick={salvar}>Salvar alterações</Button>
+        <Button variant="ghost" disabled={salvando} onClick={onClose}>Cancelar</Button>
+        <Button disabled={salvando} onClick={salvar}>
+          {salvando ? "Salvando..." : modoRevisao ? "Confirmar revisão financeira" : "Salvar alterações"}
+        </Button>
       </DialogFooter>
     </DialogContent>
   );

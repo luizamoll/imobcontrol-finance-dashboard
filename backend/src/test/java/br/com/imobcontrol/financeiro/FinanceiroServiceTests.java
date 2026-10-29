@@ -30,6 +30,9 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -44,6 +47,10 @@ class FinanceiroServiceTests {
     @Autowired UnidadeRepository unidades;
     @Autowired ClienteRepository clientes;
     @Autowired JsonMapper json;
+    @Autowired MovimentoRepository movimentos;
+    @Autowired ParcelaRepository parcelasRepo;
+    @Autowired PagamentoItemRepository pagamentosRepo;
+    @Autowired RevisaoFinanceiraVendaRepository revisoesRepo;
 
     @Test
     void corretorRecebeMetadeDosPagamentosAteAtingirTetoDeCincoPorCento() {
@@ -548,6 +555,75 @@ class FinanceiroServiceTests {
                 .filter(p -> p.vendaId().equals(venda.id())).count());
         assertThrows(ResponseStatusException.class, () ->
                 service.reverterRecebimento(auth, null, original.id()));
+    }
+
+    @Test
+    void revisaoFinanceiraAposEstornoPreservaHistoricoECriaNovasParcelas() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento emp = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, emp);
+        Cliente cliente = criarCliente(empresa, usuario);
+        Authentication auth = autenticacao(usuario);
+        LocalDate data = LocalDate.of(2026, 9, 1);
+        var original = List.of(new VendaRequest.PagamentoRequest(
+            "parcelas", "Original", new BigDecimal("100.00"), 1, data.plusMonths(1), "pendente"
+        ));
+        VendaResponse venda = service.criarVenda(auth, null, new VendaRequest(
+            emp.getId(), unidade.getId(), cliente.getId(),
+            new BigDecimal("100.00"), data, "Corretor", new BigDecimal("5"),
+            new BigDecimal("50"), false, null, original, null
+        ));
+        Long parcelaOriginal = service.listarParcelas(auth, null).stream()
+            .filter(p -> p.vendaId().equals(venda.id())).findFirst().orElseThrow().id();
+        service.receber(auth, null, parcelaOriginal,
+            new RecebimentoRequest(new BigDecimal("100.00"), data.plusMonths(1)));
+        var mudouComPagamentoAtivo = service.elegibilidadeRevisao(auth, null, venda.id());
+        assertFalse(mudouComPagamentoAtivo.permitido());
+        var tentativa = new RevisaoFinanceiraVendaRequest(
+            new VendaRequest(emp.getId(), unidade.getId(), cliente.getId(),
+                new BigDecimal("120.00"), data, "Corretor", new BigDecimal("5"),
+                new BigDecimal("50"), false, null,
+                List.of(new VendaRequest.PagamentoRequest("parcelas", "Nova", new BigDecimal("60.00"),
+                    2, data.plusMonths(1), "pendente")),
+                service.detalharVenda(auth, null, venda.id()).versao()),
+            "Corrigir o número de parcelas após estorno integral", true
+        );
+        var bloqueio = assertThrows(ResponseStatusException.class,
+            () -> service.revisarComposicaoFinanceira(auth, null, venda.id(), tentativa));
+        assertEquals(409, bloqueio.getStatusCode().value());
+        service.reverterRecebimento(auth, null, parcelaOriginal);
+        assertTrue(service.elegibilidadeRevisao(auth, null, venda.id()).permitido());
+
+        var corrigida = new RevisaoFinanceiraVendaRequest(
+            new VendaRequest(emp.getId(), unidade.getId(), cliente.getId(),
+                new BigDecimal("120.00"), data, "Corretor", new BigDecimal("5"),
+                new BigDecimal("50"), false, null,
+                List.of(new VendaRequest.PagamentoRequest("parcelas", "Nova", new BigDecimal("60.00"),
+                    2, data.plusMonths(1), "pendente")),
+                service.detalharVenda(auth, null, venda.id()).versao()),
+            "Corrigir o número de parcelas após estorno integral", true
+        );
+        VendaResponse depois = service.revisarComposicaoFinanceira(auth, null, venda.id(), corrigida);
+        assertEquals(0, depois.valorTotal().compareTo(new BigDecimal("120.00")));
+        assertEquals(1, depois.composicao().size());
+        assertEquals("Nova", depois.composicao().get(0).descricao());
+        var todas = parcelasRepo.findAllByEmpresaIdAndVendaIdOrderByVencimentoAscIdAsc(empresa.getId(), venda.id());
+        assertEquals(3, todas.size());
+        assertEquals("cancelada", parcelasRepo.findById(parcelaOriginal).orElseThrow().getStatus());
+        assertEquals(2, todas.stream().filter(p -> "pendente".equals(p.getStatus())).count());
+        assertTrue(movimentos.existsByEmpresaIdAndVendaId(empresa.getId(), venda.id()));
+        assertFalse(movimentos.existsByEmpresaIdAndVendaIdAndEstornadoFalse(empresa.getId(), venda.id()));
+        assertEquals(1, revisoesRepo.findAllByEmpresaIdAndVendaIdOrderByIdDesc(empresa.getId(), venda.id()).size());
+        assertEquals(1, service.listarRevisoesFinanceiras(auth, null, venda.id()).size());
+
+        var lancamentos = pagamentosRepo.findAllByEmpresaIdAndVendaIdOrderByIdAsc(empresa.getId(), venda.id());
+        assertTrue(lancamentos.stream().anyMatch(p -> "substituida_revisao".equals(p.getStatus())));
+        assertTrue(lancamentos.stream().anyMatch(p -> "pendente".equals(p.getStatus())));
+        // A revisão confirma uma única vez; request idempotente não é uma nova revisão.
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+            () -> service.revisarComposicaoFinanceira(auth, null, venda.id(), corrigida)
+        ).getStatusCode().value());
     }
 
     @Test

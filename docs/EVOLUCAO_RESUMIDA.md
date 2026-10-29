@@ -14,6 +14,8 @@ Histórico **por entregas agrupadas**, não transcrição de chat. PRs e commits
 
 | 29/10 — [PR #28](https://github.com/luizamoll/imobcontrol-finance-dashboard/pull/28) | Corrige HTTP 500 ao editar vendas com recebimentos estornados; preserva parcelas e movimentos ligados por FK | Teste de regressão reproduz receber → estornar → editar; mudança estrutural bloqueada com 409 explicativo, sem apagar histórico |
 
+| 29/10 — revisão financeira [PR #29](https://github.com/luizamoll/imobcontrol-finance-dashboard/pull/29) | Novo fluxo seguro para revisar a composição após estorno integral, com justificativa, confirmação e histórico persistente | Testes de regressão para bloqueio com pagamento ativo e preservação de parcelas/movimentos; homologação de caso real pendente |
+
 ## Como manter
 Uma nova linha somente para **entrega relevante**, com data, PR, efeito, status de teste e limitação ainda conhecida. Correções pequenas na mesma entrega podem ser agrupadas.
 
