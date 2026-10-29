@@ -12,6 +12,8 @@ Histórico **por entregas agrupadas**, não transcrição de chat. PRs e commits
 | 27/10 — [PR #24](https://github.com/luizamoll/imobcontrol-finance-dashboard/pull/24) | Detalhamento por unidade, impressão e arquivo mensal imutável, com distinção atribuído/pago | Snapshot somente após mês encerrado; conferir antes de arquivar |
 | 27/10 — [PR #25](https://github.com/luizamoll/imobcontrol-finance-dashboard/pull/25) | Redesenho responsivo do fechamento: resumo, unidades, lançamentos, arquivados | Alteração de interface; sem alteração planejada dos cálculos |
 
+| 29/10 — [PR #28](https://github.com/luizamoll/imobcontrol-finance-dashboard/pull/28) | Corrige HTTP 500 ao editar vendas com recebimentos estornados; preserva parcelas e movimentos ligados por FK | Teste de regressão reproduz receber → estornar → editar; mudança estrutural bloqueada com 409 explicativo, sem apagar histórico |
+
 ## Como manter
 Uma nova linha somente para **entrega relevante**, com data, PR, efeito, status de teste e limitação ainda conhecida. Correções pequenas na mesma entrega podem ser agrupadas.
 
