@@ -1,4 +1,5 @@
 import express from 'express';
+import { registerClientesWrites } from './clientes.js';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
@@ -182,6 +183,8 @@ app.get('/api/clientes/:id', exigirLogin, handler(async (req, res) => {
   if (!rows.length) throw bad(404, 'Cliente nao encontrado');
   res.json(toCliente(rows[0]));
 }));
+
+registerClientesWrites(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad, toCliente, colunas });
 
 app.get('/health', handler(async (req, res) => {
   await db.query('SELECT 1');
