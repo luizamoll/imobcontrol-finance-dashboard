@@ -287,12 +287,12 @@ export function registerVendasWrite(app,{db,exigirLogin,empresaAutorizada,exigir
       }
       await conn.execute(
         "UPDATE unidades SET status = 'vendido', versao = versao + 1, "
-        + 'atualizado_por_usuario_id = ?, atualizado_em = UTC_TIMESTAMP() '
+        + 'atualizado_por_usuario_id = ?, atualizado_em = CURRENT_TIMESTAMP '
         + 'WHERE id = ? AND empresa_id = ?', [req.usuario.id,body.unidadeId,empresa]
       );
       await conn.execute(
         "INSERT INTO auditoria_operacional (empresa_id,usuario_id,entidade,entidade_id,acao,criado_em) "
-        + "VALUES (?,?,'VENDA',?,'CRIACAO',UTC_TIMESTAMP())",
+        + "VALUES (?,?,'VENDA',?,'CRIACAO',CURRENT_TIMESTAMP)",
         [empresa,req.usuario.id,vendaId]
       );
       const [saved]=await conn.execute(
