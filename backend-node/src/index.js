@@ -6,33 +6,18 @@ import { registerEmpresaConfig } from './empresa-config.js';
 import { registerFinanceiroRead } from './financeiro-read.js';
 import { registerRecebimentos } from './recebimentos.js';
 import { registerVendasWrite } from './vendas-write.js';
-import mysql from 'mysql2/promise';
+import { createDatabase } from './postgres.js';
 import bcrypt from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
-for (const key of ['DB_HOST', 'DB_USER', 'DB_NAME', 'SESSION_SECRET']) {
-  if (!process.env[key]) throw new Error('Falta variavel de ambiente: ' + key);
-}
+if (!process.env.SESSION_SECRET) throw new Error('SESSION_SECRET nao configurado');
 if (process.env.SESSION_SECRET.length < 32) throw new Error('SESSION_SECRET deve ter pelo menos 32 caracteres');
 if (process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'true') {
   throw new Error('Em producao, COOKIE_SECURE=true exige HTTPS.');
 }
 
-const db = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 8,
-  timezone: 'Z',
-  dateStrings: true,
-  decimalNumbers: false,
-  supportBigNumbers: true,
-  bigNumberStrings: false
-});
+const db = createDatabase();
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -112,7 +97,7 @@ app.post('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, sta
   if (!ativo(usuario)) throw bad(401, 'E-mail ou senha invalidos');
 
   const token = randomBytes(32).toString('hex');
-  await db.execute('INSERT INTO node_sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 12 HOUR))', [sha(token), usuario.id]);
+  await db.execute('INSERT INTO node_sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, (CURRENT_TIMESTAMP + INTERVAL '12 hours'))', [sha(token), usuario.id]);
   res.cookie('imob_session', token, { ...COOKIE_OPTS, maxAge: 12 * 3600 * 1000 });
   res.json(await dadosUsuario(usuario));
 }));
@@ -122,7 +107,7 @@ async function exigirLogin(req, res, next) {
     const token = cookie(req, 'imob_session');
     if (!token || !/^[0-9a-f]{64}$/.test(token)) return next(bad(401, 'Nao autenticado'));
     const [rows] = await db.execute(
-      'SELECT usuario_id FROM node_sessoes WHERE token_hash = ? AND expira_em > UTC_TIMESTAMP() LIMIT 1',
+      'SELECT usuario_id FROM node_sessoes WHERE token_hash = ? AND expira_em > CURRENT_TIMESTAMP LIMIT 1',
       [sha(token)]);
     if (!rows.length) return next(bad(401, 'Sessao expirada'));
     const usuario = await usuarioPorId(rows[0].usuario_id);
@@ -148,7 +133,7 @@ async function empresaAutorizada(req) {
   if (header != null && (!Number.isSafeInteger(solicitada) || solicitada <= 0)) throw bad(400, 'Empresa invalida');
   if (u.perfil === 'SUPER_ADMIN') {
     if (solicitada == null) throw bad(400, 'Selecione uma empresa');
-    const [rows] = await db.execute('SELECT id FROM empresas WHERE id = ? AND ativa = 1', [solicitada]);
+    const [rows] = await db.execute('SELECT id FROM empresas WHERE id = ? AND ativa = TRUE', [solicitada]);
     if (!rows.length) throw bad(404, 'Empresa nao encontrada');
     return solicitada;
   }
@@ -208,7 +193,7 @@ app.get('/actuator/health', handler(async (req, res) => {
 }));
 app.use('/api', (req, res) => res.status(501).json({ erro: 'Modulo ainda nao migrado para Node.js' }));
 app.use((err, req, res, next) => {
-  const status = err.status || (err.code === 'ER_DUP_ENTRY' ? 409 : 500);
+  const status = err.status || (err.code === '23505' ? 409 : 500);
   if (status >= 500) console.error('Erro da API:', err.message);
   res.status(status).json({ erro: status === 500 ? 'Erro interno do servidor' : (err.message || 'Operacao nao concluida') });
 });
