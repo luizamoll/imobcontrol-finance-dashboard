@@ -1,5 +1,6 @@
 import express from 'express';
 import { registerClientesWrites } from './clientes.js';
+import { registerCatalogoRead } from './catalogo.js';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
@@ -185,6 +186,7 @@ app.get('/api/clientes/:id', exigirLogin, handler(async (req, res) => {
 }));
 
 registerClientesWrites(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad, toCliente, colunas });
+registerCatalogoRead(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 
 app.get('/health', handler(async (req, res) => {
   await db.query('SELECT 1');
