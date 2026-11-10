@@ -97,7 +97,7 @@ app.post('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, sta
   if (!ativo(usuario)) throw bad(401, 'E-mail ou senha invalidos');
 
   const token = randomBytes(32).toString('hex');
-  await db.execute('INSERT INTO node_sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, (CURRENT_TIMESTAMP + INTERVAL '12 hours'))', [sha(token), usuario.id]);
+  await db.execute("INSERT INTO node_sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, (CURRENT_TIMESTAMP + INTERVAL '12 hours'))", [sha(token), usuario.id]);
   res.cookie('imob_session', token, { ...COOKIE_OPTS, maxAge: 12 * 3600 * 1000 });
   res.json(await dadosUsuario(usuario));
 }));
