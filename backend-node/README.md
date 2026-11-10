@@ -10,16 +10,19 @@ Objetivo: manter o frontend React/TanStack Start e substituir gradualmente o bac
 - Login com hashes BCrypt existentes do Java, sessao armazenada no MySQL e cookie HttpOnly
 - Endpoint de usuario atual, logout e token CSRF
 - Separacao por empresa, verificacao de perfil e permissoes
-- **Leitura** de clientes com paginacao e busca individual
+- Clientes: listar, detalhar, cadastrar e atualizar (validacao de CPF/CEP, versao otimista e auditoria)
+- Catalogo: listar/detalhar empreendimentos, listar quadras e unidades
+- Financeiro: leitura de vendas/composicoes, parcelas e movimentos nao estornados
 - Endpoints `/health` e `/actuator/health`
+- Testes de contrato em `test/` e CI via GitHub Actions (`npm test` e `npm run check`)
 
-Nao foram migrados ainda cadastro/edicao de clientes, financeiro, vendas, parcelas, empreendimentos, unidades, quadras, recebimentos, administracao, e-mails e os demais endpoints. Rotas ausentes retornam 501 (e nao devem ser usadas em producao).
+Ainda faltam: cadastro/edicao de vendas, parcelas e empreendimentos, baixa/estorno de recebimentos, calculos de comissao e juros, administracao, recuperacao de senha, e-mails e outros endpoints. Leituras financeiras estao disponiveis, mas nao foram comparadas a uma base MySQL real. Rotas ausentes retornam 501. NAO usar em producao.
 
 ## Como testar em ambiente de desenvolvimento
 
 1. Criar **MySQL de testes**, nunca sobrescrever producao.
 2. Migrar esquema e dados do PostgreSQL para MySQL com um processo validado (os CSVs so fornecem dados, nao criam a estrutura).
-3. Depois de existir a tabela `usuarios`, executar `sql/01_node_sessoes.sql`.
+3. Depois de existir a tabela `usuarios`, executar `sql/01_node_sessoes.sql` (nao reutilizar sessoes antigas).
 4. Definir as variaveis de `.env.example` no ambiente do processo (o arquivo .env nao e carregado automaticamente).
 5. Executar `npm install` e `npm start` dentro de `backend-node`.
 6. Conferir `GET /health`, `POST /api/auth/login`, `GET /api/auth/me`, `GET /api/clientes?pagina=0&tamanho=20`.
@@ -41,3 +44,13 @@ O `imobcontrol-railway.dump` existente e um backup **PostgreSQL custom**, nao um
 ## Hostinger
 
 Em novembro de 2026, a Hostinger oferece Node.js gerenciado em planos Business e Cloud, com MySQL. Confirmar o plano contratado e as instrucoes de implantacao no hPanel. O frontend atual usa TanStack Start com Node: conferir suporte ao build antes da troca final. Manter o Java/Railway intocado ate a homologacao.
+
+## Testes automatizados
+
+```bash
+cd backend-node
+npm test
+npm run check
+```
+
+Eles verificam contratos e sintaxe, nao substituem testes de integracao com MySQL nem a conciliacao de valores monetarios.
