@@ -2,6 +2,7 @@ import express from 'express';
 import { registerClientesWrites } from './clientes.js';
 import { registerCatalogoRead } from './catalogo.js';
 import { registerCatalogoWrites } from './catalogo-write.js';
+import { registerEmpresaConfig } from './empresa-config.js';
 import { registerFinanceiroRead } from './financeiro-read.js';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
@@ -190,6 +191,7 @@ app.get('/api/clientes/:id', exigirLogin, handler(async (req, res) => {
 registerClientesWrites(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad, toCliente, colunas });
 registerCatalogoRead(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 registerCatalogoWrites(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
+registerEmpresaConfig(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 registerFinanceiroRead(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 
 app.get('/health', handler(async (req, res) => {
