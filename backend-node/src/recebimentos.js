@@ -188,7 +188,7 @@ export function registerRecebimentos(app, { db, exigirLogin, empresaAutorizada, 
         if (D(recebido).lte(0)) throw bad(400, 'Valor recebido deve ser positivo');
         const [pagos] = await conn.execute(
           'SELECT COALESCE(SUM(comissao_paga),0) AS total FROM movimentos '
-          + 'WHERE venda_id = ? AND empresa_id = ? AND estornado = 0',
+          + 'WHERE venda_id = ? AND empresa_id = ? AND estornado = FALSE',
           [venda.id, empresa]
         );
         const distribuicao = calcularDistribuicao({
@@ -219,7 +219,7 @@ export function registerRecebimentos(app, { db, exigirLogin, empresaAutorizada, 
         const [insert] = await conn.execute(sql, vals);
         await conn.execute(
           "UPDATE parcelas SET valor_pago = ?, data_pagamento = ?, status = 'paga', "
-          + 'versao = versao + 1, atualizado_em = UTC_TIMESTAMP() '
+          + 'versao = versao + 1, atualizado_em = CURRENT_TIMESTAMP '
           + 'WHERE id = ? AND empresa_id = ?',
           [recebido, data, parcela.id, empresa]
         );
@@ -230,13 +230,13 @@ export function registerRecebimentos(app, { db, exigirLogin, empresaAutorizada, 
         );
         if (Number(pendentes[0].total) === 0) await conn.execute(
           "UPDATE vendas SET status = 'quitada', versao = versao + 1, "
-          + 'atualizado_por_usuario_id = ?, atualizado_em = UTC_TIMESTAMP() '
+          + 'atualizado_por_usuario_id = ?, atualizado_em = CURRENT_TIMESTAMP '
           + 'WHERE id = ? AND empresa_id = ?',
           [req.usuario.id, venda.id, empresa]
         );
         await conn.execute(
           "INSERT INTO auditoria_operacional (empresa_id, usuario_id, entidade, entidade_id, acao, criado_em) "
-          + "VALUES (?, ?, 'PARCELA', ?, 'RECEBIMENTO', UTC_TIMESTAMP())",
+          + "VALUES (?, ?, 'PARCELA', ?, 'RECEBIMENTO', CURRENT_TIMESTAMP)",
           [empresa, req.usuario.id, parcela.id]
         );
         const [rows] = await conn.execute(
@@ -258,28 +258,28 @@ export function registerRecebimentos(app, { db, exigirLogin, empresaAutorizada, 
       async (conn, empresa, parcela, venda) => {
         const [rows] = await conn.execute(
           'SELECT id FROM movimentos WHERE empresa_id = ? AND parcela_id = ? '
-          + 'AND estornado = 0 ORDER BY id DESC LIMIT 1 FOR UPDATE', [empresa,id]
+          + 'AND estornado = FALSE ORDER BY id DESC LIMIT 1 FOR UPDATE', [empresa,id]
         );
         if (!rows.length) throw bad(404, 'Nenhum recebimento ativo encontrado');
         await conn.execute(
-          'UPDATE movimentos SET estornado = 1, estornado_em = UTC_TIMESTAMP(), '
-          + 'estornado_por_usuario_id = ? WHERE id = ? AND empresa_id = ? AND estornado = 0',
+          'UPDATE movimentos SET estornado = TRUE, estornado_em = CURRENT_TIMESTAMP, '
+          + 'estornado_por_usuario_id = ? WHERE id = ? AND empresa_id = ? AND estornado = FALSE',
           [req.usuario.id, rows[0].id, empresa]
         );
         await conn.execute(
           'UPDATE parcelas SET valor_pago = 0, data_pagamento = NULL, status = ?, '
-          + 'versao = versao + 1, atualizado_em = UTC_TIMESTAMP() '
+          + 'versao = versao + 1, atualizado_em = CURRENT_TIMESTAMP '
           + 'WHERE id = ? AND empresa_id = ?',
           [hojeBrasil() > parcela.vencimento ? 'vencida' : 'pendente', id, empresa]
         );
         if (venda.status === 'quitada') await conn.execute(
           "UPDATE vendas SET status = 'ativa', versao = versao + 1, "
-          + 'atualizado_por_usuario_id = ?, atualizado_em = UTC_TIMESTAMP() '
+          + 'atualizado_por_usuario_id = ?, atualizado_em = CURRENT_TIMESTAMP '
           + 'WHERE id = ? AND empresa_id = ?', [req.usuario.id,venda.id,empresa]
         );
         await conn.execute(
           "INSERT INTO auditoria_operacional (empresa_id,usuario_id,entidade,entidade_id,acao,criado_em) "
-          + "VALUES (?, ?, 'PARCELA', ?, 'RECEBIMENTO_ESTORNADO', UTC_TIMESTAMP())",
+          + "VALUES (?, ?, 'PARCELA', ?, 'RECEBIMENTO_ESTORNADO', CURRENT_TIMESTAMP)",
           [empresa,req.usuario.id,id]
         );
       }
