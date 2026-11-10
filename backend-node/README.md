@@ -13,10 +13,14 @@ Objetivo: manter o frontend React/TanStack Start e substituir gradualmente o bac
 - Clientes: listar, detalhar, cadastrar e atualizar (validacao de CPF/CEP, versao otimista e auditoria)
 - Catalogo: listar/detalhar empreendimentos, listar quadras e unidades
 - Financeiro: leitura de vendas/composicoes, parcelas e movimentos nao estornados
+- Financeiro: **criar vendas** com composicoes, parcelas, reajuste fixo, protecao da unidade e auditoria
+- Recebimentos: **baixar e estornar parcelas**, data retroativa, multa/juros/correcao, distribuiçao de imposto, comissao e socios
+- Calculo monetario com `decimal.js` e transacoes/locks MySQL para impedir baixa simultanea e ultrapassar teto de comissao
+- Perfil e configuracoes da empresa: consulta/edicao com validacoes e versao
 - Endpoints `/health` e `/actuator/health`
 - Testes de contrato em `test/` e CI via GitHub Actions (`npm test` e `npm run check`)
 
-Ainda faltam: cadastro/edicao de vendas, parcelas e empreendimentos, baixa/estorno de recebimentos, calculos de comissao e juros, administracao, recuperacao de senha, e-mails e outros endpoints. Leituras financeiras estao disponiveis, mas nao foram comparadas a uma base MySQL real. Rotas ausentes retornam 501. NAO usar em producao.
+Ainda faltam: **edicao/exclusao de vendas**, revisoes financeiras, acordos, reajustes de contratos existentes, fechamento mensal e arquivos, administracao de usuarios, convites, recuperacao de senha, e-mails, dividendos e outros endpoints. Criacao de vendas e baixas/estornos foram testadas contra um MySQL 8 descartavel (dados ficticios), mas **nao** foram comparadas a uma base real migrada do cliente. Rotas ausentes retornam 501. NAO usar em producao.
 
 ## Como testar em ambiente de desenvolvimento
 
@@ -54,3 +58,9 @@ npm run check
 ```
 
 Eles verificam contratos e sintaxe, nao substituem testes de integracao com MySQL nem a conciliacao de valores monetarios.
+
+## Hostinger Business
+
+O plano Business suporta apps Express/Node 22 e MySQL. Recomendado criar 2 websites Node.js no mesmo repositorio: `./` para o frontend SSR TanStack Start e `backend-node/` para a API. Os requests `/api` sao encaminhados pelo proxy `src/server.ts` via `API_UPSTREAM` (no frontend). Instrucoes completas: `../HOSTINGER_NODE_MYSQL.md`.
+
+**Status:** branch experimental com alguns fluxos importantes migrados, **nao publicar** sem validação financeira e completar rotas criticas. Dados reais nunca no Git.
