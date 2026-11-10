@@ -195,7 +195,7 @@ function RecebimentosPage() {
 
   const confirmar = async () => {
     if (!selecionada || confirmacaoEmAndamento.current) return;
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(data) || data > todayISO()) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data > todayISO()) {
       toast.error("Informe uma data de recebimento válida, até hoje.");
       return;
     }
