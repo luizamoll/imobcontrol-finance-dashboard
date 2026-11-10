@@ -120,6 +120,56 @@ class FinanceiroServiceTests {
     }
 
     @Test
+    void baixaRetroativaUsaDataEfetivaEBloqueiaSegundaBaixaCom409() {
+        Empresa empresa = criarEmpresa();
+        Usuario usuario = criarUsuario(empresa);
+        Empreendimento empreendimento = criarEmpreendimento(empresa, usuario);
+        Unidade unidade = criarUnidade(empresa, usuario, empreendimento);
+        Cliente cliente = criarCliente(empresa, usuario);
+        LocalDate contrato = LocalDate.of(2026, 9, 1);
+        LocalDate recebimentoEfetivo = LocalDate.of(2026, 10, 27);
+
+        VendaResponse venda = service.criarVenda(
+                autenticacao(usuario), null,
+                new VendaRequest(
+                        empreendimento.getId(), unidade.getId(), cliente.getId(),
+                        new BigDecimal("100.00"), contrato, null,
+                        BigDecimal.ZERO, BigDecimal.ZERO, false, null,
+                        List.of(new VendaRequest.PagamentoRequest(
+                                "sinal", "Entrada retroativa", new BigDecimal("100.00"),
+                                1, contrato, "pendente"
+                        )),
+                        null
+                )
+        );
+        ParcelaResponse parcela = service.listarParcelas(autenticacao(usuario), null).stream()
+                .filter(p -> p.vendaId().equals(venda.id()))
+                .findFirst().orElseThrow();
+
+        MovimentoResponse primeiro = service.receber(
+                autenticacao(usuario), null, parcela.id(),
+                new RecebimentoRequest(new BigDecimal("100.00"), recebimentoEfetivo)
+        );
+        assertEquals(recebimentoEfetivo, primeiro.data());
+        ParcelaResponse atualizada = service.listarParcelas(autenticacao(usuario), null).stream()
+                .filter(p -> p.id().equals(parcela.id())).findFirst().orElseThrow();
+        assertEquals("paga", atualizada.status());
+        assertEquals(recebimentoEfetivo, atualizada.dataPagamento());
+
+        ResponseStatusException repetida = assertThrows(ResponseStatusException.class,
+                () -> service.receber(
+                        autenticacao(usuario), null, parcela.id(),
+                        new RecebimentoRequest(new BigDecimal("100.00"), recebimentoEfetivo)
+                )
+        );
+        assertEquals(409, repetida.getStatusCode().value());
+        assertEquals(1, movimentos
+                .findAllByEmpresaIdAndParcelaIdAndEstornadoFalseOrderByIdDesc(
+                        empresa.getId(), parcela.id()
+                ).size());
+    }
+
+    @Test
     void comissaoIncluidaUsaPrecoContratadoESubtraiDoImovel() {
         Empresa empresa = criarEmpresa();
         Usuario usuario = criarUsuario(empresa);
