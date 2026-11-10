@@ -63,6 +63,6 @@ test('parcelas devolve regras de inadimplencia vigentes', async () => {
 test('movimentos exclui estornos pelo filtro SQL', async () => {
   const { rotas, consultas } = montar();
   await rotas.get('/api/movimentos')({ query: {} }, { json() {} });
-  assert.match(consultas[0].sql, /m\.estornado = 0/);
+  assert.match(consultas[0].sql, /m\.estornado = FALSE/);
   assert.deepEqual(consultas[0].params, [2]);
 });
