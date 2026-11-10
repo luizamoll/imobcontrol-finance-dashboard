@@ -1,0 +1,50 @@
+name: Imob Control Node + PostgreSQL
+on:
+  push:
+    branches: [migracao-node-postgresql-20261110]
+    paths:
+      - 'backend-node/**'
+      - 'backend/src/main/resources/db/migration/**'
+      - '.github/workflows/node-postgresql-ci.yml'
+  pull_request:
+    paths:
+      - 'backend-node/**'
+      - 'backend/src/main/resources/db/migration/**'
+      - '.github/workflows/node-postgresql-ci.yml'
+permissions:
+  contents: read
+jobs:
+  node-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: imob-ci-password
+          POSTGRES_DB: imob_node_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d imob_node_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: backend-node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar Node
+        run: npm install --no-audit --no-fund
+      - name: Validar sintaxe da API
+        run: npm run check
+      - name: Testes unitarios
+        run: npm test
+      - name: Integracao contra migracoes originais PostgreSQL
+        run: node --test test/integration.postgres.test.js
+        env:
+          TEST_POSTGRES_INTEGRATION: '1'
+          DATABASE_URL: postgresql://postgres:imob-ci-password@127.0.0.1:5432/imob_node_ci
