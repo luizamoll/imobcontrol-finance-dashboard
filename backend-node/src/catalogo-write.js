@@ -189,7 +189,7 @@ export function registerCatalogoWrites(app, deps) {
             const cols = Object.keys(dados);
             const [result] = await conn.execute(
               'UPDATE ' + table + ' SET ' + cols.map(c => c + ' = ?').join(', ') +
-              ', versao = versao + 1, atualizado_por_usuario_id = ?, atualizado_em = UTC_TIMESTAMP() ' +
+              ', versao = versao + 1, atualizado_por_usuario_id = ?, atualizado_em = CURRENT_TIMESTAMP ' +
               'WHERE id = ? AND empresa_id = ? AND versao = ?',
               [...Object.values(dados), req.usuario.id, id, empresaId, versao]
             );
@@ -202,14 +202,14 @@ export function registerCatalogoWrites(app, deps) {
               'INSERT INTO ' + table + ' (empresa_id, ' + cols.join(', ') +
               ', versao, criado_por_usuario_id, atualizado_por_usuario_id, criado_em, atualizado_em) ' +
               'VALUES (?, ' + cols.map(() => '?').join(', ') +
-              ', 0, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())',
+              ', 0, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
               [empresaId, ...Object.values(dados), req.usuario.id, req.usuario.id]
             );
             id = result.insertId;
             acao = 'CRIACAO';
           }
           await conn.execute(
-            "INSERT INTO auditoria_operacional (empresa_id, usuario_id, entidade, entidade_id, acao, criado_em) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())",
+            "INSERT INTO auditoria_operacional (empresa_id, usuario_id, entidade, entidade_id, acao, criado_em) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
             [empresaId, req.usuario.id, cfg.entity, id, acao]
           );
           const atual = await existe(conn, table, id, empresaId);
