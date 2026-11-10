@@ -15,6 +15,12 @@ const DDL = [
   "CREATE TABLE auditoria_operacional (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, usuario_id BIGINT NOT NULL, entidade VARCHAR(60) NOT NULL, entidade_id BIGINT NOT NULL, acao VARCHAR(40) NOT NULL, criado_em DATETIME NOT NULL)",
   "CREATE TABLE empreendimentos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, nome VARCHAR(160) NOT NULL, spe VARCHAR(160), cnpj VARCHAR(14), area_total DECIMAL(19,4) NOT NULL, tipo VARCHAR(30) NOT NULL, unidades_previstas INT NOT NULL, valor_total DECIMAL(19,2) NOT NULL, socio_nome VARCHAR(160), socio_pct DECIMAL(9,4) NOT NULL, empresa_pct DECIMAL(9,4) NOT NULL, corretor_pct DECIMAL(9,4) NOT NULL, aliquota_tributaria DECIMAL(9,4) NOT NULL, repasse_comissao_pct DECIMAL(9,4) NOT NULL, comissao_sobre_acrescimos TINYINT(1) NOT NULL, inadimplencia_json LONGTEXT, reajuste_contratual_json LONGTEXT, observacoes LONGTEXT, status VARCHAR(30) NOT NULL, versao BIGINT NOT NULL, criado_por_usuario_id BIGINT NOT NULL, atualizado_por_usuario_id BIGINT NOT NULL, criado_em DATETIME NOT NULL, atualizado_em DATETIME NOT NULL)"
 ];
+const DDL_FINANCEIRO = [
+  "CREATE TABLE vendas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, unidade_id BIGINT NOT NULL, cliente_id BIGINT NOT NULL, valor_total DECIMAL(19,2) NOT NULL, data_contrato DATE NOT NULL, corretor_nome VARCHAR(160), corretor_pct DECIMAL(9,4) NOT NULL, repasse_comissao_pct DECIMAL(9,4) NOT NULL, comissao_sobre_acrescimos TINYINT(1) NOT NULL, corretagem_compoe_valor_contrato TINYINT(1), status VARCHAR(30) NOT NULL, regras_json LONGTEXT NOT NULL, versao BIGINT NOT NULL, criado_por_usuario_id BIGINT NOT NULL, atualizado_por_usuario_id BIGINT NOT NULL, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE parcelas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, unidade_id BIGINT NOT NULL, cliente_id BIGINT NOT NULL, origem_tipo VARCHAR(40) NOT NULL, origem_descricao VARCHAR(240), numero INT NOT NULL, total_parcelas INT NOT NULL, vencimento DATE NOT NULL, valor DECIMAL(19,2) NOT NULL, valor_pago DECIMAL(19,2) NOT NULL DEFAULT 0, valor_original DECIMAL(19,2) NOT NULL, data_pagamento DATE, status VARCHAR(30) NOT NULL, regras_inadimplencia_json LONGTEXT, versao BIGINT NOT NULL DEFAULT 0, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE movimentos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, parcela_id BIGINT NOT NULL, venda_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, unidade_id BIGINT NOT NULL, cliente_id BIGINT NOT NULL, corretor_nome VARCHAR(160), socio_nome VARCHAR(160), origem VARCHAR(40) NOT NULL, origem_descricao VARCHAR(240), data_movimento DATE NOT NULL, usuario_id BIGINT NOT NULL, valor_recebido DECIMAL(19,2) NOT NULL, imposto_reservado DECIMAL(19,2) NOT NULL, comissao_paga DECIMAL(19,2) NOT NULL, empresa_valor DECIMAL(19,2) NOT NULL, socio_valor DECIMAL(19,2) NOT NULL, aliquota_tributaria_aplicada DECIMAL(9,4), empresa_pct_aplicada DECIMAL(9,4), socio_pct_aplicada DECIMAL(9,4), comissao_base_calculo DECIMAL(19,2), comissao_repasse_pct_aplicado DECIMAL(9,4), comissao_sobre_acrescimos_aplicada TINYINT(1), acrescimos_recebidos DECIMAL(19,2), comissao_teorica DECIMAL(19,2), saldo_comissao_apos DECIMAL(19,2), estornado TINYINT(1) NOT NULL DEFAULT 0, estornado_em DATETIME, estornado_por_usuario_id BIGINT)",
+  "CREATE TABLE pagamento_itens (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL, tipo VARCHAR(40), descricao VARCHAR(240), valor DECIMAL(19,2), parcelas INT, primeiro_vencimento DATE, status VARCHAR(40))"
+];
 
 test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { skip: !habilitado }, async () => {
   const host = process.env.MYSQL_TEST_HOST || '127.0.0.1';
@@ -25,10 +31,10 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     conn = await mysql.createConnection({ host, user, password, port: 3306 });
     await conn.query('CREATE DATABASE IF NOT EXISTS imob_integration CHARACTER SET utf8mb4');
     await conn.query('USE imob_integration');
-    for (const table of ['auditoria_operacional','clientes','empreendimentos','node_sessoes','usuario_permissoes','usuarios','empresas']) {
+    for (const table of ['movimentos','parcelas','pagamento_itens','vendas','auditoria_operacional','clientes','empreendimentos','node_sessoes','usuario_permissoes','usuarios','empresas']) {
       await conn.query('DROP TABLE IF EXISTS ' + table);
     }
-    for (const statement of DDL) await conn.query(statement);
+    for (const statement of [...DDL, ...DDL_FINANCEIRO]) await conn.query(statement);
     const hash = await bcrypt.hash('SenhaSomenteDeTeste123!', 10);
     await conn.execute("INSERT INTO empresas (id,nome,slug,ativa) VALUES (1,'Empresa de Testes','empresa-testes',1)");
     await conn.execute("INSERT INTO usuarios (id,empresa_id,nome,email,senha_hash,perfil,ativo,senha_definida,email_verificado) VALUES (1,1,'Operador de Testes','testes@example.invalid',?,'ADMIN',1,1,1)", [hash]);
@@ -120,8 +126,57 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     assert.equal(emp.status, 201, 'novo empreendimento: ' + emp.status);
     const empBody = await emp.json();
     assert.equal(empBody.valorTotal, '1500.12');
+
+    // Teste de recebimento real: usa data efetiva de outubro,
+    // segundo clique devolve 409 e estorno preserva auditoria.
+    await conn.execute(
+      'INSERT INTO vendas (id,empresa_id,empreendimento_id,unidade_id,cliente_id,valor_total,data_contrato,corretor_nome,corretor_pct,repasse_comissao_pct,comissao_sobre_acrescimos,corretagem_compoe_valor_contrato,status,regras_json,versao,criado_por_usuario_id,atualizado_por_usuario_id) '
+      + 'VALUES (25,1,?,1,?,"1000.00","2026-09-01","Corretor QA",5,50,0,1,"ativa",?,0,1,1)',
+      [empBody.id, criado.id,
+       JSON.stringify({ aliquotaTributaria: 2, empresaPct: 75, socioPct: 25,
+         inadimplencia: {jurosAtivo: true, jurosTipo: 'mensal', jurosPctMes: 2, moraAtiva:true, moraPct:1} })]
+    );
+    await conn.execute(
+      "INSERT INTO parcelas (id,empresa_id,venda_id,empreendimento_id,unidade_id,cliente_id,origem_tipo,origem_descricao,numero,total_parcelas,vencimento,valor,valor_original,status,versao) "
+      + "VALUES (31,1,25,?,1,?,'sinal','Entrada',1,1,'2026-10-01',100,100,'pendente',0)",
+      [empBody.id, criado.id]
+    );
+    const pagamento = await fetch(url + '/api/parcelas/31/receber', {
+      method: 'POST', headers: csrfHeaders,
+      body: JSON.stringify({ valorRecebido: null, data: '2026-10-31' })
+    });
+    assert.equal(pagamento.status, 201, 'falha ao receber: ' + pagamento.status);
+    const pago = await pagamento.json();
+    assert.equal(pago.valorRecebido, '103.00');
+    assert.equal(pago.comissaoPaga, '50.00');
+    assert.equal(pago.data, '2026-10-31');
+    const [antesEstorno] = await conn.execute('SELECT data_pagamento, status FROM parcelas WHERE id = 31');
+    assert.equal(antesEstorno[0].data_pagamento.toISOString().slice(0, 10), '2026-10-31');
+    assert.equal(antesEstorno[0].status, 'paga');
+    const segundoClique = await fetch(url + '/api/parcelas/31/receber', {
+      method:'POST', headers:csrfHeaders,
+      body:JSON.stringify({ data:'2026-10-31' })
+    });
+    assert.equal(segundoClique.status, 409);
+    const [duplos] = await conn.execute('SELECT COUNT(*) AS total FROM movimentos WHERE parcela_id = 31 AND estornado = 0');
+    assert.equal(duplos[0].total, 1);
+    const estorno = await fetch(url + '/api/parcelas/31/reverter', {
+      method:'POST', headers:csrfHeaders, body: '{}'
+    });
+    assert.equal(estorno.status,204);
+    const [movimentoEstornado] = await conn.execute('SELECT estornado, estornado_em FROM movimentos WHERE parcela_id = 31');
+    assert.equal(movimentoEstornado[0].estornado,1);
+    assert.ok(movimentoEstornado[0].estornado_em);
+    const [parcelaEstornada] = await conn.execute('SELECT status, valor_pago, data_pagamento FROM parcelas WHERE id = 31');
+    assert.equal(parcelaEstornada[0].status,'vencida');
+    assert.equal(parcelaEstornada[0].valor_pago,'0.00');
+    assert.equal(parcelaEstornada[0].data_pagamento,null);
+    const estornoRepetido = await fetch(url + '/api/parcelas/31/reverter', {
+      method:'POST', headers:csrfHeaders, body:'{}'
+    });
+    assert.equal(estornoRepetido.status, 404);
     const [audit] = await conn.query('SELECT COUNT(*) AS total FROM auditoria_operacional');
-    assert.equal(audit[0].total, 3);
+    assert.equal(audit[0].total, 5);
     const unauthorized = await fetch(url + '/api/clientes?pagina=0&tamanho=20');
     assert.equal(unauthorized.status,401);
     const invalidCSRF = await fetch(url + '/api/clientes', {
