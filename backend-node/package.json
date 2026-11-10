@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "check": "node --check src/index.js && node --check src/clientes.js && node --check src/catalogo.js",
+    "check": "node --check src/index.js && node --check src/clientes.js && node --check src/catalogo.js && node --check src/financeiro-read.js",
     "test": "node --test"
   },
   "dependencies": {
