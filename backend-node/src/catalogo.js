@@ -117,3 +117,5 @@ export function registerCatalogoRead(app, { db, exigirLogin, empresaAutorizada, 
     res.json(rows.map(x => mapear(x, unidadeFields)));
   }));
 }
+
+export { mapear, empFields, quadraFields, unidadeFields };
