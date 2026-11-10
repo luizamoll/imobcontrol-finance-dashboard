@@ -327,6 +327,11 @@ function ParcelasPage() {
                             </TableCell>
                             <TableCell>
                               <ParcelaStatusBadge status={p.status} />
+                              {p.status === "paga" && p.dataPagamento && (
+                                <div className="mt-1 text-[11px] text-muted-foreground">
+                                  Data efetiva: {formatDate(p.dataPagamento)}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="text-right">
                               {p.status === "paga" ? (
@@ -334,6 +339,11 @@ function ParcelasPage() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={async () => {
+                                    const confirmado = window.confirm(
+                                      `Estornar a baixa de ${p.compradorNome}, parcela ${p.numero}/${p.totalParcelas}?` +
+                                      " O movimento ficará no histórico como estornado."
+                                    );
+                                    if (!confirmado) return;
                                     try {
                                       await desmarcarParcela(p.id);
                                       toast("Recebimento revertido");
