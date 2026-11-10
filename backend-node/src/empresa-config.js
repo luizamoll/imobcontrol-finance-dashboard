@@ -81,11 +81,11 @@ export function registerEmpresaConfig(app, {db, exigirLogin, empresaAutorizada, 
         if (duplicates.length) throw bad(409, 'CNPJ ja cadastrado');
       }
       await conn.execute(
-        'UPDATE empresas SET nome = ?, razao_social = ?, cnpj = ?, email = ?, telefone = ?, atualizado_em = UTC_TIMESTAMP() WHERE id = ?',
+        'UPDATE empresas SET nome = ?, razao_social = ?, cnpj = ?, email = ?, telefone = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
         [b.nome.trim(), valor('razaoSocial',200),cnpj,email,valor('telefone',30),id]
       );
       await conn.execute(
-        "INSERT INTO auditoria_operacional (empresa_id, usuario_id, entidade, entidade_id, acao, criado_em) VALUES (?, ?, 'EMPRESA', ?, 'DADOS_CADASTRAIS_ATUALIZADOS', UTC_TIMESTAMP())",
+        "INSERT INTO auditoria_operacional (empresa_id, usuario_id, entidade, entidade_id, acao, criado_em) VALUES (?, ?, 'EMPRESA', ?, 'DADOS_CADASTRAIS_ATUALIZADOS', CURRENT_TIMESTAMP)",
         [id, req.usuario.id, id]
       );
       await conn.commit();
@@ -116,18 +116,18 @@ export function registerEmpresaConfig(app, {db, exigirLogin, empresaAutorizada, 
       if (rows.length) {
         if (versao == null || Number(rows[0].versao) !== versao) throw bad(409,'Configuracao alterada por outra sessao');
         await conn.execute(
-          'UPDATE configuracoes_empresa SET config_json = ?, versao = versao + 1, atualizado_por_usuario_id = ?, atualizado_em = UTC_TIMESTAMP() WHERE empresa_id = ?',
+          'UPDATE configuracoes_empresa SET config_json = ?, versao = versao + 1, atualizado_por_usuario_id = ?, atualizado_em = CURRENT_TIMESTAMP WHERE empresa_id = ?',
           [json,req.usuario.id,id]
         );
       } else {
         if (versao != null) throw bad(409,'Configuracao ainda nao existe');
         await conn.execute(
-          'INSERT INTO configuracoes_empresa (empresa_id,config_json,versao,atualizado_por_usuario_id,atualizado_em) VALUES (?,?,0,?,UTC_TIMESTAMP())',
+          'INSERT INTO configuracoes_empresa (empresa_id,config_json,versao,atualizado_por_usuario_id,atualizado_em) VALUES (?,?,0,?,CURRENT_TIMESTAMP)',
           [id,json,req.usuario.id]
         );
       }
       await conn.execute(
-        "INSERT INTO auditoria_operacional (empresa_id,usuario_id,entidade,entidade_id,acao,criado_em) VALUES (?,?,'CONFIGURACAO_EMPRESA',?,'ATUALIZACAO',UTC_TIMESTAMP())",
+        "INSERT INTO auditoria_operacional (empresa_id,usuario_id,entidade,entidade_id,acao,criado_em) VALUES (?,?,'CONFIGURACAO_EMPRESA',?,'ATUALIZACAO',CURRENT_TIMESTAMP)",
         [id,req.usuario.id,id]
       );
       const [salvo]=await conn.execute('SELECT versao,atualizado_em FROM configuracoes_empresa WHERE empresa_id = ?', [id]);
