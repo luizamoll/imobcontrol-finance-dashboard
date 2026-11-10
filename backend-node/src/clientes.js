@@ -65,11 +65,11 @@ export function registerClientesWrites(app, deps) {
       const chaves = Object.keys(dados);
       const [result] = await connection.execute(
         `INSERT INTO clientes (empresa_id, ${chaves.join(', ')}, versao, criado_por_usuario_id, atualizado_por_usuario_id, criado_em, atualizado_em)
-         VALUES (?, ${chaves.map(() => '?').join(', ')}, 0, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())`,
+         VALUES (?, ${chaves.map(() => '?').join(', ')}, 0, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         [empresaId, ...Object.values(dados), req.usuario.id, req.usuario.id]
       );
       await connection.execute(
-        "INSERT INTO auditoria_operacional (empresa_id, usuario_id, entidade, entidade_id, acao, criado_em) VALUES (?, ?, 'CLIENTE', ?, 'CRIACAO', UTC_TIMESTAMP())",
+        "INSERT INTO auditoria_operacional (empresa_id, usuario_id, entidade, entidade_id, acao, criado_em) VALUES (?, ?, 'CLIENTE', ?, 'CRIACAO', CURRENT_TIMESTAMP)",
         [empresaId, req.usuario.id, result.insertId]
       );
       const [rows] = await connection.execute(`SELECT ${colunas} FROM clientes WHERE id = ? AND empresa_id = ?`, [result.insertId, empresaId]);
@@ -98,7 +98,7 @@ export function registerClientesWrites(app, deps) {
       const chaves = Object.keys(dados);
       const [updated] = await connection.execute(
         `UPDATE clientes SET ${chaves.map(c => c + ' = ?').join(', ')},
-         versao = versao + 1, atualizado_por_usuario_id = ?, atualizado_em = UTC_TIMESTAMP()
+         versao = versao + 1, atualizado_por_usuario_id = ?, atualizado_em = CURRENT_TIMESTAMP
          WHERE id = ? AND empresa_id = ? AND versao = ?`,
         [...Object.values(dados), req.usuario.id, id, empresaId, versao]
       );
@@ -107,7 +107,7 @@ export function registerClientesWrites(app, deps) {
         throw bad(exists.length ? 409 : 404, exists.length ? 'Cadastro alterado por outro usuario. Atualize a tela.' : 'Cliente nao encontrado');
       }
       await connection.execute(
-        "INSERT INTO auditoria_operacional (empresa_id, usuario_id, entidade, entidade_id, acao, criado_em) VALUES (?, ?, 'CLIENTE', ?, 'ATUALIZACAO', UTC_TIMESTAMP())",
+        "INSERT INTO auditoria_operacional (empresa_id, usuario_id, entidade, entidade_id, acao, criado_em) VALUES (?, ?, 'CLIENTE', ?, 'ATUALIZACAO', CURRENT_TIMESTAMP)",
         [empresaId, req.usuario.id, id]
       );
       const [rows] = await connection.execute(`SELECT ${colunas} FROM clientes WHERE id = ? AND empresa_id = ?`, [id, empresaId]);
