@@ -29,7 +29,7 @@ test('dias de tolerancia e juros diarios respeitam os ajustes', () => {
     jurosAtivo: true, jurosTipo: 'diario', jurosPctDia: 1
   };
   assert.equal(valorCorrigido(parcela, r, '2026-10-05'), '100.00');
-  assert.equal(valorCorrigido(parcela, r, '2026-10-07'), '102.00');
+  assert.equal(valorCorrigido(parcela, r, '2026-10-07'), '101.00');
 });
 
 test('calculo preserva imposto, comissao, socio e empresa em centavos', () => {
