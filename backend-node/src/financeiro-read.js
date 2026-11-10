@@ -135,7 +135,7 @@ export function registerFinanceiroRead(app, { db, exigirLogin, empresaAutorizada
       'SELECT m.*, c.nome AS comprador_nome, u.nome AS usuario_nome FROM movimentos m '
       + 'JOIN clientes c ON c.id = m.cliente_id AND c.empresa_id = m.empresa_id '
       + 'LEFT JOIN usuarios u ON u.id = m.usuario_id '
-      + 'WHERE m.empresa_id = ? AND m.estornado = 0 ORDER BY m.data_movimento DESC, m.id DESC',
+      + 'WHERE m.empresa_id = ? AND m.estornado = FALSE ORDER BY m.data_movimento DESC, m.id DESC',
       [empresa]
     );
     res.json(rows.map(toMovimento));
