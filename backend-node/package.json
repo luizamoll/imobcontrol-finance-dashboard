@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "check": "node --check src/index.js && node --check src/clientes.js && node --check src/catalogo.js && node --check src/financeiro-read.js && node --check src/catalogo-write.js && node --check src/empresa-config.js && node --check src/recebimentos.js && node --check src/vendas-write.js && node --check src/postgres.js",
+    "check": "node --check src/index.js && node --check src/clientes.js && node --check src/catalogo.js && node --check src/financeiro-read.js && node --check src/catalogo-write.js && node --check src/empresa-config.js && node --check src/recebimentos.js && node --check src/vendas-write.js && node --check src/postgres.js && node --check src/vendas-manage.js",
     "test": "node --test"
   },
   "dependencies": {
