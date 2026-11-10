@@ -4,6 +4,7 @@ import { registerCatalogoRead } from './catalogo.js';
 import { registerCatalogoWrites } from './catalogo-write.js';
 import { registerEmpresaConfig } from './empresa-config.js';
 import { registerFinanceiroRead } from './financeiro-read.js';
+import { registerRecebimentos } from './recebimentos.js';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
@@ -193,6 +194,7 @@ registerCatalogoRead(app, { db, exigirLogin, empresaAutorizada, exigirPermissao,
 registerCatalogoWrites(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 registerEmpresaConfig(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 registerFinanceiroRead(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
+registerRecebimentos(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 
 app.get('/health', handler(async (req, res) => {
   await db.query('SELECT 1');
