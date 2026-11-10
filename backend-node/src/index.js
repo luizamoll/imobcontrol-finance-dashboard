@@ -63,7 +63,7 @@ app.get('/api/auth/csrf', (req, res) => {
 });
 app.use('/api', (req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)
-      || (req.method === 'POST' && ['/api/auth/login', '/api/auth/logout'].includes(req.path))) return next();
+      || (req.method === 'POST' && ['/auth/login', '/auth/logout'].includes(req.path))) return next();
   const nonce = cookie(req, 'imob_csrf');
   if (!nonce || !safeEqual(req.get('X-CSRF-TOKEN'), csrfFor(nonce))) return next(bad(403, 'Token CSRF invalido'));
   return next();
