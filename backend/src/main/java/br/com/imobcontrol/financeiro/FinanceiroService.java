@@ -514,7 +514,10 @@ public class FinanceiroService {
             RecebimentoRequest body
     ) {
         var ctx = tenants.resolver(auth, empresaSolicitada);
-        Parcela parcela = parcela(ctx.empresaId(), parcelaId);
+        // A parcela permanece bloqueada nesta transação: uma segunda baixa
+        // só pode consultar o status depois de a primeira ter concluído.
+        Parcela parcela = parcelas.findByIdAndEmpresaIdForUpdate(parcelaId, ctx.empresaId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Parcela não encontrada"));
         if ("paga".equalsIgnoreCase(parcela.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta parcela já está paga");
         }
@@ -1026,7 +1029,8 @@ public class FinanceiroService {
             Authentication auth, Long empresaSolicitada, Long parcelaId
     ) {
         var ctx = tenants.resolver(auth, empresaSolicitada);
-        Parcela parcela = parcela(ctx.empresaId(), parcelaId);
+        Parcela parcela = parcelas.findByIdAndEmpresaIdForUpdate(parcelaId, ctx.empresaId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Parcela não encontrada"));
         Movimento mov = movimentos
                 .findFirstByEmpresaIdAndParcelaIdAndEstornadoFalseOrderByIdDesc(
                         ctx.empresaId(), parcelaId
