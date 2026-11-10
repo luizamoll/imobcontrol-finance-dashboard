@@ -70,8 +70,8 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
       method: 'POST', headers: { 'content-type': 'application/json', cookie: csrfCookie },
       body: JSON.stringify({ email: 'testes@example.invalid', senha: 'SenhaSomenteDeTeste123!' })
     });
-    assert.equal(login.status, 200, 'login: ' + await login.text().catch(()=>''));
-    const loginData = await login.clone().json();
+    assert.equal(login.status, 200);
+    const loginData = await login.json();
     assert.equal(loginData.perfil, 'ADMIN');
     const session = login.headers.get('set-cookie')?.split(';')[0];
     assert.ok(session?.startsWith('imob_session='));
