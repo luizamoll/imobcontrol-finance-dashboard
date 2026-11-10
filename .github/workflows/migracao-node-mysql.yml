@@ -1,0 +1,29 @@
+name: ImobControl Node.js (migracao)
+on:
+  push:
+    branches:
+      - migracao-node-mysql-20261110
+    paths:
+      - 'backend-node/**'
+      - '.github/workflows/migracao-node-mysql.yml'
+  pull_request:
+    paths:
+      - 'backend-node/**'
+      - '.github/workflows/migracao-node-mysql.yml'
+permissions:
+  contents: read
+jobs:
+  teste-node:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verificar sintaxe
+        run: npm run check
+      - name: Testes unitarios
+        run: npm test
