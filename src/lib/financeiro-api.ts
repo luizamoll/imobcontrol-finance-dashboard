@@ -244,15 +244,34 @@ function movimentoFromApi(m: MovimentoApi): Movimento {
   };
 }
 
+// Buscar todas as páginas, não apenas as primeiras 100 vendas do SaaS.
+async function carregarTodasVendas(empresaId: number): Promise<VendaApi[]> {
+  const acumuladas: VendaApi[] = [];
+  let pagina = 0;
+  for (;;) {
+    const resultado = await apiJson<Pagina<VendaApi>>(
+      `/api/vendas?pagina=${pagina}&tamanho=100`,
+      { empresaId },
+    );
+    acumuladas.push(...resultado.content);
+    const totalPaginas = Math.ceil(resultado.totalElements / 100);
+    if (pagina + 1 >= totalPaginas) return acumuladas;
+    if (resultado.content.length === 0 || pagina >= 999) {
+      throw new Error("Não foi possível carregar todas as vendas. Atualize a página.");
+    }
+    pagina++;
+  }
+}
+
 export async function carregarFinanceiro(empresaId: number) {
   const [vendas, parcelas, movimentos] = await Promise.all([
-    apiJson<Pagina<VendaApi>>("/api/vendas?pagina=0&tamanho=100", { empresaId }),
+    carregarTodasVendas(empresaId),
     apiJson<ParcelaApi[]>("/api/parcelas", { empresaId }),
     apiJson<MovimentoApi[]>("/api/movimentos", { empresaId }),
   ]);
 
   return {
-    vendas: vendas.content.map(vendaFromApi),
+    vendas: vendas.map(vendaFromApi),
     parcelas: parcelas.map(parcelaFromApi),
     movimentos: movimentos.map(movimentoFromApi),
   };
