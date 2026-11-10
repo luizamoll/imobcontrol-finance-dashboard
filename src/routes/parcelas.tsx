@@ -34,7 +34,7 @@ export const Route = createFileRoute("/parcelas")({
 });
 
 function ParcelasPage() {
-  const { state, receberParcela, desmarcarParcela } = useStore();
+  const { state, desmarcarParcela } = useStore();
   const [empFilter, setEmpFilter] = useState<string>("todos");
   const [statusFilter, setStatusFilter] = useState<ParcelaStatus | "todos">("todos");
   const [busca, setBusca] = useState("");
@@ -353,27 +353,10 @@ function ParcelasPage() {
                               ) : p.status === "em_acordo" ? (
                                 <span className="text-xs text-muted-foreground">Substituída pelo acordo</span>
                               ) : (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    try {
-                                      await receberParcela(p.id, p.valorCobrado);
-                                      toast.success(
-                                        p.status === "vencida"
-                                          ? "Parcela recebida com os acréscimos contratuais"
-                                          : "Recebimento registrado",
-                                      );
-                                    } catch (error) {
-                                      toast.error(
-                                        error instanceof Error
-                                          ? error.message
-                                          : "Não foi possível registrar o recebimento",
-                                      );
-                                    }
-                                  }}
-                                >
-                                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
+                                <Button size="sm" variant="outline" asChild>
+                                  <Link to="/recebimentos" search={{ parcela: p.id }}>
+                                    <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Receber
+                                  </Link>
                                 </Button>
                               )}
                             </TableCell>
