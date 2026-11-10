@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, ChevronDown, ChevronUp, Inbox, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader, PageShell } from "@/components/page-shell";
@@ -41,12 +41,19 @@ import {
 } from "@/lib/store";
 
 export const Route = createFileRoute("/recebimentos")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    parcela: typeof search.parcela === "string" ? search.parcela : undefined,
+  }),
   component: RecebimentosPage,
   head: () => ({ meta: [{ title: "Central de Recebimentos · ImobControl" }] }),
 });
 
 function RecebimentosPage() {
   const { state, receberParcela } = useStore();
+  const { parcela: parcelaParaAbrir } = Route.useSearch();
+  const parcelaAbertaViaLink = useRef<string | null>(null);
+  const confirmacaoEmAndamento = useRef(false);
+  const [salvando, setSalvando] = useState(false);
   const [empFilter, setEmpFilter] = useState("todos");
   const [origem, setOrigem] = useState<"todos" | "sinal" | "parcelas">("todos");
   const [busca, setBusca] = useState("");
@@ -168,18 +175,51 @@ function RecebimentosPage() {
     setValor(String(calc.diasAtraso > 0 ? calc.atualizado : selecionada.valor));
   }, [selecionada, data, state.config]);
 
+  // Acesso pela tela de Parcelas: abre a parcela certa na Central,
+  // onde a data efetiva é obrigatória antes de confirmar.
+  useEffect(() => {
+    if (!parcelaParaAbrir || parcelaAbertaViaLink.current === parcelaParaAbrir) return;
+    const parcela = state.parcelas.find((p) => p.id === parcelaParaAbrir);
+    if (!parcela) return;
+    parcelaAbertaViaLink.current = parcelaParaAbrir;
+    if (["paga", "cancelada", "em_acordo"].includes(parcela.status)) {
+      toast.info("Essa parcela não está disponível para recebimento.");
+      return;
+    }
+    const hojeISO = todayISO();
+    const calc = inadimplenciaCalc(parcela, state.config, dataComoLocal(hojeISO));
+    setSelecionada(parcela);
+    setData(hojeISO);
+    setValor(String(calc.diasAtraso > 0 ? calc.atualizado : parcela.valor));
+  }, [parcelaParaAbrir, state.parcelas, state.config]);
+
   const confirmar = async () => {
-    if (!selecionada) return;
+    if (!selecionada || confirmacaoEmAndamento.current) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data > todayISO()) {
+      toast.error("Informe uma data de recebimento válida, até hoje.");
+      return;
+    }
+    confirmacaoEmAndamento.current = true;
+    setSalvando(true);
     try {
-      await receberParcela(selecionada.id, Number(valor), data);
-      toast.success("Recebimento registrado", {
-        description: "Distribuição financeira executada automaticamente.",
-      });
+      const resultado = await receberParcela(selecionada.id, Number(valor), data);
+      if (resultado === "ja_registrado") {
+        toast.info("Esta parcela já constava como recebida.", {
+          description: "Não foi criado outro recebimento.",
+        });
+      } else {
+        toast.success("Recebimento registrado", {
+          description: "Registrado na data efetiva selecionada, com distribuição financeira.",
+        });
+      }
       setSelecionada(null);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Não foi possível registrar o recebimento",
       );
+    } finally {
+      confirmacaoEmAndamento.current = false;
+      setSalvando(false);
     }
   };
 
@@ -379,7 +419,7 @@ function RecebimentosPage() {
         </div>
       )}
 
-      <Dialog open={!!selecionada} onOpenChange={(o) => !o && setSelecionada(null)}>
+      <Dialog open={!!selecionada} onOpenChange={(o) => !o && !salvando && setSelecionada(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Registrar recebimento</DialogTitle>
