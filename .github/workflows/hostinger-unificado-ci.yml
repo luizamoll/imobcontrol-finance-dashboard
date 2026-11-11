@@ -8,7 +8,7 @@ on:
       - 'src/**'
       - 'backend-node/**'
       - 'package.json'
-      - 'server.mjs'
+      - 'hosting/hostinger.mjs'
       - 'vite.config.ts'
       - 'scripts/smoke-unificado.mjs'
       - '.github/workflows/hostinger-unificado-ci.yml'
