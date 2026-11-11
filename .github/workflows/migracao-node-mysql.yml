@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - migracao-node-mysql-20261110
+      - migracao-node-mysql-hostinger-20261111
     paths:
       - 'backend-node/**'
       - '.github/workflows/migracao-node-mysql.yml'
