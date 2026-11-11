@@ -403,6 +403,91 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     assert.equal((await arquivoAntigo.json()).relatorio.saldoDisponivelEstimado,'73.00',
       'snapshot arquivado deve permanecer imutavel apos estorno');
 
+
+    // Acordo real: nao reescreve parcela historica e distribui centavos.
+    const [parcelasDaVendaTeste] = await conn.execute(
+      'SELECT id,status FROM parcelas WHERE empresa_id=1 AND venda_id=? ORDER BY id',[vendaCriada.id]);
+    const origemId=parcelasDaVendaTeste[0].id;
+    const acordoResp=await fetch(url+'/api/vendas/'+vendaCriada.id+'/acordos',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({
+        parcelaIds:[origemId],dataAcordo:'2026-11-10',valorAcordo:'300.01',
+        entradaValor:'50.00',quantidadeParcelas:3,primeiroVencimento:'2026-12-31',
+        observacoes:'Acordo de integracao'
+      })
+    });
+    assert.equal(acordoResp.status,201,'acordo MySQL: '+acordoResp.status);
+    const acordo=await acordoResp.json();
+    assert.equal(acordo.parcelasOrigemIds.length,1);
+    assert.equal(acordo.parcelasCobrancaIds.length,4);
+    const [origemEmAcordo]=await conn.execute('SELECT status,acordo_id,acordo_papel FROM parcelas WHERE id=?',[origemId]);
+    assert.equal(origemEmAcordo[0].status,'em_acordo');
+    assert.equal(origemEmAcordo[0].acordo_papel,'origem');
+    const [novasAcordo]=await conn.execute("SELECT valor,vencimento FROM parcelas WHERE acordo_id=? AND acordo_papel='cobranca' ORDER BY id",[acordo.id]);
+    assert.deepEqual(novasAcordo.map(p=>p.valor),['50.00','83.33','83.33','83.35']);
+    const acordoDuplicado=await fetch(url+'/api/vendas/'+vendaCriada.id+'/acordos',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({
+        parcelaIds:[origemId],dataAcordo:'2026-11-10',valorAcordo:'300.01',
+        entradaValor:'50.00',quantidadeParcelas:3,primeiroVencimento:'2026-12-31'
+      })
+    });
+    assert.equal(acordoDuplicado.status,409);
+
+    // Indice: so aplica em parcelas abertas e mantem ciclo unico por data.
+    const [vrules]=await conn.execute('SELECT regras_json FROM vendas WHERE id=?',[vendaCriada.id]);
+    const regrasVendaTeste=JSON.parse(vrules[0].regras_json);
+    regrasVendaTeste.reajusteContratual={ativo:true,modalidade:'indice',periodicidadeMeses:1,indiceReferencia:'IPCA'};
+    await conn.execute('UPDATE vendas SET regras_json=? WHERE id=?',[JSON.stringify(regrasVendaTeste),vendaCriada.id]);
+    const reajResp=await fetch(url+'/api/vendas/'+vendaCriada.id+'/reajustes',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({
+        dataReferencia:'2026-11-01',percentualIndice:'4.0000'
+      })
+    });
+    assert.equal(reajResp.status,201,'reajuste MySQL: '+reajResp.status);
+    assert.equal((await reajResp.json()).percentualAplicado,'4.0000');
+    const reajDuplicado=await fetch(url+'/api/vendas/'+vendaCriada.id+'/reajustes',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({dataReferencia:'2026-11-01',percentualIndice:4})
+    });
+    assert.equal(reajDuplicado.status,409);
+
+    // Equipe: cadastra, previne conflito e gerencia ativacao sem SMTP.
+    const team=await fetch(url+'/api/empresa/usuarios',{
+      method:'POST',headers:csrfHeaders,
+      body:JSON.stringify({nome:'Colaboradora QA',email:'colab@example.invalid',
+        permissoes:['CLIENTES_GERENCIAR']})
+    });
+    assert.equal(team.status,201,'criar colaboradora MySQL: '+team.status);
+    const colaboradora=await team.json();
+    assert.equal(colaboradora.senhaDefinida,false);
+    assert.ok(colaboradora.permissoes.includes('CLIENTES_VISUALIZAR'));
+    const teamList=await fetch(url+'/api/empresa/usuarios',{headers:{cookie:cookies}});
+    assert.equal(teamList.status,200);
+    assert.equal((await teamList.json()).totalElements,1);
+    const senhaTeam=await fetch(url+'/api/empresa/usuarios/'+colaboradora.id+'/senha',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({senha:'SenhaDaQA2026!'})
+    });
+    assert.equal(senhaTeam.status,204);
+    const loginColab=await fetch(url+'/api/auth/login',{
+      method:'POST',headers:{cookie:csrfCookie,'content-type':'application/json'},
+      body:JSON.stringify({email:'colab@example.invalid',senha:'SenhaDaQA2026!'})
+    });
+    assert.equal(loginColab.status,200,'colaboradora ativada precisa conseguir entrar');
+
+    // Revisao financeira: exige estorno integral, nao deixa reescrever historico.
+    const elegibilidadeBloqueada=await fetch(url+'/api/vendas/25/revisoes-financeiras/elegibilidade',{
+      headers:{cookie:cookies}
+    });
+    assert.equal(elegibilidadeBloqueada.status,200);
+    assert.equal((await elegibilidadeBloqueada.json()).permitido,false);
+    const estornoRevisao=await fetch(url+'/api/parcelas/31/reverter',{
+      method:'POST',headers:csrfHeaders,body:'{}'
+    });
+    assert.equal(estornoRevisao.status,204);
+    const elegibilidadeLiberada=await fetch(url+'/api/vendas/25/revisoes-financeiras/elegibilidade',{
+      headers:{cookie:cookies}
+    });
+    assert.equal(elegibilidadeLiberada.status,200);
+    assert.equal((await elegibilidadeLiberada.json()).permitido,true);
+
     const unauthorized = await fetch(url + '/api/clientes?pagina=0&tamanho=20');
     assert.equal(unauthorized.status,401);
     const invalidCSRF = await fetch(url + '/api/clientes', {
