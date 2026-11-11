@@ -191,6 +191,13 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     const [recriadas] = await conn.execute('SELECT COUNT(*) AS total FROM parcelas WHERE venda_id=?',[vendaCriada.id]);
     assert.equal(recriadas[0].total,3);
 
+    // Unidade da venda de teste historica: evitar referencia ficticia sem unidade.
+    await conn.execute(
+      "INSERT INTO unidades (id,empresa_id,empreendimento_id,numero,unidade,area,valor_venda,status) "+
+      "VALUES (1,1,?,'001','Lote Historico',100,1000,'vendido')",
+      [empBody.id]
+    );
+
     // Teste de recebimento real: usa data efetiva de outubro,
     // segundo clique devolve 409 e estorno preserva auditoria.
     await conn.execute(
