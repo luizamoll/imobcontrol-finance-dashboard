@@ -14,6 +14,7 @@ import { registerAcordos } from './acordos.js';
 import { registerReajustes } from './reajustes.js';
 import { registerAcessoConta } from './acesso-conta.js';
 import { registerUsuarios } from './usuarios.js';
+import { registerSuperAdmin } from './superadmin.js';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
@@ -217,6 +218,7 @@ registerAcordos(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, hand
 registerReajustes(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 const conta = registerAcessoConta(app, { db, exigirLogin, handler, bad });
 registerUsuarios(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad, conta });
+registerSuperAdmin(app, { db, exigirLogin, handler, bad });
 
 app.get('/health', handler(async (req, res) => {
   await db.query('SELECT 1');
