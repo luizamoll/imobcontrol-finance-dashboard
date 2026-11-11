@@ -16,8 +16,12 @@ for (const key of ['DB_HOST', 'DB_USER', 'DB_NAME', 'SESSION_SECRET']) {
   if (!process.env[key]) throw new Error('Falta variavel de ambiente: ' + key);
 }
 if (process.env.SESSION_SECRET.length < 32) throw new Error('SESSION_SECRET deve ter pelo menos 32 caracteres');
-if (process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'true') {
-  throw new Error('Em producao, COOKIE_SECURE=true exige HTTPS.');
+// Hostinger/legado podem usar SESSION_COOKIE_SECURE. Ambos significam
+// exatamente a mesma coisa; nunca emitir cookie inseguro em producao.
+const secureCookies = process.env.COOKIE_SECURE === 'true'
+  || process.env.SESSION_COOKIE_SECURE === 'true';
+if (process.env.NODE_ENV === 'production' && !secureCookies) {
+  throw new Error('Em producao, configure COOKIE_SECURE=true ou SESSION_COOKIE_SECURE=true e HTTPS.');
 }
 
 const db = mysql.createPool({
@@ -39,7 +43,7 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '100kb' }));
 
-const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true';
+const COOKIE_SECURE = secureCookies;
 const COOKIE_OPTS = {
   httpOnly: true, secure: COOKIE_SECURE, sameSite: 'lax', path: '/'
 };
