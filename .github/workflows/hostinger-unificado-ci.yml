@@ -1,4 +1,7 @@
 name: Hostinger - app unico Express + Nitro + MySQL
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:

@@ -1,4 +1,7 @@
 name: Empacotar Imob Control unificado para Pedro
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
     branches:

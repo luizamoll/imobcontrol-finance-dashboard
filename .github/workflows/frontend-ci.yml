@@ -1,4 +1,7 @@
 name: Frontend CI (Node 22 + npm)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   pull_request:
