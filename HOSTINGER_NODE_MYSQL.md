@@ -1,117 +1,100 @@
-# Imob Control — publicação em Hostinger Business
+# Imob Control — aplicação ÚNICA na Hostinger Business
 
-Status: **procedimento preparado, implantação real ainda não executada**.
+**Branch:** `feat/hostinger-app-unificado-20261111`  
+**Estado:** integração arquitetural para homologação, NÃO substitui ainda a produção.
 
-## Arquitetura
+## Como o projeto funciona
 
-Hostinger Business aceita **Node.js + Express**, GitHub, **React** e MySQL.
-O projeto continua em um repositório GitHub com **dois apps Node.js separados**:
+Uma instância Node.js e **uma única porta HTTP**:
 
-- Web: TanStack Start/React (raiz do repo, `./`), app de apresentação.
-- API: Express + MySQL (`backend-node/`), app de negócio.
-- Web direciona rotas `/api/*` para API via **`API_UPSTREAM`**, implementado em `src/server.ts`. Assim o navegador usa cookies de mesma origem sem precisar habilitar CORS público.
-
-Na Hostinger, aplicações de um monorepo são sites Node.js separados e cada uma conta para o limite do plano.
-
-## 1. Banco de homologação
-
-No hPanel → Websites → Manage site → Databases → Management:
-1. Criar banco **novo e vazio** e usuário exclusivo, com acesso limitado.
-2. Importar o `imobcontrol-MYSQL-REAL-20261110.sql` **somente no ambiente de homologação** (arquivo em canal privado, nunca no Git).
-3. Conferir o manifesto e totals; conferir 41 clientes, 41 vendas, 8.000 parcelas, 645 movimentos. Não restaurar por cima de dados de produção.
-4. Rodar `backend-node/sql/01_node_sessoes.sql` para sessões Node (a tabela antiga do Spring não é reutilizada).
-5. Executar `backend-node/sql/02_revisoes_financeiras.sql` após `01_node_sessoes.sql` para adicionar a tabela V22 que NÃO estava no backup de 03/11.
-6. Fazer testes de login, criação/edição de venda, recebimento e estorno com dados fictícios e conferência do saldo.
-7. Verificar os resultados de `VALIDACAO_APOS_IMPORTACAO.sql` incluído no ZIP do dump antes de abrir o acesso ao cliente.
-
-**Atenção:** o banco real contém registros pessoais e financeiros. Nunca exponha o SQL publicamente ou faça upload no repositório. A exportação representa dados **até 03/11/2026** e precisa de corte de atualização para entrar em produção.
-
-## 2. API (site Node.js privado para administração)
-
-No hPanel: Websites → Create site → Web App → Import Git Repository.
-
-| Configuração | Valor |
-|---|---|
-| Repositório | `luizamoll/imobcontrol-finance-dashboard` |
-| Branch para testes | `migracao-node-mysql-hostinger-20261111` |
-| Root directory | `backend-node` |
-| Framework | Express |
-| Node | 22.x |
-| Instalação | npm |
-| Comando de início | `npm start` |
-| Arquivo de entrada | `src/index.js` |
-
-Variáveis de ambiente no painel **da API** (NÃO no GitHub):
 ```text
+                  Hostinger — um Web App Node.js
+https://seudominio.com
+        |
+        v
+server.mjs  (node / Express; única chamada .listen)
+        |
+        +-- /api/* e /health ---> Express em backend-node/src/index.js --> MySQL
+        |
+        +-- /login, /, /assets --> Nitro/TanStack SSR + React
+                                  (.output/server/index.mjs)
+```
+
+O Express é importado como aplicação, sem abrir sua antiga porta 3000. O
+Nitro é compilado com o preset `node_middleware` e recebe diretamente os
+objetos de requisição e resposta do mesmo Express. **Não há segunda API,
+subdomínio nem variável `API_UPSTREAM`.**
+
+Os endpoints ainda não migrados de Java respondem 501; portanto, esta
+branch **não significa que todos os módulos financeiros estão concluídos**.
+
+## Deploy pelo hPanel
+
+1. Acessar Hostinger → Websites → Create site → Web App.
+2. Importar do GitHub o repositório `luizamoll/imobcontrol-finance-dashboard`.
+3. Selecionar branch `feat/hostinger-app-unificado-20261111` e **diretório raiz `./`**.
+4. Framework: escolher **Other** (ou Express customizado, se houver opção).
+5. Node.js **22**, gerenciador **npm**.
+6. Build: `npm run build` (produz `.output/server/index.mjs` e `.output/public`).
+7. Iniciar: `npm start`; **entrada `server.mjs` na raiz do projeto**.
+8. **Não apontar a entrada para `.output/server/index.mjs`**: essa saída é
+   middleware Nitro, não servidor independente. Não configurar um segundo site.
+9. Caso o hPanel peça *Output directory*, manter o projeto completo
+   disponível ao processo: `server.mjs`, `backend-node/` e `.output/`
+   devem estar **juntos**. Não configurar apenas `.output/` se isso
+   excluir o backend e `server.mjs`. Se o painel não permitir manter
+   esses arquivos no deploy, é necessária uma configuração de pacote
+   de saída específica antes de publicar.
+
+**Uma única configuração de ambiente** no painel do Web App:
+
+```env
 NODE_ENV=production
 COOKIE_SECURE=true
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_NAME=NOME_DO_BANCO
-DB_USER=USUARIO_DO_BANCO
-DB_PASSWORD=SENHA_FORTE_DO_BANCO
-SESSION_SECRET=UMA_CHAVE_ALEATORIA_LONGA_UNICA_DE_32_OU_MAIS_CARACTERES
+DB_NAME=NOME_MYSQL_COM_PREFIXO_DA_HOSTINGER
+DB_USER=USUARIO_MYSQL_COM_PREFIXO
+DB_PASSWORD=SENHA_MYSQL
+SESSION_SECRET=SEGREDO_ALEATORIO_COM_PELO_MENOS_32_CARACTERES
 ```
 
-Não definir `PORT` manualmente, a Hostinger gerencia isso.
+Deixar `PORT` controlada pela Hostinger. Não usar `DATABASE_URL`,
+`PGHOST` nem `API_UPSTREAM`. Não comitar variáveis reais ao Git.
 
-A API precisa de HTTPS e URL definida, por exemplo `https://api.seudominio.com.br`. Se a Hostinger não suportar acesso interno entre apps, usar URL HTTPS pública e manter a autenticação por sessão/CSRF; nunca confiar apenas na URL obscura. O proxy web encaminha as requisições.
+## Dados reais MySQL
 
-## 3. Web (site Node.js React)
+O dump real **continua separado do código**, com dados até **03/11/2026**.
+Se o Pedro já importou o dump em MySQL, **NÃO importar de novo**. Caso ainda
+não tenha feito, importar em banco de homologação vazio pelo phpMyAdmin.
+Aplicar uma única vez as tabelas auxiliares, se faltarem:
 
-Criar outro Web App na Hostinger com o **mesmo repositório**:
+- `backend-node/sql/01_node_sessoes.sql` (sessões Node);
+- `backend-node/sql/02_revisoes_financeiras.sql` (estrutura V22).
 
-| Configuração | Valor |
-|---|---|
-| Branch | `migracao-node-mysql-hostinger-20261111` |
-| Root directory | `./` |
-| Framework | Other (TanStack Start/Nitro), se não detectado automaticamente |
-| Node | 22.x |
-| Instalação | npm (Bun não é suportado na Hostinger) |
-| Build | `npm run build` |
-| Start | `npm start` |
-| Output | `.output` |
-| Entry | `.output/server/index.mjs` |
+Conferir contagens e totais com o relatório de validação do dump. Esses
+scripts não exigem alterar dados financeiros originais.
 
-Configuração somente **do servidor web**:
-```text
-NODE_ENV=production
-API_UPSTREAM=https://api.seudominio.com.br
-```
-O valor acima é exemplo, trocar pela URL efetiva da API. `src/server.ts` encaminha `/api/*` diretamente para o upstream. **Não usar `VITE_API_UPSTREAM`**: a URL fica no servidor, não no bundle do navegador.
+## Teste após publicar em preview
 
-Se precisar manter a versão anterior operando, usar domínio temporário/staging para essas duas aplicações.
+- `/api/auth/csrf` deve retornar JSON e cookie no mesmo domínio da página.
+- `/login` deve retornar HTML do React/TanStack SSR pela **mesma porta**.
+- `/api/clientes` sem login deve responder 401 JSON, não HTML.
+- Acesso ao login com conta autorizada e conexão MySQL, com dados de teste.
+- Testar baixa retroativa, estorno e erro 409 sem duplicação.
+- Conferir fechamento de outubro/novembro e dados reais após homologação.
 
-## 4. Homologação obrigatória
+## Limites da refatoração
 
-Antes de apontar domínio do cliente:
-- CI verde em `backend-node` (unitários + MySQL 8 real) e build de `web`.
-- `GET /health` API responde JSON com `status=UP`.
-- Login no domínio web (cookies `HttpOnly` por HTTPS).
-- Cadastro de cliente, empreendimento, unidade, venda e parcelas.
-- Recebimento retroativo em outubro deve entrar em **outubro**, não novembro.
-- Segunda tentativa de receber a mesma parcela deve dar **409 sem duplicar movimentos**.
-- Estorno deve reabrir parcela e manter o histórico como estornado.
-- Conciliar totais e contagens antes de usar dados do cliente.
-- Avaliar módulos ainda não migrados; o servidor devolve 501 para rotas ausentes.
+**Módulos Java ainda ausentes na API Node:** acordos, reajustes manuais,
+revisões financeiras especiais, fechamento mensal/arquivos, convites e
+administração de usuários, recuperação de acesso, dividendos e outros.
+A migração unificada corrige o **problema de arquitetura** relatado pelo
+Pedro; não declara esses módulos prontos. Manter o sistema anterior em
+produção até completar e homologar as regras do cliente.
 
-## Situação atual
+## Verificação técnica
 
-Não ativar produção ou mesclar o PR de migração até **edição/exclusão de vendas, reajustes, acordos, fechamentos, administração, convites** e demais rotas estarem portados e homologados. A edição e a exclusão controlada de vendas foram implementadas, mas ainda exigem homologação. Manter a instalação anterior funcionando e os backups armazenados.
-
-**Referências oficiais**:
-- https://www.hostinger.com/support/how-to-deploy-a-nodejs-website-in-hostinger/
-- https://www.hostinger.com/support/how-to-deploy-monorepos-with-npm-yarn-or-pnpm-on-hostinger/
-- https://www.hostinger.com/support/connecting-a-hostinger-mysql-database-to-a-node-js-application/
-
-## Dados reais e segurança
-
-O dump MySQL real é um **arquivo privado** gerado a partir do backup de 03/11/2026.
-Ele nunca deve ser colocado em Git, no frontend ou numa pasta pública da hospedagem.
-Importar no phpMyAdmin somente dentro do banco criado e vazio, e depois executar
-`01_node_sessoes.sql`, `02_revisoes_financeiras.sql` e o relatório SQL de conferência.
-**Não usar a importação como prova de que todas as regras financeiras estão corretas**:
-realizar homologação dos saldos, competências e totais por empresa.
-
-A API lê o MySQL pelas variáveis `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` e `DB_NAME`.
-**Ela não usa PostgreSQL nem `DATABASE_URL`** nesta branch.
+O workflow GitHub Actions `Hostinger - app unico Express + Nitro + MySQL`
+compila o SSR em modo middleware e sobe a aplicação para verificar API e
+HTML na mesma porta. A automação evita dependência de um segundo site.
