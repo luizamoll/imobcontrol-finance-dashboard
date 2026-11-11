@@ -16,6 +16,9 @@ const DDL = [
   "CREATE TABLE empreendimentos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, nome VARCHAR(160) NOT NULL, spe VARCHAR(160), cnpj VARCHAR(14), area_total DECIMAL(19,4) NOT NULL, tipo VARCHAR(30) NOT NULL, unidades_previstas INT NOT NULL, valor_total DECIMAL(19,2) NOT NULL, socio_nome VARCHAR(160), socio_pct DECIMAL(9,4) NOT NULL, empresa_pct DECIMAL(9,4) NOT NULL, corretor_pct DECIMAL(9,4) NOT NULL, aliquota_tributaria DECIMAL(9,4) NOT NULL, repasse_comissao_pct DECIMAL(9,4) NOT NULL, comissao_sobre_acrescimos TINYINT(1) NOT NULL, inadimplencia_json LONGTEXT, reajuste_contratual_json LONGTEXT, observacoes LONGTEXT, status VARCHAR(30) NOT NULL, versao BIGINT NOT NULL, criado_por_usuario_id BIGINT NOT NULL, atualizado_por_usuario_id BIGINT NOT NULL, criado_em DATETIME NOT NULL, atualizado_em DATETIME NOT NULL)"
 ];
 const DDL_FINANCEIRO = [
+  "CREATE TABLE corretores_empresa (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, nome VARCHAR(160) NOT NULL, documento VARCHAR(30), creci VARCHAR(80), email VARCHAR(200), telefone VARCHAR(30), chave_pix VARCHAR(200), versao BIGINT NOT NULL DEFAULT 0, criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_corretor_nome (empresa_id,nome))",
+  "CREATE TABLE dividendos_terceiros (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, imovel VARCHAR(200) NOT NULL, valor_base DECIMAL(19,2) NOT NULL, observacoes TEXT, versao BIGINT NOT NULL DEFAULT 0, criado_por_usuario_id BIGINT NOT NULL, atualizado_por_usuario_id BIGINT NOT NULL, criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE dividendos_terceiros_participantes (dividendo_id BIGINT NOT NULL, ordem INT NOT NULL, nome VARCHAR(160) NOT NULL, percentual DECIMAL(7,4) NOT NULL, PRIMARY KEY (dividendo_id,ordem), FOREIGN KEY (dividendo_id) REFERENCES dividendos_terceiros(id) ON DELETE CASCADE)",
   "CREATE TABLE acordos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL)",
   "CREATE TABLE reajustes_venda (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL)",
   "CREATE TABLE revisoes_financeiras_vendas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL)",
@@ -35,7 +38,7 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     conn = await mysql.createConnection({ host, user, password, port: 3306 });
     await conn.query('CREATE DATABASE IF NOT EXISTS imob_integration CHARACTER SET utf8mb4');
     await conn.query('USE imob_integration');
-    for (const table of ['revisoes_financeiras_vendas','reajustes_venda','acordos','movimentos','parcelas','pagamento_itens','vendas','unidades','auditoria_operacional','clientes','empreendimentos','node_sessoes','usuario_permissoes','usuarios','empresas']) {
+    for (const table of ['dividendos_terceiros_participantes','dividendos_terceiros','corretores_empresa','revisoes_financeiras_vendas','reajustes_venda','acordos','movimentos','parcelas','pagamento_itens','vendas','unidades','auditoria_operacional','clientes','empreendimentos','node_sessoes','usuario_permissoes','usuarios','empresas']) {
       await conn.query('DROP TABLE IF EXISTS ' + table);
     }
     for (const statement of [...DDL, ...DDL_FINANCEIRO]) await conn.query(statement);
@@ -253,6 +256,82 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     assert.equal(vendaComHistorico.status,409);
     const [audit] = await conn.query('SELECT COUNT(*) AS total FROM auditoria_operacional');
     assert.equal(audit[0].total, 7);
+
+    // Corretor: CRUD, bloqueio de duplicidade e preservacao de historico em vendas.
+    const corrCriado = await fetch(url + '/api/corretores', {
+      method:'POST',headers:csrfHeaders,
+      body:JSON.stringify({nome:'Corretor Teste',creci:'MG-100',chavePix:'chave teste'})
+    });
+    assert.equal(corrCriado.status,201,'cadastro corretor: '+corrCriado.status);
+    const corretor=await corrCriado.json();
+    assert.equal(corretor.versao,0);
+    const corrDup=await fetch(url + '/api/corretores', {
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({nome:'CORRETOR TESTE'})
+    });
+    assert.equal(corrDup.status,409,'duplicado por nome deve ser barrado');
+    const corrEditado=await fetch(url + '/api/corretores/'+corretor.id, {
+      method:'PUT',headers:csrfHeaders,body:JSON.stringify({nome:'Corretor Teste',telefone:'31988887777',versao:0})
+    });
+    assert.equal(corrEditado.status,200);
+    assert.equal((await corrEditado.json()).versao,1);
+    const corrStale=await fetch(url + '/api/corretores/'+corretor.id, {
+      method:'PUT',headers:csrfHeaders,body:JSON.stringify({nome:'Novo Nome',versao:0})
+    });
+    assert.equal(corrStale.status,409);
+    const corrRenomear=await fetch(url + '/api/corretores/'+corretor.id, {
+      method:'PUT',headers:csrfHeaders,body:JSON.stringify({nome:'Renomeado',versao:1})
+    });
+    assert.equal(corrRenomear.status,409,'vendas historicas nao podem perder nome do corretor');
+    const corrExcluir=await fetch(url + '/api/corretores/'+corretor.id,{method:'DELETE',headers:csrfHeaders});
+    assert.equal(corrExcluir.status,409,'corretor historico nao pode ser excluido');
+    const corrListar=await fetch(url + '/api/corretores',{headers:{cookie:cookies}});
+    assert.equal(corrListar.status,200);
+    assert.equal((await corrListar.json()).length,1);
+
+    // Dividendos: participantes totalizam 100%, transacao e versao otimista.
+    const divInvalido=await fetch(url+'/api/dividendos-terceiros',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({
+        imovel:'Imovel QA',valorBase:100,participantes:[{nome:'A',percentual:90}]
+      })
+    });
+    assert.equal(divInvalido.status,400);
+    const divCriado=await fetch(url+'/api/dividendos-terceiros',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({
+        imovel:'Imovel QA',valorBase:1234.56,
+        participantes:[{nome:'A',percentual:60},{nome:'B',percentual:40}]
+      })
+    });
+    assert.equal(divCriado.status,201,'cadastro dividendo: '+divCriado.status);
+    const dividendo=await divCriado.json();
+    assert.equal(dividendo.valorBase,'1234.56');
+    assert.equal(dividendo.participantes.length,2);
+    assert.equal(dividendo.participantes[0].percentual,'60.0000');
+    const divStale=await fetch(url+'/api/dividendos-terceiros/'+dividendo.id,{
+      method:'PUT',headers:csrfHeaders,body:JSON.stringify({
+        imovel:'Imovel QA',valorBase:1234.56,versao:2,
+        participantes:[{nome:'A',percentual:100}]
+      })
+    });
+    assert.equal(divStale.status,409);
+    const divEditado=await fetch(url+'/api/dividendos-terceiros/'+dividendo.id,{
+      method:'PUT',headers:csrfHeaders,body:JSON.stringify({
+        imovel:'Imovel Atualizado',valorBase:350.20,versao:0,
+        participantes:[{nome:'A',percentual:35},{nome:'B',percentual:65}]
+      })
+    });
+    assert.equal(divEditado.status,200);
+    assert.equal((await divEditado.json()).versao,1);
+    const divLista=await fetch(url+'/api/dividendos-terceiros',{headers:{cookie:cookies}});
+    assert.equal(divLista.status,200);
+    assert.equal((await divLista.json())[0].participantes.length,2);
+    const divExcluir=await fetch(url+'/api/dividendos-terceiros/'+dividendo.id,{
+      method:'DELETE',headers:csrfHeaders
+    });
+    assert.equal(divExcluir.status,204);
+    const [restantesDiv]=await conn.execute(
+      'SELECT COUNT(*) AS total FROM dividendos_terceiros_participantes WHERE dividendo_id=?',[dividendo.id]);
+    assert.equal(restantesDiv[0].total,0);
+
     const unauthorized = await fetch(url + '/api/clientes?pagina=0&tamanho=20');
     assert.equal(unauthorized.status,401);
     const invalidCSRF = await fetch(url + '/api/clientes', {
