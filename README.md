@@ -8,13 +8,13 @@ O projeto reúne **frontend React / TanStack Start / Nitro** e **backend Node.js
 
 ```text
 Hostinger — 1 aplicação Node.js
-  hosting/hostinger.mjs  (único servidor HTTP)
+  Nitro .output/server/index.mjs (único servidor HTTP)
     ├── /api/*           → backend-node/src/index.js (Express → MySQL)
     ├── /health          → Express
     └── /, /login, ...   → Nitro + TanStack Start (SSR React)
 ```
 
-**Não existem dois sites Node.js, proxy externo ou `API_UPSTREAM`.**
+**O Nitro carrega o Express diretamente pelas rotas `format: "node"`. Não existem dois sites Node.js, proxy externo ou `API_UPSTREAM`.**
 O dump MySQL com os dados reais é entregue separadamente e não integra o repositório.
 
 ## Iniciar
@@ -27,7 +27,7 @@ npm run build
 npm start
 ```
 
-Apenas um processo Node escuta a variável `PORT` definida pelo provedor. A aplicação depende das variáveis `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `SESSION_SECRET` e `COOKIE_SECURE=true` (com HTTPS). Configure-as **no painel**, nunca no GitHub.
+O Nitro inicia em `.output/server/index.mjs`, escuta a variável `PORT` definida pelo provedor e atende as rotas Express registradas em `vite.config.ts`. A aplicação depende das variáveis `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `SESSION_SECRET` e `COOKIE_SECURE=true` (com HTTPS). Configure-as **no painel**, nunca no GitHub.
 
 Para desenvolvimento da API isoladamente, `cd backend-node && npm install && npm start`, mas **não** criar um segundo site no deploy unificado.
 
