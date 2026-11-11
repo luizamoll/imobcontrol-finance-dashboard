@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const url = 'http://127.0.0.1:31821';
-const child = spawn(process.execPath, ['server.mjs'], {
+const child = spawn(process.execPath, ['hosting/hostinger.mjs'], {
   env: {
     ...process.env,
     NODE_ENV: 'test', PORT: '31821',
