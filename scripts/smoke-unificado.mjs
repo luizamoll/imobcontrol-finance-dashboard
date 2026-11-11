@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const url = 'http://127.0.0.1:31821';
-const child = spawn(process.execPath, ['hosting/hostinger.mjs'], {
+const child = spawn(process.execPath, ['.output/server/index.mjs'], {
   env: {
     ...process.env,
     NODE_ENV: 'test', PORT: '31821',
@@ -38,6 +38,17 @@ try {
   assert.equal(body.headerName, 'X-CSRF-TOKEN');
   assert.ok(csrf.headers.get('set-cookie')?.includes('imob_csrf'));
 
+  // Regressao principal: o deploy Nitro NAO pode devolver 404 HTML em /api/auth/login.
+  const login = await fetch(url + '/api/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: '', senha: '' })
+  });
+  assert.equal(login.status, 401,
+    'POST /api/auth/login precisa existir no Nitro; se 404, nao chegou ao Express.');
+  assert.match(login.headers.get('content-type') || '', /application\/json/);
+  assert.match((await login.json()).erro, /E-mail ou senha invalidos/);
+
   const unauthorized = await fetch(url + '/api/clientes');
   assert.equal(unauthorized.status, 401, 'Express precisa atender /api/clientes');
 
@@ -50,7 +61,7 @@ try {
   assert.match(home.headers.get('content-type')||'', /text\/html/);
   assert.match(html, /<html/i);
 
-  console.log('PASSOU: 1 porta, API Express /api, CSRF/cookie, Nitro SSR /login.');
+  console.log('PASSOU: Nitro server/index.mjs serviu 1 porta, POST /api/auth/login = 401 JSON, API e SSR /login.');
 } finally {
   child.kill('SIGTERM');
 }
