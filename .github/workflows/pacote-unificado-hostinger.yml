@@ -6,7 +6,6 @@ on:
     paths:
       - 'src/**'
       - 'backend-node/**'
-      - 'hosting/**'
       - 'public/**'
       - 'scripts/**'
       - 'package.json'
@@ -29,7 +28,7 @@ jobs:
           set -euo pipefail
           dir="ImobControl_UNIFICADO_NODE_MYSQL_20261111"
           mkdir -p "$dir"
-          cp -r src public backend-node hosting "$dir/"
+          cp -r src public backend-node "$dir/"
           for file in package.json tsconfig.json vite.config.ts eslint.config.js components.json .prettierrc .prettierignore .env.example .gitignore README.md DEPLOY.md HOSTINGER_NODE_MYSQL.md; do
             if [ -f "$file" ]; then cp "$file" "$dir/"; fi
           done
@@ -43,7 +42,8 @@ jobs:
 
           Instalacao: npm install
           Build: npm run build
-          Iniciar: npm start (entrada hosting/hostinger.mjs)
+          Iniciar: npm start (Nitro em .output/server/index.mjs)
+          Hostinger: output .output, entrada server/index.mjs
           Base MySQL da Hostinger em DB_HOST, DB_NAME, DB_USER,
           DB_PASSWORD e SESSION_SECRET.
           Nao configurar API_UPSTREAM. Nao e necessario criar um site
@@ -57,7 +57,7 @@ jobs:
             echo "Arquivo com potencial dado sensivel no ZIP!" >&2
             exit 1
           fi
-          test -f "$dir/hosting/hostinger.mjs"
+          test -f "$dir/backend-node/src/index.js"
           test ! -d "$dir/backend"
           zip -qr "$dir.zip" "$dir"
           unzip -l "$dir.zip" | tail -n 1
