@@ -2,6 +2,7 @@
 import { randomBytes,createHash,createHmac,timingSafeEqual } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
+import { rateLimit } from 'express-rate-limit';
 
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const validoEmail=v=>typeof v==='string'&&v.trim().length<=200&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -24,6 +25,7 @@ const pwd=(s,bad)=>{
  return s;
 };
 export function registerAcessoConta(app,{db,exigirLogin,handler,bad}){
+ const limited=rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:'draft-7',legacyHeaders:false});
  async function emitirToken(usuario,tipo,minutos){
   const token=randomBytes(32).toString('base64url'),hash=sha(token);
   await db.execute('UPDATE tokens_acesso_node SET usado_em=UTC_TIMESTAMP() WHERE usuario_id=? AND tipo=? AND usado_em IS NULL',[usuario.id,tipo]);
@@ -63,7 +65,7 @@ export function registerAcessoConta(app,{db,exigirLogin,handler,bad}){
    await c.commit();res.status(204).end();
   }catch(e){await c.rollback();throw e;}finally{c.release()}
  };
- app.post('/api/auth/recuperar-senha',handler(async(req,res)=>{
+ app.post('/api/auth/recuperar-senha',limited,handler(async(req,res)=>{
   if(!validoEmail(req.body?.email))throw bad(400,'E-mail invalido');
   if(emailConfig()){
    const [r]=await db.execute('SELECT id,nome,email FROM usuarios WHERE LOWER(email)=LOWER(?) AND ativo=1 AND (empresa_id IS NULL OR empresa_id IN (SELECT id FROM empresas WHERE ativa=1)) LIMIT 1',[req.body.email.trim()]);
@@ -141,7 +143,7 @@ export function registerAcessoConta(app,{db,exigirLogin,handler,bad}){
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
   res.json(await dtoConta(u.id));
  }));
- app.post('/api/auth/verificar-email-codigo',exigirLogin,handler(async(req,res)=>{
+ app.post('/api/auth/verificar-email-codigo',exigirLogin,limited,handler(async(req,res)=>{
   const codigo=req.body?.codigo;
   if(typeof codigo!=='string'||!/^\d{6}$/.test(codigo))throw bad(400,'Codigo invalido');
   const c=await db.getConnection();
@@ -155,7 +157,7 @@ export function registerAcessoConta(app,{db,exigirLogin,handler,bad}){
    await c.commit();res.status(204).end();
   }catch(e){await c.rollback();throw e}finally{c.release()}
  }));
- app.post('/api/auth/reenviar-verificacao-email',exigirLogin,handler(async(req,res)=>{
+ app.post('/api/auth/reenviar-verificacao-email',exigirLogin,limited,handler(async(req,res)=>{
   if(req.usuario.email_verificado) return res.status(204).end();
   if(!emailConfig())throw bad(503,'Servico de e-mail nao configurado');
   const c=await db.getConnection();
