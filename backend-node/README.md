@@ -1,29 +1,22 @@
-# API Imob Control — Express + MySQL
+# Backend Node.js / Express / MySQL
 
-Esta API é **registrada dentro do servidor Nitro** por `../vite.config.ts`, nas rotas `/api/**`, `/health` e `/actuator/health`, com `format: "node"`. O processo iniciado pela Hostinger é `.output/server/index.mjs`. Em hospedagem, **não é necessária uma aplicação separada**, subdomínio ou `API_UPSTREAM`. A pasta `backend-node` continua organizada em módulos para manutenção, mas participa do mesmo processo Node.js que serve o React/Nitro.
+A API roda como handler Node dentro do Nitro SSR, em uma unica aplicacao. Rotas `/api/**` sao registradas no `vite.config.ts`, com entrada `.output/server/index.mjs` para Hostinger.
 
-## Publicação na Hostinger
+## Modulos
+- `index.js`: sessao, login, CSRF, autenticacao/isolamento da empresa, API.
+- `clientes.js`, `catalogo*.js`, `vendas*.js`, `financeiro-read.js`, `recebimentos.js`: operacao.
+- `corretores.js`, `dividendos.js`, `fechamento.js`: cadastros e fechamento.
+- `acordos.js`, `reajustes.js`, `revisoes.js`: renegociacoes, atualizacoes monetarias e revisoes controladas.
+- `usuarios.js`, `superadmin.js`, `acesso-conta.js`: equipe, superadmin, tokens, SMTP, recuperacao e verificacao.
+- `sql/01_node_sessoes.sql`, `sql/02_revisoes_financeiras.sql`, `sql/03_tokens_acesso_node.sql`: estruturas MySQL complementares.
 
-Na raiz do repositório: `npm install` → `npm run build` → `npm start`. Entrada: `.output/server/index.mjs` (ou `server/index.mjs` relativa à saída `.output`).
-
-O servidor recebe `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `SESSION_SECRET` e `COOKIE_SECURE=true` pelo hPanel. Banco: **MySQL 8**. Dump privado entregue à parte; não adicionar à branch.
-
-## API já portada
-
-Sessão e autenticação BCrypt, proteção CSRF, clientes, catálogo, corretores, dividendos de terceiros com participantes, criação e edição controlada de vendas, leitura financeira, recebimentos retroativos, estornos, fechamento mensal (competência, lançamentos e arquivos), cálculo monetário com `decimal.js` e configurações básicas de empresa. Testes em `test/` com MySQL 8 descartável.
-
-## Em desenvolvimento
-
-Revisões financeiras especiais, acordos, reajustes manuais, administração de usuários/convites, recuperação de acesso e demais rotas Java não migradas. Essas operações retornam HTTP 501. Não usar com clientes sem completar e homologar.
-
-Para desenvolvimento isolado da API:
-
+## Testes
 ```bash
 cd backend-node
 npm install
-npm test
 npm run check
-npm start
+npm test
 ```
+O workflow `ImobControl Node.js (migracao)` tambem roda teste de integracao com um MySQL 8 descartavel. Nao executar os testes de integracao que criam/apagam tabelas no banco real.
 
-Para deploy real, usar somente **a aplicação raiz**. Veja [o guia unificado](../HOSTINGER_NODE_MYSQL.md).
+**Obrigatorio antes de producao:** testar as operacoes do cliente no banco de homologacao com o dump privado, comparar calculos com o Java e validar SMTP. Consulte [o guia](../HOSTINGER_NODE_MYSQL.md).

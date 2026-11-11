@@ -1,59 +1,72 @@
-# Hostinger — Imob Control em um único site Nitro + Express + MySQL
+# Imob Control: deploy unificado Hostinger + MySQL
 
-**Branch** `feat/hostinger-app-unificado-20261111` (homologação).
-**Objetivo**: manter o entrypoint que a Hostinger realmente executa e corrigir o 404 em `POST /api/auth/login`.
+**Branch de homologacao:** `feat/hostinger-app-unificado-20261111`.
+A versao Java da `production` permanece inalterada. NAO usar com cliente ate comparar dados, saldos e fluxos.
 
-## A implementação correta
+## Arquitetura
+- Um unico aplicativo web Node.js 22 (React/TanStack SSR e API Express).
+- Nitro `node_server` publica `.output/server/index.mjs` (`server/index.mjs` relativo a `.output` no painel).
+- `/api/**`, `/health` e `/actuator/health` sao processados pelo Express no mesmo processo.
+- Nenhum segundo app de API, nenhum `API_UPSTREAM`.
 
-- O Nitro é o **servidor HTTP único**, com preset `node_server`.
-- O build gera `.output/server/index.mjs`, executado pela Hostinger como `server/index.mjs` relativo à pasta `.output`.
-- Em `vite.config.ts`, o Nitro registra `/api/**`, `/health` e `/actuator/health` com **`format: "node"`** e handler `backend-node/src/index.js`.
-- Esse handler é o Express que implementa `POST /api/auth/login`, sessões, CSRF, vendas, parcelas e recebimentos.
-- As páginas `/`, `/login` e demais telas são renderizadas normalmente pelo React/TanStack Start.
-- **Não** utilizar `API_UPSTREAM`, dois sites Node, um segundo processo Express, ou um proxy externo entre API e frontend.
+## Hostinger hPanel
+| Campo | Configuracao |
+|---|---|
+| Git | `luizamoll/imobcontrol-finance-dashboard` |
+| Branch | `feat/hostinger-app-unificado-20261111` |
+| Diretorio raiz | `./` |
+| Node.js | `22` |
+| Build | `npm run build` |
+| Start | `npm start` |
+| Output | `.output` |
+| Entry | `server/index.mjs` |
 
-## Configuração no hPanel
-
-**Uma única aplicação** Node.js, repositório `luizamoll/imobcontrol-finance-dashboard`, branch `feat/hostinger-app-unificado-20261111`, diretório raiz `./`, Node 22 e npm.
-
-- Instalação: `npm install`.
-- Build: `npm run build`.
-- Iniciar: `npm start` (**`node .output/server/index.mjs`**).
-- Se o hPanel usar **diretório de saída** `.output` e entrada relativa **`server/index.mjs`**, **está correto**. Não precisa trocar para um entrypoint externo.
-- Deploy GitHub: escolher a branch acima; só fazer deploy depois de CI verde.
-
-### Variáveis privadas no hPanel (sem enviar senhas em mensagens)
-
-```env
+### Variaveis de ambiente secretas
+```text
 NODE_ENV=production
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_NAME=SEU_BANCO_MYSQL_COM_PREFIXO
-DB_USER=SEU_USUARIO_MYSQL_COM_PREFIXO
-DB_PASSWORD=SEGREDO_CONFIGURADO_NO_HM_PANEL
-SESSION_SECRET=SEGREDO_LONGO_DE_PELO_MENOS_32_CARACTERES
+DB_NAME=SEU_BANCO_HOSTINGER
+DB_USER=SEU_USUARIO_MYSQL
+DB_PASSWORD=SENHA_DO_MYSQL
+SESSION_SECRET=SEGREDO_ALEATORIO_DE_32+_CARACTERES
 SESSION_COOKIE_SECURE=true
+APP_URL=https://SEU_DOMINIO
+SMTP_HOST=SERVIDOR_SMTP
+SMTP_PORT=587
+SMTP_USER=USUARIO_SMTP
+SMTP_PASSWORD=SENHA_SMTP
+SMTP_FROM=Imob Control <no-reply@SEU_DOMINIO>
 ```
+O envio de convites, confirmacao de e-mail e recuperacao de senha depende de SMTP operacional. Sem SMTP, o sistema permite redefinicao administrativa, mas **nao** envio de convite nem recuperacao por e-mail. Nunca registrar segredos no GitHub ou em prints publicos.
 
-O backend também aceita `COOKIE_SECURE=true`. Qualquer uma das duas variáveis de cookie é válida em produção, com HTTPS.
+## Banco MySQL 8: procedimentos para homologacao
+1. Criar **banco novo, vazio, de homologacao**.
+2. Importar dump privado MySQL de 03/11/2026, conferindo origem e versao; ele **nao** inclui operacoes posteriores. NUNCA importar sobre banco de producao em uso.
+3. Executar somente se necessarias as migracoes, na ordem:
+   - `backend-node/sql/01_node_sessoes.sql`
+   - `backend-node/sql/02_revisoes_financeiras.sql`
+   - `backend-node/sql/03_tokens_acesso_node.sql`
+4. Validar tabelas e indices, permissoes, contagem de usuarios/clientes/vendas/parcelas/movimentos e somatorios por empreendimento. Verificar que os movimentos estornados nao sao somados.
+5. Testar um login de conta ativa com senha existente. Verificar cookie seguro e isolamento por empresa.
 
-## Teste obrigatório depois do deploy
+## Funcionalidades Node da migracao
+- Autenticacao, sessoes, CSRF, equipe, permisssoes, empresas, superadmin, auditoria.
+- Minha conta, alteracao de senha, verificacao de e-mail por codigo, convite, recuperacao por e-mail (dependem de SMTP).
+- Clientes, corretores, empreendimentos, quadras, unidades, vendas, parcelas, recebimentos, comissoes, estornos.
+- Acordos e substituicao atomica de parcelas, reajustes contratuais, revisao financeira com trilha historica.
+- Dividendos de terceiros, fechamento mensal, lancamentos, estornos e arquivos de competencia.
+- Implementacao foi enviada ao GitHub e os testes automatizados usam MySQL 8 descartavel; testar com o dump real de homologacao ANTES do uso operacional.
 
-Em DevTools → Network, confira:
+## Checklist de aprovacao
+- `POST /api/auth/login` retorna JSON 200 com credenciais validas, ou 401 JSON se invalidas; nunca 404 HTML.
+- `GET /api/auth/csrf` retorna 200 JSON com cookie seguro.
+- `GET /api/clientes` sem login retorna 401 JSON; com empresa autorizada lista so o tenant correspondente.
+- Testar criar/editar/excluir venda sem pagamentos; bloquear alteracao retroativa apos recebimento.
+- Testar receber parcela em data historica, bloquear recebimento duplo, estornar e conferir saldos.
+- Testar acordos, reajustes, fechamento de mes arquivado (snapshot), dividendos e permissoes.
+- Testar convites, recuperar senha e verificar e-mail com SMTP verdadeiro.
+- Comparar **resultado e saldos** da versao Java e da versao Node na mesma base, incluindo centavos.
+- Validar no **dominio de homologacao** com Pedro e responsavel pelo cliente antes de mudar DNS/branch de producao.
 
-1. `GET /api/auth/csrf`: **200 JSON** com cookie `imob_csrf`.
-2. `POST /api/auth/login` com corpo vazio e JSON: **401 JSON** (validação). **Nunca 404 HTML**. Esta é a regressão protegida no CI.
-3. `GET /api/clientes` sem sessão: **401 JSON**.
-4. `GET /login`: **200 HTML** da aplicação React.
-5. Login com usuário válido deve devolver 200 JSON, **desde que** o banco MySQL, a senha e a tabela `node_sessoes` estejam corretos.
-6. Testar operações de venda, baixa com data retroativa, bloqueio de duplicidade (409) e estorno em banco de homologação.
-
-## Banco de dados — separado do código
-
-Não colocar dump ou credenciais no GitHub. O arquivo real MySQL está disponível separadamente e representa dados até **03/11/2026**. Importar em banco de homologação vazio, nunca sobre dados em uso. Aplicar, somente se faltarem, `backend-node/sql/01_node_sessoes.sql` e `02_revisoes_financeiras.sql`.
-
-## Limitação funcional
-
-O conserto de roteamento foi seguido pela implementação Node de corretores, dividendos de terceiros e fechamento mensal com lançamentos, estornos e arquivos. Esses módulos ainda exigem validação do CI/MySQL e homologação.
-
-**Permanecem ausentes** acordos, reajustes manuais, administração de usuários/convites, recuperação de conta, revisões excepcionais e outras rotas. Rotas não implementadas podem responder 501. Não substituir o sistema financeiro do cliente até homologar a paridade funcional e os saldos.
+A existencia de CI verde nao significa que a aplicacao foi validada com o banco real ou publicada no hPanel.

@@ -1,25 +1,10 @@
-# Imob Control — Hostinger (Node.js + MySQL, aplicação única)
+# Imob Control — migracao Node.js + MySQL para Hostinger
 
-> **Branch de homologação** `feat/hostinger-app-unificado-20261111`. A produção Java/PostgreSQL continua intacta. A API Node ainda **não** cobre todos os módulos do Java; não substituir o sistema do cliente antes da homologação.
+O frontend React/TanStack Start + Nitro e a API Express funcionam em um unico servidor Node.js, sem `API_UPSTREAM`. O banco de destino e MySQL 8; o codigo Java original permanece preservado na branch `production`.
 
-O projeto reúne **frontend React / TanStack Start / Nitro** e **backend Node.js / Express** no **mesmo aplicativo HTTP**, usando **uma única porta**. O banco de hospedagem é **MySQL 8**.
+**Versao em homologacao:** `feat/hostinger-app-unificado-20261111`. Nao confundir build aprovado com autorizacao de uso do cliente.
 
-## Arquitetura
-
-```text
-Hostinger — 1 aplicação Node.js
-  Nitro .output/server/index.mjs (único servidor HTTP)
-    ├── /api/*           → backend-node/src/index.js (Express → MySQL)
-    ├── /health          → Express
-    └── /, /login, ...   → Nitro + TanStack Start (SSR React)
-```
-
-**O Nitro carrega o Express diretamente pelas rotas `format: "node"`. Não existem dois sites Node.js, proxy externo ou `API_UPSTREAM`.**
-O dump MySQL com os dados reais é entregue separadamente e não integra o repositório.
-
-## Iniciar
-
-Na raiz do projeto, Node.js 22 e npm:
+## Desenvolvimento da aplicacao unificada
 
 ```bash
 npm install
@@ -27,22 +12,23 @@ npm run build
 npm start
 ```
 
-O Nitro inicia em `.output/server/index.mjs`, escuta a variável `PORT` definida pelo provedor e atende as rotas Express registradas em `vite.config.ts`. A aplicação depende das variáveis `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `SESSION_SECRET` e `COOKIE_SECURE=true` (com HTTPS). Configure-as **no painel**, nunca no GitHub.
+O Nitro inicia em `.output/server/index.mjs`, incluindo Express em `/api/**` (tambem `/health`).
 
-Para desenvolvimento da API isoladamente, `cd backend-node && npm install && npm start`, mas **não** criar um segundo site no deploy unificado.
+## Modulos presentes
+- Login, sessoes, CSRF, minha conta, convite, verificacao de e-mail, recuperacao de senha.
+- Empresas, administracao de usuarios, permissoes, superadmin e auditoria.
+- Clientes, corretores, empreendimentos/quadras/unidades, vendas, parcelas, recebimentos, comissoes e estornos.
+- Acordos, reajustes de contratos, revisao financeira controlada, dividendos e fechamento mensal.
 
-## Publicação e testes
+## Testes e integracao
+O GitHub Actions compila o frontend Nitro, verifica `POST /api/auth/login` em JSON e executa testes Node e MySQL 8. A base real requer **homologacao separada** das regras financeiras e das permissoes de clientes.
 
-- [Guia de hospedagem único](HOSTINGER_NODE_MYSQL.md)
-- [Instruções rápidas](DEPLOY.md)
-- [Backend Node](backend-node/README.md)
-- [Regras de negócio](docs/REGRAS_DE_NEGOCIO.md)
-- [Roadmap e pendências](docs/ROADMAP.md)
+## Documentacao
+- [Instrucoes Hostinger, SMTP e migracoes MySQL](HOSTINGER_NODE_MYSQL.md)
+- [API Node](backend-node/README.md)
+- [Deploy](DEPLOY.md)
+- [Regras de negocio](docs/REGRAS_DE_NEGOCIO.md)
 
-Workflow GitHub Actions: `Hostinger - app unico Express + Nitro + MySQL`, verificando build SSR, JSON em `/api`, cookies/CSRF e HTML em `/login`, na mesma porta.
+Nunca colocar dumps com dados reais nem credenciais neste repositorio publico.
 
-**Novos módulos Node em homologação:** cadastro de corretores, dividendos de terceiros e fechamento mensal (consulta, lançamentos, estornos e arquivos). Testes MySQL de integração foram adicionados; conferir CI antes de liberar.
-
-**Pendências:** acordos, reajustes manuais, administração/convites, recuperação de acesso, revisões financeiras excepcionais e outras rotas do legado. Rotas não migradas retornam 501. Homologar as regras e os dados antes do uso real.
-
-Sistema desenvolvido por Maria Luiza Mol.
+Desenvolvido por Maria Luiza Mol.
