@@ -140,7 +140,15 @@ async function exigirLogin(req, res, next) {
       [sha(token)]);
     if (!rows.length) return next(bad(401, 'Sessao expirada'));
     const usuario = await usuarioPorId(rows[0].usuario_id);
-    if (!ativo(usuario)) return next(bad(403, 'Acesso bloqueado'));
+    // Sessao existente pode confirmar o novo e-mail sem acessar dados financeiros.
+    // Conta nao verificada continua bloqueada em TODAS as demais rotas.
+    const rotaVerificacao = ['/api/auth/me','/api/auth/verificar-email-codigo',
+      '/api/auth/reenviar-verificacao-email'].includes(req.path);
+    const pendente = usuario && Number(usuario.ativo) === 1 &&
+      Number(usuario.senha_definida) === 1 && Number(usuario.email_verificado) === 0 &&
+      (usuario.perfil === 'SUPER_ADMIN' ||
+        (usuario.empresa_id != null && Number(usuario.empresa_ativa) === 1));
+    if (!ativo(usuario) && !(rotaVerificacao && pendente)) return next(bad(403, 'Acesso bloqueado'));
     req.usuario = usuario;
     next();
   } catch (e) { next(e); }
