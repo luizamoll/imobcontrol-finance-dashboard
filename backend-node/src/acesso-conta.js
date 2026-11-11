@@ -74,30 +74,109 @@ export function registerAcessoConta(app,{db,exigirLogin,handler,bad}){
  }));
  app.post('/api/auth/ativar-conta',handler(async(req,res)=>concluir('CONVITE',req.body,res)));
  app.post('/api/auth/redefinir-senha',handler(async(req,res)=>concluir('RECUPERACAO_SENHA',req.body,res)));
+
+ const codigoHash=(id,codigo)=>createHmac('sha256',process.env.SESSION_SECRET).update('email:'+id+':'+codigo).digest('hex');
+ const prepararCodigo=async(conn,usuarioId)=>{
+  const codigo=String(randomBytes(4).readUInt32BE(0)%1000000).padStart(6,'0');
+  await conn.execute("UPDATE tokens_acesso_node SET usado_em=UTC_TIMESTAMP() WHERE usuario_id=? AND tipo='VERIFICACAO_EMAIL' AND usado_em IS NULL",[usuarioId]);
+  await conn.execute("INSERT INTO tokens_acesso_node (usuario_id,tipo,token_hash,expira_em,criado_em) VALUES (?,'VERIFICACAO_EMAIL',?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 15 MINUTE),UTC_TIMESTAMP())",[usuarioId,codigoHash(usuarioId,codigo)]);
+  return codigo;
+ };
+ const enviarCodigo=async(usuarioId,mail,nome,conn)=>{
+  const codigo=await prepararCodigo(conn,usuarioId);
+  return enviar(mail,'Codigo de verificacao - Imob Control',
+    'Ola, '+nome+'.\\n\\nSeu codigo de verificacao do Imob Control e: '+codigo+
+    '\\n\\nUso unico, valido por 15 minutos. Nao compartilhe este codigo.');
+ };
+ const cookieSessao=req=>{
+  const m=String(req.headers.cookie||'').match(/(?:^|;\\s*)imob_session=([0-9a-f]{64})(?:;|$)/i);
+  return m?sha(m[1]):null;
+ };
+ const dtoConta=async usuarioId=>{
+  const [r]=await db.execute('SELECT id,nome,email,telefone,email_verificado,senha_definida,perfil FROM usuarios WHERE id=?',[usuarioId]);
+  if(!r.length)throw bad(404,'Usuario nao encontrado');
+  const u=r[0];
+  const [p]=await db.execute('SELECT permissao FROM usuario_permissoes WHERE usuario_id=?',[usuarioId]);
+  const [empresa]=await db.execute('SELECT e.id,e.nome,e.slug FROM empresas e JOIN usuarios u ON u.empresa_id=e.id WHERE u.id=?',[usuarioId]);
+  return {id:u.id,nome:u.nome,email:u.email,telefone:u.telefone,emailVerificado:Boolean(u.email_verificado),
+   senhaDefinida:Boolean(u.senha_definida),perfil:u.perfil,permissoes:p.map(x=>x.permissao),
+   empresa:empresa[0]||null};
+ };
  app.put('/api/auth/minha-conta',exigirLogin,handler(async(req,res)=>{
   const u=req.usuario,b=req.body||{};
-  if(typeof b.nome!=='string'||!b.nome.trim()||b.nome.length>160||!validoEmail(b.email))throw bad(400,'Nome ou e-mail invalido');
-  const email=b.email.trim().toLowerCase(),mudouEmail=email!==u.email.toLowerCase(),novaSenha=b.novaSenha||null;
-  if(mudouEmail)throw bad(503,'Alteracao de e-mail exige verificacao; disponivel apos configurar fluxo de confirmacao');
+  if(typeof b.nome!=='string'||!b.nome.trim()||b.nome.trim().length>160||!validoEmail(b.email))throw bad(400,'Nome ou e-mail invalido');
+  const email=b.email.trim().toLowerCase(),mudouEmail=email!==u.email.toLowerCase();
+  const novaSenha=b.novaSenha||null;
+  if((mudouEmail||novaSenha!=null)&&!emailConfig()&&mudouEmail)throw bad(503,'Configure SMTP para confirmar a mudanca de e-mail');
   if(novaSenha!=null)pwd(novaSenha,bad);
-  if(novaSenha!=null){
-   if(typeof b.senhaAtual!=='string')throw bad(400,'Informe a senha atual');
-   const [r]=await db.execute('SELECT senha_hash FROM usuarios WHERE id=?',[u.id]);
-   if(!r.length||!await bcrypt.compare(b.senhaAtual,r[0].senha_hash))throw bad(400,'Senha atual incorreta');
+  if(mudouEmail||novaSenha!=null){
+   const [rows]=await db.execute('SELECT senha_hash FROM usuarios WHERE id=?',[u.id]);
+   if(!rows.length||typeof b.senhaAtual!=='string'||!await bcrypt.compare(b.senhaAtual,rows[0].senha_hash))throw bad(400,'Confirme sua senha atual');
   }
   const telefone=b.telefone==null||b.telefone===''?null:String(b.telefone).trim();
   if(telefone?.length>30)throw bad(400,'Telefone invalido');
+  const conn=await db.getConnection();
+  try{
+   await conn.beginTransaction();
+   const [rows]=await conn.execute('SELECT id,email FROM usuarios WHERE id=? FOR UPDATE',[u.id]);
+   if(!rows.length)throw bad(404,'Usuario nao encontrado');
+   if(mudouEmail){
+    const [duplos]=await conn.execute('SELECT id FROM usuarios WHERE LOWER(email)=LOWER(?) AND id<>?',[email,u.id]);
+    if(duplos.length)throw bad(409,'E-mail ja cadastrado');
+   }
+   const sql='UPDATE usuarios SET nome=?,email=?,telefone=?,email_verificado=?,'
+     +'senha_hash=COALESCE(?,senha_hash),versao=versao+1,atualizado_em=UTC_TIMESTAMP() WHERE id=?';
+   await conn.execute(sql,[b.nome.trim(),email,telefone,mudouEmail?0:u.email_verificado,
+    novaSenha==null?null:await bcrypt.hash(novaSenha,12),u.id]);
+   if(mudouEmail) {
+    if(!await enviarCodigo(u.id,email,b.nome.trim(),conn))throw bad(503,'Falha ao enviar o codigo de confirmacao');
+   }
+   // O usuario pode confirmar com a propria sessao; todas as outras sao encerradas.
+   if(mudouEmail||novaSenha!=null){
+    const tokenHash=cookieSessao(req);
+    if(tokenHash)await conn.execute('DELETE FROM node_sessoes WHERE usuario_id=? AND token_hash<>?',[u.id,tokenHash]);
+    if(novaSenha!=null)await conn.execute('UPDATE tokens_acesso_node SET usado_em=UTC_TIMESTAMP() WHERE usuario_id=? AND tipo<>\'VERIFICACAO_EMAIL\' AND usado_em IS NULL',[u.id]);
+   }
+   await conn.commit();
+  }catch(e){await conn.rollback();throw e}finally{conn.release()}
+  res.json(await dtoConta(u.id));
+ }));
+ app.post('/api/auth/verificar-email-codigo',exigirLogin,handler(async(req,res)=>{
+  const codigo=req.body?.codigo;
+  if(typeof codigo!=='string'||!/^\\d{6}$/.test(codigo))throw bad(400,'Codigo invalido');
   const c=await db.getConnection();
   try{
    await c.beginTransaction();
-   if(novaSenha!=null){
-    await c.execute('UPDATE usuarios SET nome=?,telefone=?,senha_hash=?,atualizado_em=UTC_TIMESTAMP(),versao=versao+1 WHERE id=?',[b.nome.trim(),telefone,await bcrypt.hash(novaSenha,12),u.id]);
-    await c.execute('DELETE FROM node_sessoes WHERE usuario_id=?',[u.id]);
-    await c.execute('UPDATE tokens_acesso_node SET usado_em=UTC_TIMESTAMP() WHERE usuario_id=? AND usado_em IS NULL',[u.id]);
-   }else await c.execute('UPDATE usuarios SET nome=?,telefone=?,atualizado_em=UTC_TIMESTAMP(),versao=versao+1 WHERE id=?',[b.nome.trim(),telefone,u.id]);
-   await c.commit();
+   const [t]=await c.execute("SELECT id,expira_em,usado_em FROM tokens_acesso_node WHERE usuario_id=? AND tipo='VERIFICACAO_EMAIL' AND token_hash=? FOR UPDATE",[req.usuario.id,codigoHash(req.usuario.id,codigo)]);
+   const token=t[0],agora=new Date().toISOString().slice(0,19).replace('T',' ');
+   if(!token||token.usado_em!=null||String(token.expira_em).replace('T',' ').slice(0,19)<=agora)throw bad(400,'Codigo invalido ou expirado');
+   await c.execute('UPDATE usuarios SET email_verificado=1,atualizado_em=UTC_TIMESTAMP(),versao=versao+1 WHERE id=?',[req.usuario.id]);
+   await c.execute("UPDATE tokens_acesso_node SET usado_em=UTC_TIMESTAMP() WHERE usuario_id=? AND tipo='VERIFICACAO_EMAIL' AND usado_em IS NULL",[req.usuario.id]);
+   await c.commit();res.status(204).end();
   }catch(e){await c.rollback();throw e}finally{c.release()}
-  res.json({id:u.id,nome:b.nome.trim(),email,telefone,perfil:u.perfil,senhaDefinida:true,emailVerificado:Boolean(u.email_verificado)});
+ }));
+ app.post('/api/auth/reenviar-verificacao-email',exigirLogin,handler(async(req,res)=>{
+  if(req.usuario.email_verificado) return res.status(204).end();
+  if(!emailConfig())throw bad(503,'Servico de e-mail nao configurado');
+  const c=await db.getConnection();
+  try{
+   await c.beginTransaction();
+   if(!await enviarCodigo(req.usuario.id,req.usuario.email,req.usuario.nome,c))throw bad(503,'Falha ao enviar codigo');
+   await c.commit();res.status(204).end();
+  }catch(e){await c.rollback();throw e}finally{c.release()}
+ }));
+ app.post('/api/auth/verificar-email',handler(async(req,res)=>{
+  if(typeof req.body?.token!=='string'||req.body.token.length<30||req.body.token.length>200)throw bad(400,'Token invalido');
+  const c=await db.getConnection();
+  try{
+   await c.beginTransaction();
+   const [r]=await c.execute("SELECT id,usuario_id,expira_em,usado_em FROM tokens_acesso_node WHERE tipo='VERIFICACAO_EMAIL' AND token_hash=? FOR UPDATE",[sha(req.body.token.trim())]);
+   const token=r[0];
+   if(!token||token.usado_em!=null||String(token.expira_em).replace('T',' ').slice(0,19)<=new Date().toISOString().slice(0,19).replace('T',' '))throw bad(400,'Token invalido ou expirado');
+   await c.execute('UPDATE usuarios SET email_verificado=1,atualizado_em=UTC_TIMESTAMP() WHERE id=?',[token.usuario_id]);
+   await c.execute('UPDATE tokens_acesso_node SET usado_em=UTC_TIMESTAMP() WHERE usuario_id=? AND usado_em IS NULL',[token.usuario_id]);
+   await c.commit();res.status(204).end();
+  }catch(e){await c.rollback();throw e}finally{c.release()}
  }));
  return { solicitarConvite, emailConfig };
 }
