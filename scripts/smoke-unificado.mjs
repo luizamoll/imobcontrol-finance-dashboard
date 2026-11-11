@@ -12,7 +12,8 @@ const child = spawn(process.execPath, ['.output/server/index.mjs'], {
     DB_NAME: 'imob_qa',
     SESSION_SECRET: 'Chave-local-para-testes-0123456789abcdef',
     // Vite/Nitro compila modo production; HTTPS termina no proxy da Hostinger.
-    COOKIE_SECURE: 'true'
+    COOKIE_SECURE: '',
+    SESSION_COOKIE_SECURE: 'true'
   },
   stdio: ['ignore', 'pipe', 'pipe']
 });
@@ -38,6 +39,8 @@ try {
   const body = await csrf.json();
   assert.equal(body.headerName, 'X-CSRF-TOKEN');
   assert.ok(csrf.headers.get('set-cookie')?.includes('imob_csrf'));
+  assert.match(csrf.headers.get('set-cookie') || '', /; Secure/i,
+    'SESSION_COOKIE_SECURE do hPanel precisa manter cookie seguro');
 
   // Regressao principal: o deploy Nitro NAO pode devolver 404 HTML em /api/auth/login.
   const login = await fetch(url + '/api/auth/login', {
