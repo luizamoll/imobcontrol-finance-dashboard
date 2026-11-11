@@ -27,8 +27,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Instalar dependencias da unica aplicacao
-        run: npm install --no-audit --no-fund
+      - name: Simular instalacao da Hostinger (somente dependencias de producao)
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: Validar dependencias do build no ambiente de producao
+        run: npm ls @lovable.dev/vite-tanstack-config vite nitro --depth=0
       - name: Validar sintaxe do backend Node
         run: npm run check:unified
       - name: Compilar Nitro com API Express registrada
