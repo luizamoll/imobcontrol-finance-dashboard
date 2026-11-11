@@ -1,0 +1,67 @@
+name: Empacotar Imob Control unificado para Pedro
+on:
+  push:
+    branches:
+      - feat/hostinger-app-unificado-20261111
+    paths:
+      - 'src/**'
+      - 'backend-node/**'
+      - 'hosting/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'vite.config.ts'
+      - '.github/workflows/pacote-unificado-hostinger.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pacote-codigo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ZIP somente de codigo Node.js + React + MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="ImobControl_UNIFICADO_NODE_MYSQL_20261111"
+          mkdir -p "$dir"
+          cp -r src public backend-node hosting "$dir/"
+          for file in package.json tsconfig.json vite.config.ts eslint.config.js components.json .prettierrc .prettierignore .env.example .gitignore HOSTINGER_NODE_MYSQL.md; do
+            if [ -f "$file" ]; then cp "$file" "$dir/"; fi
+          done
+          mkdir -p "$dir/scripts"
+          cp scripts/smoke-unificado.mjs "$dir/scripts/"
+          cat > "$dir/LEIA-ME.txt" <<'EOF'
+          IMOB CONTROL UNIFICADO - CODIGO SEM DADOS REAIS
+
+          Aplicacao unica Node.js + Express + Nitro SSR + React + MySQL.
+          Branch: feat/hostinger-app-unificado-20261111
+
+          Instalacao: npm install
+          Build: npm run build
+          Iniciar: npm start (entrada hosting/hostinger.mjs)
+          Base MySQL da Hostinger em DB_HOST, DB_NAME, DB_USER,
+          DB_PASSWORD e SESSION_SECRET.
+          Nao configurar API_UPSTREAM. Nao e necessario criar um site
+          para a API e outro para o frontend.
+          Dump MySQL e outro arquivo, separado e privado.
+
+          Ainda ha modulos financeiros do Java nao migrados.
+          Usar apenas em homologacao e ler HOSTINGER_NODE_MYSQL.md.
+          EOF
+          if find "$dir" -type f \( -name '*.dump' -o -name '*.csv' -o -name '*.zip' -o -name '.env' \) | grep -q .; then
+            echo "Arquivo com potencial dado sensivel no ZIP!" >&2
+            exit 1
+          fi
+          test -f "$dir/hosting/hostinger.mjs"
+          test ! -d "$dir/backend"
+          zip -qr "$dir.zip" "$dir"
+          unzip -l "$dir.zip" | tail -n 1
+      - name: Disponibilizar codigo
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImobControl-UNIFICADO-CODIGO-Node-MySQL
+          path: ImobControl_UNIFICADO_NODE_MYSQL_20261111.zip
+          if-no-files-found: error
+          retention-days: 30
