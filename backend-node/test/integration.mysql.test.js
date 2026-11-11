@@ -488,6 +488,59 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     assert.equal(elegibilidadeLiberada.status,200);
     assert.equal((await elegibilidadeLiberada.json()).permitido,true);
 
+
+    // Superadmin: tenant diferente e autorizacoes administrativas segregadas.
+    const adminNegado=await fetch(url+'/api/super-admin/empresas',{headers:{cookie:cookies}});
+    assert.equal(adminNegado.status,403,'ADMIN de empresa nao pode gerir superadmin');
+    const hashSuper=await bcrypt.hash('SenhaSuperDeTestes123!',10);
+    await conn.execute(
+      "INSERT INTO usuarios (id,empresa_id,nome,email,senha_hash,perfil,ativo,senha_definida,email_verificado) VALUES (100,NULL,'Super de Teste','super@example.invalid',?,'SUPER_ADMIN',1,1,1)",
+      [hashSuper]
+    );
+    const loginSuper=await fetch(url+'/api/auth/login',{
+      method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({email:'super@example.invalid',senha:'SenhaSuperDeTestes123!'})
+    });
+    assert.equal(loginSuper.status,200,'superadmin login');
+    const superCookie=loginSuper.headers.get('set-cookie')?.split(';')[0];
+    assert.ok(superCookie?.startsWith('imob_session='));
+    const headersSuper={cookie:csrfCookie+'; '+superCookie,'content-type':'application/json',
+      'X-CSRF-TOKEN':csrfData.token};
+    const listaEmpresas=await fetch(url+'/api/super-admin/empresas',{headers:headersSuper});
+    assert.equal(listaEmpresas.status,200);
+    const empresaNova=await fetch(url+'/api/super-admin/empresas',{
+      method:'POST',headers:headersSuper,
+      body:JSON.stringify({nome:'Construtora QA',email:'qa-empresa@example.invalid'})
+    });
+    assert.equal(empresaNova.status,201,'superadmin cria empresa: '+empresaNova.status);
+    const novaEmp=await empresaNova.json();
+    assert.equal(novaEmp.slug,'construtora-qa');
+    const criarAdm=await fetch(url+'/api/super-admin/usuarios',{
+      method:'POST',headers:headersSuper,
+      body:JSON.stringify({nome:'Gestor QA',email:'gestor@example.invalid',
+       empresaId:novaEmp.id,perfil:'ADMIN'})
+    });
+    assert.equal(criarAdm.status,201,'superadmin cria gestor');
+    const gestor=await criarAdm.json();
+    assert.equal(gestor.perfil,'ADMIN');
+    const resumoAdmin=await fetch(url+'/api/super-admin/usuarios/resumo',{headers:headersSuper});
+    assert.equal(resumoAdmin.status,200);
+    assert.ok((await resumoAdmin.json()).administradores>=2);
+    const auditoriaSuper=await fetch(url+'/api/super-admin/auditoria?pagina=0&tamanho=20',{headers:headersSuper});
+    assert.equal(auditoriaSuper.status,200);
+    assert.ok((await auditoriaSuper.json()).totalElements>=1);
+
+    // Rotas de acesso publico nao podem vazar existencia de usuario.
+    const recuperarInexistente=await fetch(url+'/api/auth/recuperar-senha',{
+      method:'POST',headers:csrfHeaders,
+      body:JSON.stringify({email:'nao-existe@example.invalid'})
+    });
+    assert.equal(recuperarInexistente.status,204);
+    const codigoErrado=await fetch(url+'/api/auth/verificar-email-codigo',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({codigo:'123456'})
+    });
+    assert.equal(codigoErrado.status,400);
+
     const unauthorized = await fetch(url + '/api/clientes?pagina=0&tamanho=20');
     assert.equal(unauthorized.status,401);
     const invalidCSRF = await fetch(url + '/api/clientes', {
