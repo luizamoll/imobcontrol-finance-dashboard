@@ -215,5 +215,16 @@ app.use((err, req, res, next) => {
   res.status(status).json({ erro: status === 500 ? 'Erro interno do servidor' : (err.message || 'Operacao nao concluida') });
 });
 
-const porta = Number(process.env.PORT || 3000);
-app.listen(porta, '0.0.0.0', () => console.log('ImobControl API Node em porta ' + porta));
+// A API pode ser usada de duas formas:
+// - standalone para testes/compatibilidade: node backend-node/src/index.js;
+// - importada no servidor unificado da Hostinger, sem abrir outra porta.
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+
+export default app;
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const porta = Number(process.env.PORT || 3000);
+  app.listen(porta, '0.0.0.0', () => {
+    console.log('ImobControl API Node em porta ' + porta);
+  });
+}
