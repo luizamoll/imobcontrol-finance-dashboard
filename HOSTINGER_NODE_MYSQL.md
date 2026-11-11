@@ -1,100 +1,57 @@
-# Imob Control — aplicação ÚNICA na Hostinger Business
+# Hostinger — Imob Control em um único site Nitro + Express + MySQL
 
-**Branch:** `feat/hostinger-app-unificado-20261111`  
-**Estado:** integração arquitetural para homologação, NÃO substitui ainda a produção.
+**Branch** `feat/hostinger-app-unificado-20261111` (homologação).
+**Objetivo**: manter o entrypoint que a Hostinger realmente executa e corrigir o 404 em `POST /api/auth/login`.
 
-## Como o projeto funciona
+## A implementação correta
 
-Uma instância Node.js e **uma única porta HTTP**:
+- O Nitro é o **servidor HTTP único**, com preset `node_server`.
+- O build gera `.output/server/index.mjs`, executado pela Hostinger como `server/index.mjs` relativo à pasta `.output`.
+- Em `vite.config.ts`, o Nitro registra `/api/**`, `/health` e `/actuator/health` com **`format: "node"`** e handler `backend-node/src/index.js`.
+- Esse handler é o Express que implementa `POST /api/auth/login`, sessões, CSRF, vendas, parcelas e recebimentos.
+- As páginas `/`, `/login` e demais telas são renderizadas normalmente pelo React/TanStack Start.
+- **Não** utilizar `API_UPSTREAM`, dois sites Node, um segundo processo Express, ou um proxy externo entre API e frontend.
 
-```text
-                  Hostinger — um Web App Node.js
-https://seudominio.com
-        |
-        v
-hosting/hostinger.mjs  (node / Express; única chamada .listen)
-        |
-        +-- /api/* e /health ---> Express em backend-node/src/index.js --> MySQL
-        |
-        +-- /login, /, /assets --> Nitro/TanStack SSR + React
-                                  (.output/server/index.mjs)
-```
+## Configuração no hPanel
 
-O Express é importado como aplicação, sem abrir sua antiga porta 3000. O
-Nitro é compilado com o preset `node_middleware` e recebe diretamente os
-objetos de requisição e resposta do mesmo Express. **Não há segunda API,
-subdomínio nem variável `API_UPSTREAM`.**
+**Uma única aplicação** Node.js, repositório `luizamoll/imobcontrol-finance-dashboard`, branch `feat/hostinger-app-unificado-20261111`, diretório raiz `./`, Node 22 e npm.
 
-Os endpoints ainda não migrados de Java respondem 501; portanto, esta
-branch **não significa que todos os módulos financeiros estão concluídos**.
+- Instalação: `npm install`.
+- Build: `npm run build`.
+- Iniciar: `npm start` (**`node .output/server/index.mjs`**).
+- Se o hPanel usar **diretório de saída** `.output` e entrada relativa **`server/index.mjs`**, **está correto**. Não precisa trocar para um entrypoint externo.
+- Deploy GitHub: escolher a branch acima; só fazer deploy depois de CI verde.
 
-## Deploy pelo hPanel
-
-1. Acessar Hostinger → Websites → Create site → Web App.
-2. Importar do GitHub o repositório `luizamoll/imobcontrol-finance-dashboard`.
-3. Selecionar branch `feat/hostinger-app-unificado-20261111` e **diretório raiz `./`**.
-4. Framework: escolher **Other** (ou Express customizado, se houver opção).
-5. Node.js **22**, gerenciador **npm**.
-6. Build: `npm run build` (produz `.output/server/index.mjs` e `.output/public`).
-7. Iniciar: `npm start`; **entrada `hosting/hostinger.mjs` na raiz do projeto**.
-8. **Não apontar a entrada para `.output/server/index.mjs`**: essa saída é
-   middleware Nitro, não servidor independente. Não configurar um segundo site.
-9. Caso o hPanel peça *Output directory*, manter o projeto completo
-   disponível ao processo: `hosting/hostinger.mjs`, `backend-node/` e `.output/`
-   devem estar **juntos**. Não configurar apenas `.output/` se isso
-   excluir o backend e `hosting/hostinger.mjs`. Se o painel não permitir manter
-   esses arquivos no deploy, é necessária uma configuração de pacote
-   de saída específica antes de publicar.
-
-**Uma única configuração de ambiente** no painel do Web App:
+### Variáveis privadas no hPanel (sem enviar senhas em mensagens)
 
 ```env
 NODE_ENV=production
-COOKIE_SECURE=true
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_NAME=NOME_MYSQL_COM_PREFIXO_DA_HOSTINGER
-DB_USER=USUARIO_MYSQL_COM_PREFIXO
-DB_PASSWORD=SENHA_MYSQL
-SESSION_SECRET=SEGREDO_ALEATORIO_COM_PELO_MENOS_32_CARACTERES
+DB_NAME=SEU_BANCO_MYSQL_COM_PREFIXO
+DB_USER=SEU_USUARIO_MYSQL_COM_PREFIXO
+DB_PASSWORD=SEGREDO_CONFIGURADO_NO_HM_PANEL
+SESSION_SECRET=SEGREDO_LONGO_DE_PELO_MENOS_32_CARACTERES
+SESSION_COOKIE_SECURE=true
 ```
 
-Deixar `PORT` controlada pela Hostinger. Não usar `DATABASE_URL`,
-`PGHOST` nem `API_UPSTREAM`. Não comitar variáveis reais ao Git.
+O backend também aceita `COOKIE_SECURE=true`. Qualquer uma das duas variáveis de cookie é válida em produção, com HTTPS.
 
-## Dados reais MySQL
+## Teste obrigatório depois do deploy
 
-O dump real **continua separado do código**, com dados até **03/11/2026**.
-Se o Pedro já importou o dump em MySQL, **NÃO importar de novo**. Caso ainda
-não tenha feito, importar em banco de homologação vazio pelo phpMyAdmin.
-Aplicar uma única vez as tabelas auxiliares, se faltarem:
+Em DevTools → Network, confira:
 
-- `backend-node/sql/01_node_sessoes.sql` (sessões Node);
-- `backend-node/sql/02_revisoes_financeiras.sql` (estrutura V22).
+1. `GET /api/auth/csrf`: **200 JSON** com cookie `imob_csrf`.
+2. `POST /api/auth/login` com corpo vazio e JSON: **401 JSON** (validação). **Nunca 404 HTML**. Esta é a regressão protegida no CI.
+3. `GET /api/clientes` sem sessão: **401 JSON**.
+4. `GET /login`: **200 HTML** da aplicação React.
+5. Login com usuário válido deve devolver 200 JSON, **desde que** o banco MySQL, a senha e a tabela `node_sessoes` estejam corretos.
+6. Testar operações de venda, baixa com data retroativa, bloqueio de duplicidade (409) e estorno em banco de homologação.
 
-Conferir contagens e totais com o relatório de validação do dump. Esses
-scripts não exigem alterar dados financeiros originais.
+## Banco de dados — separado do código
 
-## Teste após publicar em preview
+Não colocar dump ou credenciais no GitHub. O arquivo real MySQL está disponível separadamente e representa dados até **03/11/2026**. Importar em banco de homologação vazio, nunca sobre dados em uso. Aplicar, somente se faltarem, `backend-node/sql/01_node_sessoes.sql` e `02_revisoes_financeiras.sql`.
 
-- `/api/auth/csrf` deve retornar JSON e cookie no mesmo domínio da página.
-- `/login` deve retornar HTML do React/TanStack SSR pela **mesma porta**.
-- `/api/clientes` sem login deve responder 401 JSON, não HTML.
-- Acesso ao login com conta autorizada e conexão MySQL, com dados de teste.
-- Testar baixa retroativa, estorno e erro 409 sem duplicação.
-- Conferir fechamento de outubro/novembro e dados reais após homologação.
+## Limitação funcional
 
-## Limites da refatoração
-
-**Módulos Java ainda ausentes na API Node:** acordos, reajustes manuais,
-revisões financeiras especiais, fechamento mensal/arquivos, convites e
-administração de usuários, recuperação de acesso, dividendos e outros.
-A migração unificada corrige o **problema de arquitetura** relatado pelo
-Pedro; não declara esses módulos prontos. Manter o sistema anterior em
-produção até completar e homologar as regras do cliente.
-
-## Verificação técnica
-
-O workflow GitHub Actions `Hostinger - app unico Express + Nitro + MySQL`
-compila o SSR em modo middleware e sobe a aplicação para verificar API e
-HTML na mesma porta. A automação evita dependência de um segundo site.
+O conserto de roteamento não cria automaticamente os módulos ainda ausentes na API Node (acordos, fechamento mensal, reajustes manuais, administração, recuperação de conta, dividendos, revisões excepcionais). Rotas não implementadas podem responder 501. Não substituir o sistema financeiro do cliente até homologar a paridade funcional e os saldos.
