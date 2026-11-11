@@ -85,11 +85,11 @@ export function registerAcessoConta(app,{db,exigirLogin,handler,bad}){
  const enviarCodigo=async(usuarioId,mail,nome,conn)=>{
   const codigo=await prepararCodigo(conn,usuarioId);
   return enviar(mail,'Codigo de verificacao - Imob Control',
-    'Ola, '+nome+'.\\n\\nSeu codigo de verificacao do Imob Control e: '+codigo+
-    '\\n\\nUso unico, valido por 15 minutos. Nao compartilhe este codigo.');
+    'Ola, '+nome+'.\n\nSeu codigo de verificacao do Imob Control e: '+codigo+
+    '\n\nUso unico, valido por 15 minutos. Nao compartilhe este codigo.');
  };
  const cookieSessao=req=>{
-  const m=String(req.headers.cookie||'').match(/(?:^|;\\s*)imob_session=([0-9a-f]{64})(?:;|$)/i);
+  const m=String(req.headers.cookie||'').match(/(?:^|;\s*)imob_session=([0-9a-f]{64})(?:;|$)/i);
   return m?sha(m[1]):null;
  };
  const dtoConta=async usuarioId=>{
@@ -143,7 +143,7 @@ export function registerAcessoConta(app,{db,exigirLogin,handler,bad}){
  }));
  app.post('/api/auth/verificar-email-codigo',exigirLogin,handler(async(req,res)=>{
   const codigo=req.body?.codigo;
-  if(typeof codigo!=='string'||!/^\\d{6}$/.test(codigo))throw bad(400,'Codigo invalido');
+  if(typeof codigo!=='string'||!/^\d{6}$/.test(codigo))throw bad(400,'Codigo invalido');
   const c=await db.getConnection();
   try{
    await c.beginTransaction();
