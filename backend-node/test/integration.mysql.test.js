@@ -16,6 +16,8 @@ const DDL = [
   "CREATE TABLE empreendimentos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, nome VARCHAR(160) NOT NULL, spe VARCHAR(160), cnpj VARCHAR(14), area_total DECIMAL(19,4) NOT NULL, tipo VARCHAR(30) NOT NULL, unidades_previstas INT NOT NULL, valor_total DECIMAL(19,2) NOT NULL, socio_nome VARCHAR(160), socio_pct DECIMAL(9,4) NOT NULL, empresa_pct DECIMAL(9,4) NOT NULL, corretor_pct DECIMAL(9,4) NOT NULL, aliquota_tributaria DECIMAL(9,4) NOT NULL, repasse_comissao_pct DECIMAL(9,4) NOT NULL, comissao_sobre_acrescimos TINYINT(1) NOT NULL, inadimplencia_json LONGTEXT, reajuste_contratual_json LONGTEXT, observacoes LONGTEXT, status VARCHAR(30) NOT NULL, versao BIGINT NOT NULL, criado_por_usuario_id BIGINT NOT NULL, atualizado_por_usuario_id BIGINT NOT NULL, criado_em DATETIME NOT NULL, atualizado_em DATETIME NOT NULL)"
 ];
 const DDL_FINANCEIRO = [
+  "CREATE TABLE fechamento_mensal_lancamentos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, data_lancamento DATE NOT NULL, tipo VARCHAR(35) NOT NULL, descricao VARCHAR(240) NOT NULL, valor DECIMAL(19,2) NOT NULL, criado_por_usuario_id BIGINT NOT NULL, criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, estornado_por_usuario_id BIGINT, estornado_em DATETIME)",
+  "CREATE TABLE fechamento_mensal_arquivos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, mes VARCHAR(7) NOT NULL, relatorio_json LONGTEXT NOT NULL, criado_por_usuario_id BIGINT NOT NULL, criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_fechamento_arquivado (empresa_id,empreendimento_id,mes))",
   "CREATE TABLE corretores_empresa (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, nome VARCHAR(160) NOT NULL, documento VARCHAR(30), creci VARCHAR(80), email VARCHAR(200), telefone VARCHAR(30), chave_pix VARCHAR(200), versao BIGINT NOT NULL DEFAULT 0, criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_corretor_nome (empresa_id,nome))",
   "CREATE TABLE dividendos_terceiros (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, imovel VARCHAR(200) NOT NULL, valor_base DECIMAL(19,2) NOT NULL, observacoes TEXT, versao BIGINT NOT NULL DEFAULT 0, criado_por_usuario_id BIGINT NOT NULL, atualizado_por_usuario_id BIGINT NOT NULL, criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
   "CREATE TABLE dividendos_terceiros_participantes (dividendo_id BIGINT NOT NULL, ordem INT NOT NULL, nome VARCHAR(160) NOT NULL, percentual DECIMAL(7,4) NOT NULL, PRIMARY KEY (dividendo_id,ordem), FOREIGN KEY (dividendo_id) REFERENCES dividendos_terceiros(id) ON DELETE CASCADE)",
@@ -24,7 +26,7 @@ const DDL_FINANCEIRO = [
   "CREATE TABLE revisoes_financeiras_vendas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL)",
   "CREATE TABLE unidades (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, quadra_id BIGINT NULL, numero VARCHAR(80) NOT NULL, unidade VARCHAR(120) NOT NULL, unidade_tipo VARCHAR(30), descricao LONGTEXT, area DECIMAL(19,4) NOT NULL DEFAULT 0, valor_venda DECIMAL(19,2) NOT NULL DEFAULT 0, status VARCHAR(30) NOT NULL, regras_json LONGTEXT, versao BIGINT NOT NULL DEFAULT 0, criado_por_usuario_id BIGINT NOT NULL DEFAULT 1, atualizado_por_usuario_id BIGINT NOT NULL DEFAULT 1, criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
   "CREATE TABLE vendas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, unidade_id BIGINT NOT NULL, cliente_id BIGINT NOT NULL, valor_total DECIMAL(19,2) NOT NULL, data_contrato DATE NOT NULL, corretor_nome VARCHAR(160), corretor_pct DECIMAL(9,4) NOT NULL, repasse_comissao_pct DECIMAL(9,4) NOT NULL, comissao_sobre_acrescimos TINYINT(1) NOT NULL, corretagem_compoe_valor_contrato TINYINT(1), valor_imovel DECIMAL(19,2), corretagem_valor DECIMAL(19,2), corretagem_forma_pagamento VARCHAR(40), observacoes LONGTEXT, status VARCHAR(30) NOT NULL, regras_json LONGTEXT NOT NULL, versao BIGINT NOT NULL, criado_por_usuario_id BIGINT NOT NULL, atualizado_por_usuario_id BIGINT NOT NULL, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE TABLE parcelas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, unidade_id BIGINT NOT NULL, cliente_id BIGINT NOT NULL, origem_tipo VARCHAR(40) NOT NULL, origem_descricao VARCHAR(240), numero INT NOT NULL, total_parcelas INT NOT NULL, vencimento DATE NOT NULL, valor DECIMAL(19,2) NOT NULL, valor_pago DECIMAL(19,2) NOT NULL DEFAULT 0, valor_original DECIMAL(19,2) NOT NULL, reajustes_aplicados INT NOT NULL DEFAULT 0, data_pagamento DATE, status VARCHAR(30) NOT NULL, regras_inadimplencia_json LONGTEXT, versao BIGINT NOT NULL DEFAULT 0, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE parcelas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, unidade_id BIGINT NOT NULL, cliente_id BIGINT NOT NULL, origem_tipo VARCHAR(40) NOT NULL, origem_descricao VARCHAR(240), numero INT NOT NULL, total_parcelas INT NOT NULL, vencimento DATE NOT NULL, valor DECIMAL(19,2) NOT NULL, valor_pago DECIMAL(19,2) NOT NULL DEFAULT 0, valor_original DECIMAL(19,2) NOT NULL, reajustes_aplicados INT NOT NULL DEFAULT 0, acordo_papel VARCHAR(20), data_pagamento DATE, status VARCHAR(30) NOT NULL, regras_inadimplencia_json LONGTEXT, versao BIGINT NOT NULL DEFAULT 0, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
   "CREATE TABLE movimentos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, parcela_id BIGINT NOT NULL, venda_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, unidade_id BIGINT NOT NULL, cliente_id BIGINT NOT NULL, corretor_nome VARCHAR(160), socio_nome VARCHAR(160), origem VARCHAR(40) NOT NULL, origem_descricao VARCHAR(240), data_movimento DATE NOT NULL, usuario_id BIGINT NOT NULL, valor_recebido DECIMAL(19,2) NOT NULL, imposto_reservado DECIMAL(19,2) NOT NULL, comissao_paga DECIMAL(19,2) NOT NULL, empresa_valor DECIMAL(19,2) NOT NULL, socio_valor DECIMAL(19,2) NOT NULL, aliquota_tributaria_aplicada DECIMAL(9,4), empresa_pct_aplicada DECIMAL(9,4), socio_pct_aplicada DECIMAL(9,4), comissao_base_calculo DECIMAL(19,2), comissao_repasse_pct_aplicado DECIMAL(9,4), comissao_sobre_acrescimos_aplicada TINYINT(1), acrescimos_recebidos DECIMAL(19,2), comissao_teorica DECIMAL(19,2), saldo_comissao_apos DECIMAL(19,2), estornado TINYINT(1) NOT NULL DEFAULT 0, estornado_em DATETIME, estornado_por_usuario_id BIGINT)",
   "CREATE TABLE pagamento_itens (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL, tipo VARCHAR(40), descricao VARCHAR(240), valor DECIMAL(19,2), parcelas INT, primeiro_vencimento DATE, status VARCHAR(40))"
 ];
@@ -38,7 +40,7 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     conn = await mysql.createConnection({ host, user, password, port: 3306 });
     await conn.query('CREATE DATABASE IF NOT EXISTS imob_integration CHARACTER SET utf8mb4');
     await conn.query('USE imob_integration');
-    for (const table of ['dividendos_terceiros_participantes','dividendos_terceiros','corretores_empresa','revisoes_financeiras_vendas','reajustes_venda','acordos','movimentos','parcelas','pagamento_itens','vendas','unidades','auditoria_operacional','clientes','empreendimentos','node_sessoes','usuario_permissoes','usuarios','empresas']) {
+    for (const table of ['fechamento_mensal_arquivos','fechamento_mensal_lancamentos','dividendos_terceiros_participantes','dividendos_terceiros','corretores_empresa','revisoes_financeiras_vendas','reajustes_venda','acordos','movimentos','parcelas','pagamento_itens','vendas','unidades','auditoria_operacional','clientes','empreendimentos','node_sessoes','usuario_permissoes','usuarios','empresas']) {
       await conn.query('DROP TABLE IF EXISTS ' + table);
     }
     for (const statement of [...DDL, ...DDL_FINANCEIRO]) await conn.query(statement);
@@ -331,6 +333,74 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     const [restantesDiv]=await conn.execute(
       'SELECT COUNT(*) AS total FROM dividendos_terceiros_participantes WHERE dividendo_id=?',[dividendo.id]);
     assert.equal(restantesDiv[0].total,0);
+
+
+    // Fechamento mensal: estornos excluidos, competencia de pagamento real,
+    // lancamentos de caixa e snapshot congelado em mes encerrado.
+    const resumoAntes=await fetch(url+'/api/fechamento-mensal?mes=2026-10&empreendimentoId='+empBody.id,{
+      headers:{cookie:cookies}
+    });
+    assert.equal(resumoAntes.status,200);
+    assert.equal((await resumoAntes.json()).recebidoParcelas,'0.00',
+      'movimento historico estornado nao deve entrar no fechamento');
+    const recebimentoValido=await fetch(url+'/api/parcelas/31/receber',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({data:'2026-10-31'})
+    });
+    assert.equal(recebimentoValido.status,201);
+    const resumoComRecebimento=await fetch(url+'/api/fechamento-mensal?mes=2026-10&empreendimentoId='+empBody.id,{
+      headers:{cookie:cookies}
+    });
+    assert.equal(resumoComRecebimento.status,200);
+    const fechamento=await resumoComRecebimento.json();
+    assert.equal(fechamento.recebidoParcelas,'103.00');
+    assert.equal(fechamento.valorTotalRecebido,'103.00');
+    assert.equal(fechamento.glebasComPagamentoMes,1);
+    const resumoNovembro=await fetch(url+'/api/fechamento-mensal?mes=2026-11&empreendimentoId='+empBody.id,{
+      headers:{cookie:cookies}
+    });
+    assert.equal((await resumoNovembro.json()).recebidoParcelas,'0.00');
+    const despesa=await fetch(url+'/api/fechamento-mensal/lancamentos',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({
+        empreendimentoId:empBody.id,data:'2026-10-15',tipo:'CUSTO_EMPREENDIMENTO',
+        descricao:'Custo de teste',valor:'30.00'
+      })
+    });
+    assert.equal(despesa.status,201);
+    const lancamento=await despesa.json();
+    const comDespesa=await fetch(url+'/api/fechamento-mensal?mes=2026-10&empreendimentoId='+empBody.id,{
+      headers:{cookie:cookies}
+    });
+    const resumoDespesa=await comDespesa.json();
+    assert.equal(resumoDespesa.custoEmpreendimento,'30.00');
+    assert.equal(resumoDespesa.saldoDisponivelEstimado,'73.00');
+    const arquivar=await fetch(url+'/api/fechamento-mensal/arquivos',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({mes:'2026-10',empreendimentoId:empBody.id})
+    });
+    assert.equal(arquivar.status,201,'arquivar fechamento: '+arquivar.status);
+    const snapshot=await arquivar.json();
+    assert.equal(snapshot.relatorio.saldoDisponivelEstimado,'73.00');
+    const repetido=await fetch(url+'/api/fechamento-mensal/arquivos',{
+      method:'POST',headers:csrfHeaders,body:JSON.stringify({mes:'2026-10',empreendimentoId:empBody.id})
+    });
+    assert.equal(repetido.status,409);
+    const estornarLancamento=await fetch(url+'/api/fechamento-mensal/lancamentos/'+lancamento.id+'/estornar',{
+      method:'POST',headers:csrfHeaders,body:'{}'
+    });
+    assert.equal(estornarLancamento.status,204);
+    const estornar2=await fetch(url+'/api/fechamento-mensal/lancamentos/'+lancamento.id+'/estornar',{
+      method:'POST',headers:csrfHeaders,body:'{}'
+    });
+    assert.equal(estornar2.status,409);
+    const fechamentoAtualizado=await fetch(url+'/api/fechamento-mensal?mes=2026-10&empreendimentoId='+empBody.id,{
+      headers:{cookie:cookies}
+    });
+    assert.equal((await fechamentoAtualizado.json()).saldoDisponivelEstimado,'103.00');
+    const arquivoAntigo=await fetch(url+'/api/fechamento-mensal/arquivos/'+snapshot.id,{
+      headers:{cookie:cookies}
+    });
+    assert.equal(arquivoAntigo.status,200);
+    assert.equal((await arquivoAntigo.json()).relatorio.saldoDisponivelEstimado,'73.00',
+      'snapshot arquivado deve permanecer imutavel apos estorno');
 
     const unauthorized = await fetch(url + '/api/clientes?pagina=0&tamanho=20');
     assert.equal(unauthorized.status,401);
