@@ -238,6 +238,7 @@ app.get('/actuator/health', handler(async (req, res) => {
   await db.query('SELECT 1');
   res.json({ status: 'UP' });
 }));
+app.get('/api', (req, res) => res.json({ application: 'ImobControl API', status: 'em desenvolvimento' }));
 app.use('/api', (req, res) => res.status(501).json({ erro: 'Modulo ainda nao migrado para Node.js' }));
 app.use((err, req, res, next) => {
   const status = err.status || (err.code === 'ER_DUP_ENTRY' ? 409 : 500);
