@@ -16,6 +16,9 @@ const DDL = [
   "CREATE TABLE empreendimentos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, nome VARCHAR(160) NOT NULL, spe VARCHAR(160), cnpj VARCHAR(14), area_total DECIMAL(19,4) NOT NULL, tipo VARCHAR(30) NOT NULL, unidades_previstas INT NOT NULL, valor_total DECIMAL(19,2) NOT NULL, socio_nome VARCHAR(160), socio_pct DECIMAL(9,4) NOT NULL, empresa_pct DECIMAL(9,4) NOT NULL, corretor_pct DECIMAL(9,4) NOT NULL, aliquota_tributaria DECIMAL(9,4) NOT NULL, repasse_comissao_pct DECIMAL(9,4) NOT NULL, comissao_sobre_acrescimos TINYINT(1) NOT NULL, inadimplencia_json LONGTEXT, reajuste_contratual_json LONGTEXT, observacoes LONGTEXT, status VARCHAR(30) NOT NULL, versao BIGINT NOT NULL, criado_por_usuario_id BIGINT NOT NULL, atualizado_por_usuario_id BIGINT NOT NULL, criado_em DATETIME NOT NULL, atualizado_em DATETIME NOT NULL)"
 ];
 const DDL_FINANCEIRO = [
+  "CREATE TABLE acordos (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL)",
+  "CREATE TABLE reajustes_venda (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL)",
+  "CREATE TABLE revisoes_financeiras_vendas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL)",
   "CREATE TABLE unidades (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, quadra_id BIGINT NULL, numero VARCHAR(80) NOT NULL, unidade VARCHAR(120) NOT NULL, unidade_tipo VARCHAR(30), descricao LONGTEXT, area DECIMAL(19,4) NOT NULL DEFAULT 0, valor_venda DECIMAL(19,2) NOT NULL DEFAULT 0, status VARCHAR(30) NOT NULL, regras_json LONGTEXT, versao BIGINT NOT NULL DEFAULT 0, criado_por_usuario_id BIGINT NOT NULL DEFAULT 1, atualizado_por_usuario_id BIGINT NOT NULL DEFAULT 1, criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
   "CREATE TABLE vendas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, unidade_id BIGINT NOT NULL, cliente_id BIGINT NOT NULL, valor_total DECIMAL(19,2) NOT NULL, data_contrato DATE NOT NULL, corretor_nome VARCHAR(160), corretor_pct DECIMAL(9,4) NOT NULL, repasse_comissao_pct DECIMAL(9,4) NOT NULL, comissao_sobre_acrescimos TINYINT(1) NOT NULL, corretagem_compoe_valor_contrato TINYINT(1), valor_imovel DECIMAL(19,2), corretagem_valor DECIMAL(19,2), corretagem_forma_pagamento VARCHAR(40), observacoes LONGTEXT, status VARCHAR(30) NOT NULL, regras_json LONGTEXT NOT NULL, versao BIGINT NOT NULL, criado_por_usuario_id BIGINT NOT NULL, atualizado_por_usuario_id BIGINT NOT NULL, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
   "CREATE TABLE parcelas (id BIGINT PRIMARY KEY AUTO_INCREMENT, empresa_id BIGINT NOT NULL, venda_id BIGINT NOT NULL, empreendimento_id BIGINT NOT NULL, unidade_id BIGINT NOT NULL, cliente_id BIGINT NOT NULL, origem_tipo VARCHAR(40) NOT NULL, origem_descricao VARCHAR(240), numero INT NOT NULL, total_parcelas INT NOT NULL, vencimento DATE NOT NULL, valor DECIMAL(19,2) NOT NULL, valor_pago DECIMAL(19,2) NOT NULL DEFAULT 0, valor_original DECIMAL(19,2) NOT NULL, reajustes_aplicados INT NOT NULL DEFAULT 0, data_pagamento DATE, status VARCHAR(30) NOT NULL, regras_inadimplencia_json LONGTEXT, versao BIGINT NOT NULL DEFAULT 0, atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP)",
@@ -32,7 +35,7 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     conn = await mysql.createConnection({ host, user, password, port: 3306 });
     await conn.query('CREATE DATABASE IF NOT EXISTS imob_integration CHARACTER SET utf8mb4');
     await conn.query('USE imob_integration');
-    for (const table of ['movimentos','parcelas','pagamento_itens','vendas','unidades','auditoria_operacional','clientes','empreendimentos','node_sessoes','usuario_permissoes','usuarios','empresas']) {
+    for (const table of ['revisoes_financeiras_vendas','reajustes_venda','acordos','movimentos','parcelas','pagamento_itens','vendas','unidades','auditoria_operacional','clientes','empreendimentos','node_sessoes','usuario_permissoes','usuarios','empresas']) {
       await conn.query('DROP TABLE IF EXISTS ' + table);
     }
     for (const statement of [...DDL, ...DDL_FINANCEIRO]) await conn.query(statement);
@@ -167,6 +170,27 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
     });
     assert.equal(repetirVenda.status,409);
 
+    const editarVenda = await fetch(url + '/api/vendas/' + vendaCriada.id, {
+      method:'PUT', headers:csrfHeaders, body:JSON.stringify({
+        empreendimentoId: empBody.id, unidadeId:5, clienteId: criado.id,
+        valorTotal:'600.00', valorImovel:'570.00', corretagemValor:'30.00',
+        corretagemCompoeValorContrato:true, corretagemFormaPagamento:'repasse_recebimentos',
+        dataContrato:'2026-10-01', corretorNome:'Corretor Teste',
+        corretorPct:5, repasseComissaoPct:50, comissaoSobreAcrescimos:false,
+        observacoes:'Conferido na integracao MySQL', versao:0,
+        composicao:[
+          {tipo:'sinal', descricao:'Entrada', valor:'100.00', parcelas:1, primeiroVencimento:'2026-10-01', status:'pendente'},
+          {tipo:'parcelas', descricao:'Mensais', valor:'250.00', parcelas:2, primeiroVencimento:'2026-10-31', status:'pendente'}
+        ]
+      })
+    });
+    assert.equal(editarVenda.status,200,'editar venda: ' + editarVenda.status);
+    const editada = await editarVenda.json();
+    assert.equal(editada.versao,1);
+    assert.equal(editada.observacoes,'Conferido na integracao MySQL');
+    const [recriadas] = await conn.execute('SELECT COUNT(*) AS total FROM parcelas WHERE venda_id=?',[vendaCriada.id]);
+    assert.equal(recriadas[0].total,3);
+
     // Teste de recebimento real: usa data efetiva de outubro,
     // segundo clique devolve 409 e estorno preserva auditoria.
     await conn.execute(
@@ -215,8 +239,13 @@ test('API Node.js + MySQL 8: login, sessao, clientes, catalogo e auditoria', { s
       method:'POST', headers:csrfHeaders, body:'{}'
     });
     assert.equal(estornoRepetido.status, 404);
+
+    const vendaComHistorico = await fetch(url + '/api/vendas/25', {
+      method:'DELETE', headers:csrfHeaders
+    });
+    assert.equal(vendaComHistorico.status,409);
     const [audit] = await conn.query('SELECT COUNT(*) AS total FROM auditoria_operacional');
-    assert.equal(audit[0].total, 6);
+    assert.equal(audit[0].total, 7);
     const unauthorized = await fetch(url + '/api/clientes?pagina=0&tamanho=20');
     assert.equal(unauthorized.status,401);
     const invalidCSRF = await fetch(url + '/api/clientes', {
