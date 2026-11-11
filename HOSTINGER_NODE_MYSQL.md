@@ -15,12 +15,14 @@ Na Hostinger, aplicações de um monorepo são sites Node.js separados e cada um
 
 ## 1. Banco de homologação
 
-No hPanel → Bancos de dados MySQL:
+No hPanel → Websites → Manage site → Databases → Management:
 1. Criar banco **novo e vazio** e usuário exclusivo, com acesso limitado.
 2. Importar o `imobcontrol-MYSQL-REAL-20261110.sql` **somente no ambiente de homologação** (arquivo em canal privado, nunca no Git).
 3. Conferir o manifesto e totals; conferir 41 clientes, 41 vendas, 8.000 parcelas, 645 movimentos. Não restaurar por cima de dados de produção.
 4. Rodar `backend-node/sql/01_node_sessoes.sql` para sessões Node (a tabela antiga do Spring não é reutilizada).
-5. Fazer testes de login, criação de venda, recebimento e estorno com dados fictícios e conferência do saldo.
+5. Executar `backend-node/sql/02_revisoes_financeiras.sql` após `01_node_sessoes.sql` para adicionar a tabela V22 que NÃO estava no backup de 03/11.
+6. Fazer testes de login, criação/edição de venda, recebimento e estorno com dados fictícios e conferência do saldo.
+7. Verificar os resultados de `VALIDACAO_APOS_IMPORTACAO.sql` incluído no ZIP do dump antes de abrir o acesso ao cliente.
 
 **Atenção:** o banco real contém registros pessoais e financeiros. Nunca exponha o SQL publicamente ou faça upload no repositório. A exportação representa dados **até 03/11/2026** e precisa de corte de atualização para entrar em produção.
 
@@ -31,7 +33,7 @@ No hPanel: Websites → Create site → Web App → Import Git Repository.
 | Configuração | Valor |
 |---|---|
 | Repositório | `luizamoll/imobcontrol-finance-dashboard` |
-| Branch para testes | `migracao-node-mysql-20261110` |
+| Branch para testes | `migracao-node-mysql-hostinger-20261111` |
 | Root directory | `backend-node` |
 | Framework | Express |
 | Node | 22.x |
@@ -61,7 +63,7 @@ Criar outro Web App na Hostinger com o **mesmo repositório**:
 
 | Configuração | Valor |
 |---|---|
-| Branch | `migracao-node-mysql-20261110` |
+| Branch | `migracao-node-mysql-hostinger-20261111` |
 | Root directory | `./` |
 | Framework | Other (TanStack Start/Nitro), se não detectado automaticamente |
 | Node | 22.x |
@@ -95,9 +97,21 @@ Antes de apontar domínio do cliente:
 
 ## Situação atual
 
-Não ativar produção nem mesclar o PR #30 enquanto edição/exclusão de vendas, reajustes, acordos, fechamentos, administração, convites e demais rotas não estiverem portados e homologados. Manter a instalação anterior funcionando e os backups armazenados.
+Não ativar produção ou mesclar o PR de migração até **edição/exclusão de vendas, reajustes, acordos, fechamentos, administração, convites** e demais rotas estarem portados e homologados. A edição e a exclusão controlada de vendas foram implementadas, mas ainda exigem homologação. Manter a instalação anterior funcionando e os backups armazenados.
 
 **Referências oficiais**:
 - https://www.hostinger.com/support/how-to-deploy-a-nodejs-website-in-hostinger/
 - https://www.hostinger.com/support/how-to-deploy-monorepos-with-npm-yarn-or-pnpm-on-hostinger/
 - https://www.hostinger.com/support/connecting-a-hostinger-mysql-database-to-a-node-js-application/
+
+## Dados reais e segurança
+
+O dump MySQL real é um **arquivo privado** gerado a partir do backup de 03/11/2026.
+Ele nunca deve ser colocado em Git, no frontend ou numa pasta pública da hospedagem.
+Importar no phpMyAdmin somente dentro do banco criado e vazio, e depois executar
+`01_node_sessoes.sql`, `02_revisoes_financeiras.sql` e o relatório SQL de conferência.
+**Não usar a importação como prova de que todas as regras financeiras estão corretas**:
+realizar homologação dos saldos, competências e totais por empresa.
+
+A API lê o MySQL pelas variáveis `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` e `DB_NAME`.
+**Ela não usa PostgreSQL nem `DATABASE_URL`** nesta branch.
