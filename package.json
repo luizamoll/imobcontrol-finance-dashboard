@@ -7,11 +7,11 @@
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "start": "node hosting/hostinger.mjs",
+    "start": "node .output/server/index.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "check:unified": "node --check hosting/hostinger.mjs && node --check backend-node/src/index.js"
+    "check:unified": "node --check backend-node/src/index.js && node --check scripts/smoke-unificado.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
