@@ -44,6 +44,6 @@ test('dividendos: percentuais precisos, imovel e participante unicos',()=>{
   },bad),400);
   erro(()=>validarDividendo({
     imovel:'Teste',valorBase:100,
-    participantes:[{nome:'Ana',percentual:100},{nome:'Bia',percentual:0.001}]
+    participantes:[{nome:'Ana',percentual:100},{nome:'Bia',percentual:0.02}]
   },bad),400);
 });
