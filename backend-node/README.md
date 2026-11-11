@@ -1,10 +1,10 @@
 # API Imob Control — Express + MySQL
 
-Esta API é **importada pelo servidor único** `../hosting/hostinger.mjs`. Em hospedagem, **não é necessária uma aplicação separada**, subdomínio ou `API_UPSTREAM`. A pasta `backend-node` continua organizada em módulos para manutenção, mas participa do mesmo processo Node.js que serve o React/Nitro.
+Esta API é **registrada dentro do servidor Nitro** por `../vite.config.ts`, nas rotas `/api/**`, `/health` e `/actuator/health`, com `format: "node"`. O processo iniciado pela Hostinger é `.output/server/index.mjs`. Em hospedagem, **não é necessária uma aplicação separada**, subdomínio ou `API_UPSTREAM`. A pasta `backend-node` continua organizada em módulos para manutenção, mas participa do mesmo processo Node.js que serve o React/Nitro.
 
 ## Publicação na Hostinger
 
-Na raiz do repositório: `npm install` → `npm run build` → `npm start`. Entrada: `hosting/hostinger.mjs`.
+Na raiz do repositório: `npm install` → `npm run build` → `npm start`. Entrada: `.output/server/index.mjs` (ou `server/index.mjs` relativa à saída `.output`).
 
 O servidor recebe `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `SESSION_SECRET` e `COOKIE_SECURE=true` pelo hPanel. Banco: **MySQL 8**. Dump privado entregue à parte; não adicionar à branch.
 
