@@ -21,14 +21,4 @@ export default defineConfig({
     },
     output: { dir: ".output" },
   },
-  vite: {
-    server: {
-      proxy: {
-        "/api": {
-          target: "http://localhost:8081",
-          changeOrigin: true,
-        },
-      },
-    },
-  },
 });
