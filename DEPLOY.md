@@ -13,7 +13,7 @@ A aplicação desta branch é **uma única web app Node.js**, com Express (API) 
 | Instalação | `npm install` |
 | Build | `npm run build` |
 | Iniciar | `npm start` |
-| Arquivo de entrada | `hosting/hostinger.mjs` |
+| Arquivo de entrada | `server/index.mjs` relativo à saída `.output/` |
 | Banco | MySQL (mesma conta Hostinger) |
 
 **Não criar uma aplicação separada para backend.** Não definir `API_UPSTREAM`.
@@ -31,7 +31,7 @@ DB_PASSWORD=SUA_SENHA
 SESSION_SECRET=SEGREDO_ALEATORIO_FORTE_DE_32_CARACTERES_OU_MAIS
 ```
 
-A variável `PORT` é gerenciada pelo provedor. O processo em `hosting/hostinger.mjs` escuta essa porta e serve ambas as partes. O build gera `.output/server/index.mjs` (middleware Nitro) e `.output/public`, mantidos junto ao código na instalação. **Não iniciar diretamente `.output/server/index.mjs`.**
+A variável `PORT` é gerenciada pelo provedor. O processo Nitro `.output/server/index.mjs` escuta essa porta e serve ambas as partes. O Express é registrado como handler Node em `vite.config.ts` nas rotas `/api/**`, `/health` e `/actuator/health`. O build gera `.output/server/index.mjs` (middleware Nitro) e `.output/public`, mantidos junto ao código na instalação. **É necessário iniciar `.output/server/index.mjs`**; é justamente a entrada que o painel da Hostinger detecta como `server/index.mjs`. Não iniciar o antigo arquivo `hosting/hostinger.mjs`.
 
 ## Banco
 
