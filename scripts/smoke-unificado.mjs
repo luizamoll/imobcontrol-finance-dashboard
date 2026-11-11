@@ -11,7 +11,8 @@ const child = spawn(process.execPath, ['.output/server/index.mjs'], {
     DB_USER: 'teste', DB_PASSWORD: 'ficticia',
     DB_NAME: 'imob_qa',
     SESSION_SECRET: 'Chave-local-para-testes-0123456789abcdef',
-    COOKIE_SECURE: 'false'
+    // Vite/Nitro compila modo production; HTTPS termina no proxy da Hostinger.
+    COOKIE_SECURE: 'true'
   },
   stdio: ['ignore', 'pipe', 'pipe']
 });
