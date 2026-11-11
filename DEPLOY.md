@@ -22,7 +22,13 @@ Definir estas variáveis no painel, sem colocá-las em arquivos públicos:
 
 ```text
 NODE_ENV=production
-COOKIE_SECURE=true
+SESSION_COOKIE_SECURE=true
+APP_URL=https://SEU_DOMINIO
+SMTP_HOST=HOST_SMTP
+SMTP_PORT=587
+SMTP_USER=USUARIO_SMTP
+SMTP_PASSWORD=SENHA_SMTP
+SMTP_FROM=Imob Control <no-reply@SEU_DOMINIO>
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_NAME=SEU_BANCO
@@ -35,7 +41,7 @@ A variável `PORT` é gerenciada pelo provedor. O processo Nitro `.output/server
 
 ## Banco
 
-O dump privado MySQL até 03/11/2026 permanece **separado** do código. Criar banco de teste vazio no hPanel, importar no phpMyAdmin, aplicar se faltarem `backend-node/sql/01_node_sessoes.sql` e `02_revisoes_financeiras.sql`. Conferir contagens e saldos antes de qualquer virada. Não reimportar sobre banco já populado e não incluir dump no GitHub.
+O dump privado MySQL até 03/11/2026 permanece **separado** do código. Criar banco de teste vazio no hPanel, importar no phpMyAdmin, aplicar se faltarem `backend-node/sql/01_node_sessoes.sql`, `02_revisoes_financeiras.sql` e `03_tokens_acesso_node.sql`. Conferir contagens e saldos antes de qualquer virada. Não reimportar sobre banco já populado e não incluir dump no GitHub.
 
 ## Verificações após o deploy em preview
 
@@ -44,6 +50,6 @@ O dump privado MySQL até 03/11/2026 permanece **separado** do código. Criar ba
 - `/login` → HTML React por SSR.
 - Testar login real, baixa retroativa, 409 sem duplicação, estorno e relatório de valores.
 
-O GitHub Actions dessa branch já verifica API Express e SSR Nitro **em uma única porta**. Porém a migração ainda tem módulos de negócio ausentes. **Não publicar em produção antes de concluir a paridade e validar os dados.**
+O GitHub Actions dessa branch já verifica API Express e SSR Nitro **em uma única porta**. Os módulos de acordos, reajustes, revisões, equipe, convites, recuperação de senha e superadmin já foram adicionados. **Não publicar em produção antes de conferir o CI do último commit, executar as três migrações no MySQL de testes, configurar SMTP e validar os fluxos e saldos com o dump real.**
 
 Detalhes: [HOSTINGER_NODE_MYSQL.md](HOSTINGER_NODE_MYSQL.md).
