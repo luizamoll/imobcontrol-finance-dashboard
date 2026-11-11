@@ -10,7 +10,8 @@ export default defineConfig({
     server: { entry: "server" },
   },
   nitro: {
-    preset: "node-server",
+    preset: "node_middleware",
+    serveStatic: "node",
     output: { dir: ".output" },
   },
   vite: {
