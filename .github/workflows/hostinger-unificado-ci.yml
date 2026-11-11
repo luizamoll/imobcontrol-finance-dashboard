@@ -11,7 +11,6 @@ on:
       - 'src/**'
       - 'backend-node/**'
       - 'package.json'
-      - 'hosting/hostinger.mjs'
       - 'vite.config.ts'
       - 'scripts/smoke-unificado.mjs'
       - '.github/workflows/hostinger-unificado-ci.yml'
@@ -30,9 +29,9 @@ jobs:
           node-version: '22'
       - name: Instalar dependencias da unica aplicacao
         run: npm install --no-audit --no-fund
-      - name: Validar arquivos e entrada customizada
+      - name: Validar sintaxe do backend Node
         run: npm run check:unified
-      - name: Compilar Nitro como middleware
+      - name: Compilar Nitro com API Express registrada
         run: npm run build
       - name: Confirmar middleware compilado
         run: test -s .output/server/index.mjs

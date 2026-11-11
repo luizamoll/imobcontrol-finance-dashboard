@@ -54,4 +54,6 @@ Não colocar dump ou credenciais no GitHub. O arquivo real MySQL está disponív
 
 ## Limitação funcional
 
-O conserto de roteamento não cria automaticamente os módulos ainda ausentes na API Node (acordos, fechamento mensal, reajustes manuais, administração, recuperação de conta, dividendos, revisões excepcionais). Rotas não implementadas podem responder 501. Não substituir o sistema financeiro do cliente até homologar a paridade funcional e os saldos.
+O conserto de roteamento foi seguido pela implementação Node de corretores, dividendos de terceiros e fechamento mensal com lançamentos, estornos e arquivos. Esses módulos ainda exigem validação do CI/MySQL e homologação.
+
+**Permanecem ausentes** acordos, reajustes manuais, administração de usuários/convites, recuperação de conta, revisões excepcionais e outras rotas. Rotas não implementadas podem responder 501. Não substituir o sistema financeiro do cliente até homologar a paridade funcional e os saldos.

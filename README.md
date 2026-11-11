@@ -41,6 +41,8 @@ Para desenvolvimento da API isoladamente, `cd backend-node && npm install && npm
 
 Workflow GitHub Actions: `Hostinger - app unico Express + Nitro + MySQL`, verificando build SSR, JSON em `/api`, cookies/CSRF e HTML em `/login`, na mesma porta.
 
-**Pendências:** acordos, reajustes manuais, fechamentos, administração/convites, recuperação de acesso, revisões financeiras excepcionais, dividendos e outros endpoints do legado. Rotas não migradas retornam 501. Homologar as regras e os dados antes do uso real.
+**Novos módulos Node em homologação:** cadastro de corretores, dividendos de terceiros e fechamento mensal (consulta, lançamentos, estornos e arquivos). Testes MySQL de integração foram adicionados; conferir CI antes de liberar.
+
+**Pendências:** acordos, reajustes manuais, administração/convites, recuperação de acesso, revisões financeiras excepcionais e outras rotas do legado. Rotas não migradas retornam 501. Homologar as regras e os dados antes do uso real.
 
 Sistema desenvolvido por Maria Luiza Mol.
