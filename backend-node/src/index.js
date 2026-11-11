@@ -12,6 +12,8 @@ import { registerDividendos } from './dividendos.js';
 import { registerFechamento } from './fechamento.js';
 import { registerAcordos } from './acordos.js';
 import { registerReajustes } from './reajustes.js';
+import { registerAcessoConta } from './acesso-conta.js';
+import { registerUsuarios } from './usuarios.js';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
@@ -213,6 +215,8 @@ registerDividendos(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, h
 registerFechamento(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 registerAcordos(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
 registerReajustes(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
+const conta = registerAcessoConta(app, { db, exigirLogin, handler, bad });
+registerUsuarios(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad, conta });
 
 app.get('/health', handler(async (req, res) => {
   await db.query('SELECT 1');
