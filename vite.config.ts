@@ -10,8 +10,15 @@ export default defineConfig({
     server: { entry: "server" },
   },
   nitro: {
-    preset: "node_middleware",
-    serveStatic: "node",
+    preset: "node_server",
+    // O arquivo iniciado pela Hostinger e o Nitro gerado em .output/server/index.mjs.
+    // Registre a API Node nele, com handlers de formato Node que executam o Express
+    // no MESMO processo e sem chamar um segundo servidor.
+    routes: {
+      "/api/**": { handler: "./backend-node/src/index.js", format: "node" },
+      "/health": { handler: "./backend-node/src/index.js", format: "node" },
+      "/actuator/health": { handler: "./backend-node/src/index.js", format: "node" },
+    },
     output: { dir: ".output" },
   },
   vite: {
