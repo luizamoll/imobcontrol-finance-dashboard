@@ -1,0 +1,37 @@
+name: Hostinger - app unico Express + Nitro + MySQL
+
+on:
+  push:
+    branches: [feat/hostinger-app-unificado-20261111]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'backend-node/**'
+      - 'package.json'
+      - 'server.mjs'
+      - 'vite.config.ts'
+      - 'scripts/smoke-unificado.mjs'
+      - '.github/workflows/hostinger-unificado-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-e-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias da unica aplicacao
+        run: npm install --no-audit --no-fund
+      - name: Validar arquivos e entrada customizada
+        run: npm run check:unified
+      - name: Compilar Nitro como middleware
+        run: npm run build
+      - name: Confirmar middleware compilado
+        run: test -s .output/server/index.mjs
+      - name: Testar Express + Nitro na MESMA porta
+        run: node scripts/smoke-unificado.mjs
