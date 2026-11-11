@@ -10,6 +10,9 @@ on:
       - 'public/**'
       - 'scripts/**'
       - 'package.json'
+      - 'README.md'
+      - 'DEPLOY.md'
+      - 'HOSTINGER_NODE_MYSQL.md'
       - 'vite.config.ts'
       - '.github/workflows/pacote-unificado-hostinger.yml'
   workflow_dispatch:
@@ -27,7 +30,7 @@ jobs:
           dir="ImobControl_UNIFICADO_NODE_MYSQL_20261111"
           mkdir -p "$dir"
           cp -r src public backend-node hosting "$dir/"
-          for file in package.json tsconfig.json vite.config.ts eslint.config.js components.json .prettierrc .prettierignore .env.example .gitignore HOSTINGER_NODE_MYSQL.md; do
+          for file in package.json tsconfig.json vite.config.ts eslint.config.js components.json .prettierrc .prettierignore .env.example .gitignore README.md DEPLOY.md HOSTINGER_NODE_MYSQL.md; do
             if [ -f "$file" ]; then cp "$file" "$dir/"; fi
           done
           mkdir -p "$dir/scripts"
