@@ -12,7 +12,7 @@ Uma instância Node.js e **uma única porta HTTP**:
 https://seudominio.com
         |
         v
-server.mjs  (node / Express; única chamada .listen)
+hosting/hostinger.mjs  (node / Express; única chamada .listen)
         |
         +-- /api/* e /health ---> Express em backend-node/src/index.js --> MySQL
         |
@@ -36,13 +36,13 @@ branch **não significa que todos os módulos financeiros estão concluídos**.
 4. Framework: escolher **Other** (ou Express customizado, se houver opção).
 5. Node.js **22**, gerenciador **npm**.
 6. Build: `npm run build` (produz `.output/server/index.mjs` e `.output/public`).
-7. Iniciar: `npm start`; **entrada `server.mjs` na raiz do projeto**.
+7. Iniciar: `npm start`; **entrada `hosting/hostinger.mjs` na raiz do projeto**.
 8. **Não apontar a entrada para `.output/server/index.mjs`**: essa saída é
    middleware Nitro, não servidor independente. Não configurar um segundo site.
 9. Caso o hPanel peça *Output directory*, manter o projeto completo
-   disponível ao processo: `server.mjs`, `backend-node/` e `.output/`
+   disponível ao processo: `hosting/hostinger.mjs`, `backend-node/` e `.output/`
    devem estar **juntos**. Não configurar apenas `.output/` se isso
-   excluir o backend e `server.mjs`. Se o painel não permitir manter
+   excluir o backend e `hosting/hostinger.mjs`. Se o painel não permitir manter
    esses arquivos no deploy, é necessária uma configuração de pacote
    de saída específica antes de publicar.
 
