@@ -15,7 +15,8 @@ const LOCK = 'imob_adm_joao_paulo_20261113';
 
 export async function cadastrarAdminSolicitadoNoDeploy(
   db,
-  { solicitarConvite, emailConfig, logger = console, ambiente = process.env.NODE_ENV } = {},
+  { solicitarConvite, emailConfig, logger = console, ambiente = process.env.NODE_ENV,
+    empresaIdPreferido = process.env.IMOB_ADMIN_CLIENTE_EMPRESA_ID } = {},
 ) {
   if (ambiente !== 'production') return { status: 'fora_de_producao' };
 
@@ -64,8 +65,20 @@ export async function cadastrarAdminSolicitadoNoDeploy(
       return { status: 'ja_cadastrado', perfil: usuarios[0].perfil };
     }
 
+    const empresaId = empresaIdPreferido == null || String(empresaIdPreferido).trim() === ''
+      ? null : Number(empresaIdPreferido);
+    if (empresaId != null && (!Number.isSafeInteger(empresaId) || empresaId < 1)) {
+      await c.commit();
+      transacao = false;
+      logger.error('[Cadastro de administrador] ID da empresa configurado e invalido.');
+      return { status: 'empresa_invalida' };
+    }
+    // Com mais de uma empresa, exige o ID explicito para evitar acesso cruzado.
     const [empresas] = await c.execute(
-      'SELECT id, nome FROM empresas WHERE ativa = 1 ORDER BY id LIMIT 2',
+      empresaId == null
+        ? 'SELECT id, nome FROM empresas WHERE ativa = 1 ORDER BY id LIMIT 2'
+        : 'SELECT id, nome FROM empresas WHERE ativa = 1 AND id = ? LIMIT 1',
+      empresaId == null ? [] : [empresaId],
     );
     if (empresas.length !== 1) {
       await c.commit();
