@@ -532,7 +532,7 @@ interface Ctx {
   addVenda: (v: VendaInput) => Promise<Venda>;
   updateVenda: (id: string, patch: VendaUpdatePatch) => Promise<void>;
   deleteVenda: (id: string) => Promise<void>;
-  receberParcela: (id: string, valorRecebido?: number, data?: string) => Promise<void>;
+  receberParcela: (id: string, valorRecebido?: number, data?: string) => Promise<"registrado" | "ja_registrado">;
   reverterParcela: (id: string) => Promise<void>;
   marcarParcelaPaga: (id: string, dataPagamento?: string) => Promise<void>;
   desmarcarParcela: (id: string) => Promise<void>;
@@ -803,52 +803,90 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       receberParcela: async (id, valorRecebido, data) => {
         if (empresaAtualId == null) throw new Error("Selecione uma empresa");
-        const financeiro = await receberParcelaRemota(
-          empresaAtualId,
-          id,
-          valorRecebido,
-          data,
+        const { financeiro, movimento, jaRegistrado } = await receberParcelaRemota(
+          empresaAtualId, id, valorRecebido, data,
         );
-        setStateRaw((s) => ({
+        setStateRaw((s) => financeiro ? ({
           ...s,
           vendas: financeiro.vendas,
           parcelas: financeiro.parcelas,
           movimentos: financeiro.movimentos,
+        }) : ({
+          // A API confirmou o POST, mas a atualização geral falhou:
+          // preservar localmente o recebimento confirmado, sem nova baixa.
+          ...s,
+          parcelas: s.parcelas.map((p) => p.id === id ? {
+            ...p, status: "paga" as const,
+            valorPago: movimento.valorRecebido,
+            dataPagamento: movimento.data,
+            versao: p.versao == null ? undefined : p.versao + 1,
+          } : p),
+          movimentos: [
+            ...s.movimentos.filter((m) => m.id !== movimento.id),
+            movimento,
+          ],
         }));
+        return jaRegistrado ? "ja_registrado" : "registrado";
       },
       reverterParcela: async (id) => {
         if (empresaAtualId == null) throw new Error("Selecione uma empresa");
         const financeiro = await reverterParcelaRemota(empresaAtualId, id);
-        setStateRaw((s) => ({
+        setStateRaw((s) => financeiro ? ({
           ...s,
           vendas: financeiro.vendas,
           parcelas: financeiro.parcelas,
           movimentos: financeiro.movimentos,
+        }) : ({
+          ...s,
+          parcelas: s.parcelas.map((p) => p.id === id ? {
+            ...p,
+            status: p.vencimento < todayISO() ? "vencida" as const : "pendente" as const,
+            valorPago: 0,
+            dataPagamento: undefined,
+            versao: p.versao == null ? undefined : p.versao + 1,
+          } : p),
+          movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
+          vendas: s.vendas.map((v) =>
+            s.parcelas.some((p) => p.id === id && p.vendaId === v.id) && v.status === "quitada"
+              ? { ...v, status: "ativa" as const } : v
+          ),
         }));
       },
       marcarParcelaPaga: async (id, dataPagamento) => {
         if (empresaAtualId == null) throw new Error("Selecione uma empresa");
-        const financeiro = await receberParcelaRemota(
-          empresaAtualId,
-          id,
-          undefined,
-          dataPagamento,
+        const { financeiro, movimento } = await receberParcelaRemota(
+          empresaAtualId, id, undefined, dataPagamento,
         );
-        setStateRaw((s) => ({
+        setStateRaw((s) => financeiro ? ({
+          ...s, vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas, movimentos: financeiro.movimentos,
+        }) : ({
           ...s,
-          vendas: financeiro.vendas,
-          parcelas: financeiro.parcelas,
-          movimentos: financeiro.movimentos,
+          parcelas: s.parcelas.map((p) => p.id === id ? {
+            ...p, status: "paga" as const,
+            valorPago: movimento.valorRecebido, dataPagamento: movimento.data,
+          } : p),
+          movimentos: [...s.movimentos.filter((m) => m.id !== movimento.id), movimento],
         }));
       },
       desmarcarParcela: async (id) => {
         if (empresaAtualId == null) throw new Error("Selecione uma empresa");
         const financeiro = await reverterParcelaRemota(empresaAtualId, id);
-        setStateRaw((s) => ({
+        setStateRaw((s) => financeiro ? ({
+          ...s, vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas, movimentos: financeiro.movimentos,
+        }) : ({
           ...s,
-          vendas: financeiro.vendas,
-          parcelas: financeiro.parcelas,
-          movimentos: financeiro.movimentos,
+          parcelas: s.parcelas.map((p) => p.id === id ? {
+            ...p,
+            status: p.vencimento < todayISO() ? "vencida" as const : "pendente" as const,
+            valorPago: 0, dataPagamento: undefined,
+          } : p),
+          movimentos: s.movimentos.filter((m) => m.parcelaId !== id),
+          vendas: s.vendas.map((v) =>
+            s.parcelas.some((p) => p.id === id && p.vendaId === v.id) && v.status === "quitada"
+              ? { ...v, status: "ativa" as const } : v
+          ),
         }));
       },
       updateConfig: (patch) =>

@@ -1,0 +1,23 @@
+{
+  "name": "imobcontrol-api-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "check": "node --check src/index.js && node --check src/clientes.js && node --check src/catalogo.js && node --check src/financeiro-read.js && node --check src/catalogo-write.js && node --check src/empresa-config.js && node --check src/recebimentos.js && node --check src/vendas-write.js && node --check src/vendas-manage.js && node --check src/corretores.js && node --check src/dividendos.js && node --check src/fechamento.js && node --check src/acordos.js && node --check src/reajustes.js && node --check src/acesso-conta.js && node --check src/usuarios.js && node --check src/superadmin.js && node --check src/revisoes.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "mysql2": "^3.15.2",
+    "decimal.js": "^10.6.0",
+    "nodemailer": "^7.0.10"
+  }
+}

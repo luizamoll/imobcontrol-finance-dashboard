@@ -244,15 +244,34 @@ function movimentoFromApi(m: MovimentoApi): Movimento {
   };
 }
 
+// Buscar todas as páginas, não apenas as primeiras 100 vendas do SaaS.
+async function carregarTodasVendas(empresaId: number): Promise<VendaApi[]> {
+  const acumuladas: VendaApi[] = [];
+  let pagina = 0;
+  for (;;) {
+    const resultado = await apiJson<Pagina<VendaApi>>(
+      `/api/vendas?pagina=${pagina}&tamanho=100`,
+      { empresaId },
+    );
+    acumuladas.push(...resultado.content);
+    const totalPaginas = Math.ceil(resultado.totalElements / 100);
+    if (pagina + 1 >= totalPaginas) return acumuladas;
+    if (resultado.content.length === 0 || pagina >= 999) {
+      throw new Error("Não foi possível carregar todas as vendas. Atualize a página.");
+    }
+    pagina++;
+  }
+}
+
 export async function carregarFinanceiro(empresaId: number) {
   const [vendas, parcelas, movimentos] = await Promise.all([
-    apiJson<Pagina<VendaApi>>("/api/vendas?pagina=0&tamanho=100", { empresaId }),
+    carregarTodasVendas(empresaId),
     apiJson<ParcelaApi[]>("/api/parcelas", { empresaId }),
     apiJson<MovimentoApi[]>("/api/movimentos", { empresaId }),
   ]);
 
   return {
-    vendas: vendas.content.map(vendaFromApi),
+    vendas: vendas.map(vendaFromApi),
     parcelas: parcelas.map(parcelaFromApi),
     movimentos: movimentos.map(movimentoFromApi),
   };
@@ -354,21 +373,57 @@ export async function excluirVendaRemota(
   });
 }
 
+export type ResultadoBaixa = {
+  financeiro: Awaited<ReturnType<typeof carregarFinanceiro>> | null;
+  movimento: Movimento;
+  jaRegistrado: boolean;
+};
+
+// A confirmação de POST é independente da atualização da lista.
+// Se GET falhar após a gravação, não anunciamos que o recebimento falhou.
 export async function receberParcelaRemota(
   empresaId: number,
   parcelaId: string,
   valorRecebido?: number,
   data?: string,
-) {
-  await apiJson<MovimentoApi>(`/api/parcelas/${parcelaId}/receber`, {
-    method: "POST",
-    empresaId,
-    body: JSON.stringify({
-      valorRecebido: valorRecebido ?? null,
-      data: data ?? null,
-    }),
-  });
-  return carregarFinanceiro(empresaId);
+): Promise<ResultadoBaixa> {
+  let movimento: MovimentoApi;
+  try {
+    movimento = await apiJson<MovimentoApi>(`/api/parcelas/${parcelaId}/receber`, {
+      method: "POST",
+      empresaId,
+      body: JSON.stringify({
+        valorRecebido: valorRecebido ?? null,
+        data: data ?? null,
+      }),
+    });
+  } catch (error) {
+    // Um 409 pode ser uma segunda tentativa quando a primeira já foi gravada.
+    // Consultamos o servidor antes de autorizar nova tentativa, sem criar
+    // movimentação adicional nem tratar qualquer conflito como sucesso.
+    if ((error as Error & { status?: number }).status === 409) {
+      const financeiro = await carregarFinanceiro(empresaId).catch(() => null);
+      const parcela = financeiro?.parcelas.find((p) => p.id === parcelaId);
+      const movimentoExistente = financeiro?.movimentos.find(
+        (m) => m.parcelaId === parcelaId,
+      );
+      if (parcela?.status === "paga" && movimentoExistente) {
+        return {
+          financeiro: financeiro!,
+          movimento: movimentoExistente,
+          jaRegistrado: true,
+        };
+      }
+    }
+    throw error;
+  }
+
+  const financeiro = await carregarFinanceiro(empresaId).catch(() => null);
+  return {
+    financeiro,
+    movimento: movimentoFromApi(movimento),
+    jaRegistrado: false,
+  };
 }
 
 export async function reverterParcelaRemota(
@@ -379,7 +434,8 @@ export async function reverterParcelaRemota(
     method: "POST",
     empresaId,
   });
-  return carregarFinanceiro(empresaId);
+  // O estorno já foi confirmado. GET pode falhar temporariamente.
+  return carregarFinanceiro(empresaId).catch(() => null);
 }
 
 
