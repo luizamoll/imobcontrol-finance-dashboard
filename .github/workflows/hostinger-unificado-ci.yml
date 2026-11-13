@@ -33,6 +33,8 @@ jobs:
         run: npm ls @lovable.dev/vite-tanstack-config vite nitro --depth=0
       - name: Validar sintaxe do backend Node
         run: npm run check:unified
+      - name: Testar cadastro seguro e idempotente de administrador
+        run: node --test backend-node/test/bootstrap-admin-cliente.test.js
       - name: Compilar Nitro com API Express registrada
         run: npm run build
       - name: Confirmar middleware compilado
