@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "check:unified": "node --check backend-node/src/index.js && node --check scripts/smoke-unificado.mjs && node --check scripts/cadastrar-admin-cliente.mjs"
+    "check:unified": "node --check backend-node/src/index.js && node --check scripts/smoke-unificado.mjs && node --check scripts/cadastrar-admin-cliente.mjs && node --check backend-node/src/bootstrap-admin-cliente.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
