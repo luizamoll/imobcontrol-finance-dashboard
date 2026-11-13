@@ -16,6 +16,7 @@ import { registerAcessoConta } from './acesso-conta.js';
 import { registerUsuarios } from './usuarios.js';
 import { registerSuperAdmin } from './superadmin.js';
 import { registerRevisoes } from './revisoes.js';
+import { cadastrarAdminSolicitadoNoDeploy } from './bootstrap-admin-cliente.js';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
@@ -229,6 +230,15 @@ const conta = registerAcessoConta(app, { db, exigirLogin, handler, bad });
 registerUsuarios(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad, conta });
 registerSuperAdmin(app, { db, exigirLogin, handler, bad });
 registerRevisoes(app, { db, exigirLogin, empresaAutorizada, exigirPermissao, handler, bad });
+
+// Operacao pontual, idempotente e restrita a producao. Nunca criar admin em
+// ambiente de testes, em mais de uma empresa, nem com senha predefinida.
+if (process.env.NODE_ENV === 'production') {
+  void cadastrarAdminSolicitadoNoDeploy(db, {
+    solicitarConvite: conta.solicitarConvite,
+    emailConfig: conta.emailConfig,
+  }).catch((error) => console.error('[Cadastro de administrador] Falha:', error.message));
+}
 
 app.get('/health', handler(async (req, res) => {
   await db.query('SELECT 1');
