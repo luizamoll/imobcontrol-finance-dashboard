@@ -81,8 +81,23 @@ function validarReajuste(reajuste, bad) {
     if (reajuste[campo] != null) numero(reajuste[campo],4,7,bad,campo);
   }
   if (reajuste.periodicidadeMeses != null &&
-      (!Number.isSafeInteger(reajuste.periodicidadeMeses) || reajuste.periodicidadeMeses < 1)) {
+      (!Number.isSafeInteger(reajuste.periodicidadeMeses) || reajuste.periodicidadeMeses < 1
+       || reajuste.periodicidadeMeses > 1200)) {
     throw bad(400, 'Periodicidade de reajuste invalida');
+  }
+  if(reajuste.ativo===true){
+    if(!['percentual_fixo','indice','maior_entre','regra_personalizada'].includes(reajuste.modalidade))
+      throw bad(400,'Modalidade de reajuste invalida');
+  }
+  if(reajuste.taxaMensalReferencia != null){
+    if(reajuste.modalidade!=='percentual_fixo')
+      throw bad(400,'Taxa mensal nominal somente para percentual fixo');
+    const taxa=Number(numero(reajuste.taxaMensalReferencia,4,7,bad,'taxaMensalReferencia'));
+    const periodicidade=reajuste.periodicidadeMeses??12;
+    const percentualCiclo=Math.round(taxa*periodicidade*10000)/10000;
+    if(percentualCiclo>100)throw bad(400,'Reajuste por ciclo excede 100%');
+    if(Math.abs(Number(reajuste.percentualBase??0)-percentualCiclo)>0.0001)
+      throw bad(400,'Percentual por ciclo nao corresponde a taxa mensal nominal');
   }
 }
 export function normalizarCatalogo(tipo, body, bad) {
