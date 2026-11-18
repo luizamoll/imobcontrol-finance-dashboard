@@ -239,7 +239,8 @@ function EmpreendimentoDetail() {
                 {previaReajuste.resumo.parcelasAlteradas} parcelas elegíveis alteradas;{" "}
                 {previaReajuste.resumo.parcelasPreservadas} preservadas, das quais{" "}
                 {previaReajuste.resumo.parcelasParciaisPreservadas} com pagamentos parciais.
-                {" "}Regra por ciclo: <strong>{previaReajuste.percentualPorCiclo ?? "índice variável"}%</strong>.
+                {" "}Regra por ciclo: <strong>{previaReajuste.percentualPorCiclo != null
+                  ? `${previaReajuste.percentualPorCiclo}%` : "índice variável"}</strong>.
               </p>
 
               <div className="space-y-2">
@@ -260,7 +261,12 @@ function EmpreendimentoDetail() {
                     <TableBody>
                       {previaReajuste.contratos.map((contrato) => (
                         <TableRow key={contrato.vendaId}>
-                          <TableCell>#{contrato.vendaId}</TableCell>
+                          <TableCell>
+                            <span className="font-medium">#{contrato.vendaId}</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {vendas.find((v) => v.id === String(contrato.vendaId))?.compradorNome ?? "Cliente não identificado"}
+                            </span>
+                          </TableCell>
                           <TableCell>{contrato.dataContrato}</TableCell>
                           <TableCell>{contrato.parcelasAlteradas}</TableCell>
                           <TableCell>{contrato.maiorCiclo}</TableCell>
