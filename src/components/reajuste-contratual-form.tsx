@@ -20,6 +20,10 @@ export function ReajusteContratualForm({
 }) {
   const patch = (parcial: Partial<ReajusteContratual>) =>
     onChange({ ...value, ...parcial });
+  const taxaMensalAtiva =
+    value.modalidade === "percentual_fixo" && value.taxaMensalReferencia != null;
+  const percentualAnual = (taxaMensal: number, meses: number) =>
+    Math.round(taxaMensal * meses * 10000) / 10000;
 
   return (
     <div className="rounded-lg border border-border/70 p-4">
@@ -40,7 +44,12 @@ export function ReajusteContratualForm({
             <Label className="text-xs">Modalidade</Label>
             <Select
               value={value.modalidade}
-              onValueChange={(modalidade) => patch({ modalidade: modalidade as ReajusteModalidade })}
+              onValueChange={(modalidade) =>
+                patch({
+                  modalidade: modalidade as ReajusteModalidade,
+                  ...(modalidade !== "percentual_fixo" ? { taxaMensalReferencia: undefined } : {}),
+                })
+              }
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -59,21 +68,76 @@ export function ReajusteContratualForm({
               min="1"
               value={value.periodicidadeMeses}
               onChange={(event) =>
-                patch({ periodicidadeMeses: Math.max(1, Number(event.target.value) || 1) })
+                {
+                  const periodicidadeMeses = Math.max(1, Number(event.target.value) || 1);
+                  patch({
+                    periodicidadeMeses,
+                    ...(taxaMensalAtiva
+                      ? { percentualBase: percentualAnual(value.taxaMensalReferencia!, periodicidadeMeses) }
+                      : {}),
+                  });
+                }
               }
             />
           </div>
 
-          <div>
-            <Label className="text-xs">Percentual-base (%)</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={value.percentualBase}
-              onChange={(event) => patch({ percentualBase: Number(event.target.value) || 0 })}
-            />
-          </div>
+          {value.modalidade === "percentual_fixo" && (
+            <div>
+              <Label className="text-xs">Como o percentual foi contratado?</Label>
+              <Select
+                value={taxaMensalAtiva ? "mensal" : "ciclo"}
+                onValueChange={(tipo) =>
+                  tipo === "mensal"
+                    ? patch({ taxaMensalReferencia: 0, percentualBase: 0 })
+                    : patch({ taxaMensalReferencia: undefined })
+                }
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ciclo">Percentual por ciclo (ex.: 11,88% ao ano)</SelectItem>
+                  <SelectItem value="mensal">Taxa mensal nominal, aplicada por ciclo (ex.: 0,99%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {taxaMensalAtiva ? (
+            <div>
+              <Label className="text-xs">Taxa mensal nominal (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={value.taxaMensalReferencia ?? 0}
+                onChange={(event) => {
+                  const taxaMensalReferencia = Number(event.target.value) || 0;
+                  patch({
+                    taxaMensalReferencia,
+                    percentualBase: percentualAnual(taxaMensalReferencia, value.periodicidadeMeses),
+                  });
+                }}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Percentual aplicado a cada {value.periodicidadeMeses} meses:
+                <strong> {value.percentualBase.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}%</strong>
+                {" "}({(value.taxaMensalReferencia ?? 0).toLocaleString("pt-BR")}% × {value.periodicidadeMeses},
+                cálculo simples).
+              </p>
+            </div>
+          ) : (
+            <div>
+              <Label className="text-xs">Percentual por ciclo (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={value.percentualBase}
+                onChange={(event) => patch({ percentualBase: Number(event.target.value) || 0 })}
+              />
+            </div>
+          )}
 
           <div>
             <Label className="text-xs">Índice de referência</Label>
@@ -105,9 +169,12 @@ export function ReajusteContratualForm({
           </div>
 
           <div className="sm:col-span-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-            Percentuais fixos são refletidos automaticamente nas parcelas conforme os ciclos do contrato.
-            Para IPCA ou outro índice variável, o percentual apurado em cada aniversário é informado no
-            contrato e aplicado somente às parcelas vincendas, preservando o histórico.
+            Se o contrato prevê 0,99% ao mês, mas corrige somente a cada 12 meses por
+            soma simples, selecione Taxa mensal nominal: o sistema calculará 11,88% por ano.
+            A primeira correção segue o aniversário da data do contrato, não a numeração
+            das parcelas nem a quantidade de sinais. Os pagamentos já realizados são preservados.
+            Índices variáveis (IPCA, INCC etc.) dependem do percentual informado e da aplicação
+            autorizada na venda; as regras não são aplicadas retroativamente ao editar o empreendimento.
           </div>
         </div>
       )}
