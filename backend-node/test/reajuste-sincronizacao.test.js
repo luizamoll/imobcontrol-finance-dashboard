@@ -54,8 +54,10 @@ function fake({ comIndice=false, semBase=false } = {}) {
  });
  async function chamar(method,path,tokenPrevia){
   const req={params:{id:'1'},usuario:{id:4},body:{tokenPrevia}};
-  const res={json:value=>value};
-  return routes[method][path](req,res);
+  let resposta;
+  const res={json:value=>{resposta=value;return value;}};
+  await routes[method][path](req,res);
+  return resposta;
  }
  return {chamar,comandos,parcelas,venda};
 }
