@@ -1,5 +1,6 @@
 
 import Decimal from 'decimal.js';
+import { createHash } from 'node:crypto';
 const D=v=>new Decimal(v??0),cash=v=>D(v).toDecimalPlaces(2,Decimal.ROUND_HALF_UP).toFixed(2);
 const id=(v,bad)=>{const n=Number(v);if(!Number.isSafeInteger(n)||n<1)throw bad(400,'ID invalido');return n};
 const data=(v,bad)=>{if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v)||Number.isNaN(Date.parse(v))||new Date(v+'T00:00:00Z').toISOString().slice(0,10)!==v)throw bad(400,'Data invalida');return v};
@@ -73,36 +74,120 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
    await conn.commit();res.status(201).json(dto(rows[0]));
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
  }));
+
+ // Simulacao e execucao usam a MESMA funcao: nao ha duas regras financeiras concorrentes.
+ // Nenhum contrato existente e modificado sem uma previa validada pelo usuario.
+ async function prepararSincronizacao(conn,empresa,empId,travar=false){
+  const lock=travar?' FOR UPDATE':'';
+  const [empRows]=await conn.execute('SELECT * FROM empreendimentos WHERE empresa_id=? AND id=?'+lock,[empresa,empId]);
+  if(!empRows.length)throw bad(404,'Empreendimento nao encontrado');
+  const regra=parse(empRows[0].reajuste_contratual_json);
+  if(!regra.ativo)throw bad(409,'Correcao contratual desativada');
+  if(regra.modalidade==='percentual_fixo')percentualPorCiclo(regra);
+  const [vendas]=await conn.execute(
+   "SELECT * FROM vendas WHERE empresa_id=? AND empreendimento_id=? AND status='ativa' ORDER BY id"+lock,
+   [empresa,empId]
+  );
+  const updates=[],amostras=[],assinaturas=[],resumo={
+   contratosAnalisados:vendas.length,contratosAlterados:0,parcelasAnalisadas:0,
+   parcelasAlteradas:0,parcelasComValorAlterado:0,parcelasPreservadas:0,
+   valorAtualTotal:'0.00',valorPropostoTotal:'0.00'
+  };
+  let totalAtual=D(0),totalProposto=D(0);
+  for(const v of vendas){
+   const regrasAtuais=parse(v.regras_json);
+   const novasRegras={...regrasAtuais,reajusteContratual:regra};
+   const mudouRegra=JSON.stringify(regrasAtuais.reajusteContratual??null)!==JSON.stringify(regra);
+   const [parcelas]=await conn.execute(
+    "SELECT id,vencimento,valor,valor_original,reajustes_aplicados,acordo_id,status,versao FROM parcelas "+
+    "WHERE empresa_id=? AND venda_id=? ORDER BY id"+lock,[empresa,v.id]
+   );
+   const mudancas=[];
+   for(const p of parcelas){
+    assinaturas.push([v.id,p.id,p.vencimento,String(p.valor),String(p.valor_original??''),
+     p.reajustes_aplicados,p.acordo_id,p.status,p.versao]);
+    if(['paga','cancelada','em_acordo'].includes(p.status)||p.acordo_id!=null){
+     resumo.parcelasPreservadas++;
+     continue;
+    }
+    resumo.parcelasAnalisadas++;
+    const original=p.valor_original??p.valor;
+    const novo=regra.modalidade==='percentual_fixo'
+     ?valorReajustadoFixo(original,v.data_contrato,p.vencimento,regra)
+     :{valor:cash(p.valor),ciclos:Number(p.reajustes_aplicados??0)};
+    totalAtual=totalAtual.plus(D(p.valor));
+    totalProposto=totalProposto.plus(D(novo.valor));
+    const valorMudou=!D(novo.valor).eq(p.valor);
+    const contagemMudou=regra.modalidade==='percentual_fixo'&&novo.ciclos!==Number(p.reajustes_aplicados??0);
+    if(valorMudou||contagemMudou){
+     mudancas.push({id:p.id,valor:novo.valor,original,ciclos:novo.ciclos});
+     resumo.parcelasAlteradas++;
+     if(valorMudou)resumo.parcelasComValorAlterado++;
+     if(amostras.length<12)amostras.push({
+      vendaId:v.id,parcelaId:p.id,vencimento:p.vencimento,
+      valorAtual:cash(p.valor),valorProposto:novo.valor
+     });
+    }
+   }
+   if(mudouRegra||mudancas.length)resumo.contratosAlterados++;
+   updates.push({v,novasRegras,mudouRegra,mudancas});
+   assinaturas.push([v.id,v.versao,v.regras_json??null]);
+  }
+  resumo.valorAtualTotal=cash(totalAtual);
+  resumo.valorPropostoTotal=cash(totalProposto);
+  const token=createHash('sha256').update(JSON.stringify({
+   empresa,empId,regra,empVersao:empRows[0].versao,assinaturas
+  })).digest('hex');
+  return {resumo,amostras,token,updates,regra};
+ }
+ app.get('/api/empreendimentos/:id/reajuste-contratos/previa',exigirLogin,handler(async(req,res)=>{
+  await exigirPermissao(req,['VENDAS_EDITAR']);
+  const empresa=await empresaAutorizada(req),empId=id(req.params.id,bad);
+  const simulacao=await prepararSincronizacao(db,empresa,empId);
+  res.json({resumo:simulacao.resumo,amostras:simulacao.amostras,
+   token:simulacao.token,modalidade:simulacao.regra.modalidade,
+   percentualPorCiclo:simulacao.regra.modalidade==='percentual_fixo'
+    ?percentualPorCiclo(simulacao.regra):null});
+ }));
  app.post('/api/empreendimentos/:id/reajuste-contratos',exigirLogin,handler(async(req,res)=>{
   await exigirPermissao(req,['VENDAS_EDITAR']);
-  const empresa=await empresaAutorizada(req),empId=id(req.params.id,bad),conn=await db.getConnection();
+  const empresa=await empresaAutorizada(req),empId=id(req.params.id,bad);
+  const token=req.body?.tokenPrevia;
+  if(typeof token!=='string'||!/^[a-f0-9]{64}$/.test(token))
+   throw bad(400,'Confira a previa antes de confirmar a sincronizacao');
+  const conn=await db.getConnection();
   try{
    await conn.beginTransaction();
-   const [empRows]=await conn.execute('SELECT * FROM empreendimentos WHERE empresa_id=? AND id=? FOR UPDATE',[empresa,empId]);
-   if(!empRows.length)throw bad(404,'Empreendimento nao encontrado');
-   const regra=parse(empRows[0].reajuste_contratual_json);
-   if(!regra.ativo)throw bad(409,'Correcao contratual desativada');
-   const [vendas]=await conn.execute("SELECT * FROM vendas WHERE empresa_id=? AND empreendimento_id=? AND status='ativa' ORDER BY id FOR UPDATE",[empresa,empId]);
-   for(const v of vendas){
-    const antigas=parse(v.regras_json);
-    antigas.reajusteContratual=regra;
-    await conn.execute('UPDATE vendas SET regras_json=?,atualizado_por_usuario_id=?,versao=versao+1,atualizado_em=UTC_TIMESTAMP() WHERE id=? AND empresa_id=?',[JSON.stringify(antigas),req.usuario.id,v.id,empresa]);
-    const [abertas]=await conn.execute("SELECT id,vencimento,valor_original,valor,acordo_id,status FROM parcelas WHERE empresa_id=? AND venda_id=? AND status NOT IN ('paga','cancelada','em_acordo') FOR UPDATE",[empresa,v.id]);
-    for(const p of abertas){
-     const inad=antigas.inadimplencia==null?null:JSON.stringify(antigas.inadimplencia);
-     if(p.acordo_id!=null){await conn.execute('UPDATE parcelas SET regras_inadimplencia_json=? WHERE empresa_id=? AND id=?',[inad,empresa,p.id]);continue;}
-     if(regra.modalidade==='percentual_fixo'){
-      const valorOriginal=p.valor_original??p.valor;
-      const novo=valorReajustadoFixo(valorOriginal,v.data_contrato,p.vencimento,regra);
-      await conn.execute('UPDATE parcelas SET valor=?,valor_original=?,reajustes_aplicados=?,regras_inadimplencia_json=?,versao=versao+1,atualizado_em=UTC_TIMESTAMP() WHERE empresa_id=? AND id=?',
-       [novo.valor,valorOriginal,novo.ciclos,inad,empresa,p.id]);
-     }else{
-      await conn.execute('UPDATE parcelas SET regras_inadimplencia_json=? WHERE empresa_id=? AND id=?',[inad,empresa,p.id]);
-     }
+   const simulacao=await prepararSincronizacao(conn,empresa,empId,true);
+   if(simulacao.token!==token)
+    throw bad(409,'Os contratos mudaram desde a previa. Atualize a simulacao e confira os valores');
+   for(const {v,novasRegras,mudouRegra,mudancas} of simulacao.updates){
+    const inad=novasRegras.inadimplencia==null?null:JSON.stringify(novasRegras.inadimplencia);
+    if(mudouRegra){
+     await conn.execute(
+      'UPDATE vendas SET regras_json=?,atualizado_por_usuario_id=?,versao=versao+1,atualizado_em=UTC_TIMESTAMP() WHERE id=? AND empresa_id=?',
+      [JSON.stringify(novasRegras),req.usuario.id,v.id,empresa]
+     );
     }
-    await auditar(conn,empresa,req.usuario.id,v.id,'REAJUSTE_SINCRONIZADO_DO_EMPREENDIMENTO');
+    for(const p of mudancas){
+     await conn.execute(
+      'UPDATE parcelas SET valor=?,valor_original=?,reajustes_aplicados=?,regras_inadimplencia_json=?,versao=versao+1,atualizado_em=UTC_TIMESTAMP() WHERE empresa_id=? AND id=?',
+      [p.valor,p.original,p.ciclos,inad,empresa,p.id]
+     );
+    }
+    if(mudouRegra||mudancas.length){
+     await conn.execute(
+      "INSERT INTO auditoria_operacional (empresa_id,usuario_id,entidade,entidade_id,acao,detalhes,criado_em) "+
+      "VALUES (?,?,'VENDA',?,'REAJUSTE_SINCRONIZADO_DO_EMPREENDIMENTO',?,UTC_TIMESTAMP())",
+      [empresa,req.usuario.id,v.id,JSON.stringify({
+       regraAnterior:parse(v.regras_json).reajusteContratual??null,
+       regraNova:simulacao.regra,parcelasAlteradas:mudancas.length
+      })]
+     );
+    }
    }
-   await conn.commit();res.json(vendas.length);
+   await conn.commit();
+   res.json(simulacao.resumo);
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
  }));
 }
