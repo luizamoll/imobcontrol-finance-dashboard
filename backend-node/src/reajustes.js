@@ -62,7 +62,9 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
    let aplicado=D(indice);
    if(regra.modalidade==='maior_entre')aplicado=Decimal.max(aplicado,D(regra.percentualBase??0));
    const fator=D(1).plus(aplicado.div(100));
-   const [abertas]=await conn.execute("SELECT id,valor,valor_original,reajustes_aplicados FROM parcelas WHERE empresa_id=? AND venda_id=? AND acordo_id IS NULL AND status NOT IN ('paga','cancelada','em_acordo') AND vencimento>=? FOR UPDATE",[empresa,vendaId,ref]);
+   const [abertas]=await conn.execute("SELECT id,valor,valor_pago,valor_original,reajustes_aplicados FROM parcelas WHERE empresa_id=? AND venda_id=? AND acordo_id IS NULL AND status NOT IN ('paga','cancelada','em_acordo') AND vencimento>=? FOR UPDATE",[empresa,vendaId,ref]);
+   if(abertas.some(p=>D(p.valor_pago??0).gt(0)))
+    throw bad(409,'Ha parcelas com pagamentos parciais. Revise essas parcelas antes de aplicar o indice.');
    for(const p of abertas)await conn.execute(
     'UPDATE parcelas SET valor=?,valor_original=COALESCE(valor_original,valor),reajustes_aplicados=COALESCE(reajustes_aplicados,0)+1,versao=versao+1,atualizado_em=UTC_TIMESTAMP() WHERE empresa_id=? AND id=?',
     [cash(D(p.valor).times(fator)),empresa,p.id]);
