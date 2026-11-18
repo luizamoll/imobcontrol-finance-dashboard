@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { validarCorretor } from '../src/corretores.js';
 import { validarDividendo } from '../src/dividendos.js';
 import { validarAcordo, gerarParcelasAcordo, addMonths } from '../src/acordos.js';
-import { valorReajustadoFixo } from '../src/reajustes.js';
+import { valorReajustadoFixo, percentualPorCiclo } from '../src/reajustes.js';
 
 const bad = (status,message)=>Object.assign(new Error(message),{status});
 const erro=(fn,status)=>assert.throws(fn,e=>e?.status===status);
@@ -67,4 +67,21 @@ test('reajuste fixo: ciclos completos e centavos exatos',()=>{
  assert.deepEqual(valorReajustadoFixo('100.00','2026-01-31','2027-01-30',regra),{valor:'100.00',ciclos:0});
  assert.deepEqual(valorReajustadoFixo('100.00','2026-01-31','2027-01-31',regra),{valor:'110.00',ciclos:1});
  assert.deepEqual(valorReajustadoFixo('100.00','2026-01-31','2028-01-31',regra),{valor:'121.00',ciclos:2});
+});
+
+test('0,99% nominal ao mes, apurado uma vez ao ano: 11,88% sem capitalizacao mensal',()=>{
+ const regra={ativo:true,modalidade:'percentual_fixo',periodicidadeMeses:12,
+  taxaMensalReferencia:0.99,percentualBase:11.88};
+ assert.equal(percentualPorCiclo(regra),'11.8800');
+ assert.deepEqual(valorReajustadoFixo('3700.00','2024-11-07','2025-11-06',regra),
+  {valor:'3700.00',ciclos:0});
+ assert.deepEqual(valorReajustadoFixo('3700.00','2024-11-07','2025-11-07',regra),
+  {valor:'4139.56',ciclos:1});
+ // A segunda correcao e composta ANUALMENTE sobre o valor contratual,
+ // nao capitalizada todo mes.
+ assert.deepEqual(valorReajustadoFixo('3700.00','2024-11-07','2026-11-07',regra),
+  {valor:'4631.34',ciclos:2});
+ assert.deepEqual(valorReajustadoFixo('3700.00','2024-11-07','2025-11-07',
+  {...regra,taxaMensalReferencia:undefined,percentualBase:11.88}),
+  {valor:'4139.56',ciclos:1});
 });
