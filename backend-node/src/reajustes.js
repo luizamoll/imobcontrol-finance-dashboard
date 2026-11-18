@@ -122,8 +122,9 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
      String(p.valor_original??''),p.reajustes_aplicados,p.acordo_id,p.status,p.versao]);
     // Recebimentos parciais ainda abertos tambem sao historico financeiro:
     // nao recalcular seu principal nem modificar o saldo sem revisao individual.
-    const parcial=D(p.valor_pago??0).gt(0);
-    if(['paga','cancelada','em_acordo'].includes(p.status)||p.acordo_id!=null||parcial){
+    const encerrada=['paga','cancelada','em_acordo'].includes(p.status)||p.acordo_id!=null;
+    const parcial=!encerrada&&D(p.valor_pago??0).gt(0);
+    if(encerrada||parcial){
      resumo.parcelasPreservadas++;
      preservadasContrato++;
      if(parcial){resumo.parcelasParciaisPreservadas++;parciaisContrato++;}
