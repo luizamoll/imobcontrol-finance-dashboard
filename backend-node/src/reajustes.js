@@ -12,11 +12,25 @@ function mesCompleto(from,to){
  const a=from.slice(0,10).split('-').map(Number),b=to.slice(0,10).split('-').map(Number);
  let meses=(b[0]-a[0])*12+b[1]-a[1];if(b[2]<a[2])meses--;return Math.max(0,meses);
 }
+// Uma so fonte para a geracao inicial e a sincronizacao dos contratos.
+// O percentual-base sempre representa o percentual de UM CICLO (ex.: 12 meses).
+// Uma taxa nominal mensal pode ser informada, com conversao SIMPLES, sem capitalizacao mensal.
+export function percentualPorCiclo(regra){
+ const periodicidade=Number(regra?.periodicidadeMeses??12);
+ if(!Number.isSafeInteger(periodicidade)||periodicidade<1||periodicidade>1200)
+   throw new Error('Periodicidade de reajuste invalida');
+ const percentual=regra?.taxaMensalReferencia==null
+   ? D(regra?.percentualBase??0)
+   : D(regra.taxaMensalReferencia).times(periodicidade);
+ if(!percentual.isFinite()||percentual.lt(0)||percentual.gt(100))
+   throw new Error('Percentual de reajuste por ciclo invalido');
+ return percentual.toDecimalPlaces(4,Decimal.ROUND_HALF_UP).toFixed(4);
+}
 export function valorReajustadoFixo(original,contrato,vencimento,regra){
  if(!regra?.ativo||regra.modalidade!=='percentual_fixo')return {valor:cash(original),ciclos:0};
- const intervalo=Math.max(1,Number(regra.periodicidadeMeses??12));
+ const intervalo=Number(regra.periodicidadeMeses??12);
+ const percentual=D(percentualPorCiclo(regra));
  const ciclos=Math.floor(mesCompleto(contrato,vencimento)/intervalo);
- const percentual=D(regra.percentualBase??0);
  if(ciclos===0||percentual.lte(0))return {valor:cash(original),ciclos};
  return {valor:cash(D(original).times(D(1).plus(percentual.div(100)).pow(ciclos))),ciclos};
 }
