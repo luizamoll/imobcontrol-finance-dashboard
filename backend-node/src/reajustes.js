@@ -102,6 +102,15 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
     "SELECT id,vencimento,valor,valor_original,reajustes_aplicados,acordo_id,status,versao FROM parcelas "+
     "WHERE empresa_id=? AND venda_id=? ORDER BY id"+lock,[empresa,v.id]
    );
+   // Contratos que ja receberam indice manual nao devem perder ajustes anteriores
+   // ao trocar silenciosamente para percentual fixo.
+   if(regra.modalidade==='percentual_fixo'){
+    const [historicoIndice]=await conn.execute(
+     'SELECT id FROM reajustes_venda WHERE empresa_id=? AND venda_id=? LIMIT 1',[empresa,v.id]
+    );
+    if(historicoIndice.length)throw bad(409,
+     'A venda #'+v.id+' ja possui reajustes por indice. Revise o contrato antes de sincronizar a regra fixa.');
+   }
    const mudancas=[];
    for(const p of parcelas){
     assinaturas.push([v.id,p.id,p.vencimento,String(p.valor),String(p.valor_original??''),
@@ -111,6 +120,9 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
      continue;
     }
     resumo.parcelasAnalisadas++;
+    if(regra.modalidade==='percentual_fixo' && p.valor_original==null
+       && Number(p.reajustes_aplicados??0)>0)
+      throw bad(409,'Parcela #'+p.id+' sem valor original para recalculo seguro. Solicite revisao financeira.');
     const original=p.valor_original??p.valor;
     const novo=regra.modalidade==='percentual_fixo'
      ?valorReajustadoFixo(original,v.data_contrato,p.vencimento,regra)
