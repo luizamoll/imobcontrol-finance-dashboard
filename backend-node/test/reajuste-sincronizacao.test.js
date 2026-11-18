@@ -31,7 +31,7 @@ function fake({ comIndice=false, semBase=false } = {}) {
     return [{affectedRows:1}];
    }
    if(sql.startsWith('UPDATE parcelas SET')){
-    const p=parcelas.find(p=>p.id===args[6]);
+    const p=parcelas.find(p=>p.id===args[5]);
     assert.ok(p);
     p.valor=args[0];p.valor_original=args[1];p.reajustes_aplicados=args[2];p.versao++;
     return [{affectedRows:1}];
