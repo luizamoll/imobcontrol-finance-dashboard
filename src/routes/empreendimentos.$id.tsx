@@ -47,7 +47,7 @@ import {
   criarUnidadeRemota,
 } from "@/lib/catalogo-api";
 import { brl, formatCNPJ, num, pct } from "@/lib/format";
-import { aplicarReajusteEmpreendimentoRemoto, carregarFinanceiro } from "@/lib/financeiro-api";
+import { aplicarReajusteEmpreendimentoRemoto, consultarPreviaReajusteEmpreendimento, carregarFinanceiro } from "@/lib/financeiro-api";
 import {
   DEFAULT_REAJUSTE_CONTRATUAL,
   empTotais,
@@ -111,36 +111,54 @@ function EmpreendimentoDetail() {
       toast.error("Ative e salve uma regra de correção contratual primeiro.");
       return;
     }
-
-    const confirmar = window.confirm(
-      "Aplicar a regra de correção deste empreendimento às vendas ativas? Parcelas pagas e recebimentos históricos não serão alterados.",
-    );
-    if (!confirmar) return;
-
     setSincronizandoReajuste(true);
     try {
-      const quantidade = await aplicarReajusteEmpreendimentoRemoto(empresaAtualId, emp.id);
+      const previa = await consultarPreviaReajusteEmpreendimento(empresaAtualId, emp.id);
+      const resumo = previa.resumo;
+      if (resumo.contratosAlterados === 0) {
+        toast.info("Os contratos ativos já estão sincronizados com a regra atual.");
+        return;
+      }
+      const brlValor = (valor: string) =>
+        Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      const amostras = previa.amostras.slice(0, 5).map((p) =>
+        "Venda #" + p.vendaId + ", parcela #" + p.parcelaId + ": " +
+        brlValor(p.valorAtual) + " → " + brlValor(p.valorProposto),
+      ).join("\n");
+      const texto =
+        "SIMULAÇÃO — NENHUMA ALTERAÇÃO FOI APLICADA AINDA\n\n" +
+        "Contratos ativos analisados: " + resumo.contratosAnalisados + "\n" +
+        "Contratos com mudanças: " + resumo.contratosAlterados + "\n" +
+        "Parcelas abertas afetadas: " + resumo.parcelasAlteradas + "\n" +
+        "Parcelas já quitadas, canceladas ou em acordo preservadas: " + resumo.parcelasPreservadas + "\n" +
+        "Total das parcelas abertas antes: " + brlValor(resumo.valorAtualTotal) + "\n" +
+        "Total proposto: " + brlValor(resumo.valorPropostoTotal) + "\n" +
+        (previa.modalidade === "percentual_fixo"
+          ? "Percentual por ciclo: " + previa.percentualPorCiclo + "%\n"
+          : "Índice variável: somente a regra será vinculada; a aplicação do índice depende de ação autorizada em cada venda.\n") +
+        (amostras ? "\nExemplos de alterações:\n" + amostras + "\n" : "") +
+        "\nConfirmar as alterações nas parcelas abertas e nas regras dos contratos? " +
+        "Valores já recebidos e seus históricos serão preservados.";
+      if (!window.confirm(texto)) return;
+
+      const resultado = await aplicarReajusteEmpreendimentoRemoto(
+        empresaAtualId, emp.id, previa.token,
+      );
       const financeiro = await carregarFinanceiro(empresaAtualId);
-      setState((s) => ({
-        ...s,
+      setState((anterior) => ({
+        ...anterior,
         vendas: financeiro.vendas,
         parcelas: financeiro.parcelas,
         movimentos: financeiro.movimentos,
       }));
       toast.success(
-        quantidade === 1
-          ? "Correção aplicada a 1 contrato ativo"
-          : `Correção aplicada a ${quantidade} contratos ativos`,
-        {
-          description:
-            "Somente parcelas abertas foram recalculadas; pagamentos e recebimentos históricos foram preservados.",
-        },
+        "Sincronização concluída: " + resultado.contratosAlterados +
+        " contrato(s), " + resultado.parcelasAlteradas + " parcela(s).",
+        { description: "Os relatórios usam os mesmos dados atualizados; pagamentos anteriores foram preservados." },
       );
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível aplicar a correção aos contratos ativos",
+        error instanceof Error ? error.message : "Não foi possível sincronizar o reajuste",
       );
     } finally {
       setSincronizandoReajuste(false);
@@ -318,7 +336,7 @@ function EmpreendimentoDetail() {
                 disabled={sincronizandoReajuste}
               >
                 <RefreshCcw className="mr-2 h-4 w-4" />
-                {sincronizandoReajuste ? "Aplicando..." : "Aplicar correção às vendas ativas"}
+                {sincronizandoReajuste ? "Aplicando..." : "Conferir impacto e aplicar correção"}
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
@@ -624,7 +642,7 @@ function ResumoRegras({ regras }: { regras: RegrasOperacao }) {
           <span className="text-muted-foreground">Reajuste contratual: </span>
           <span>
             {regras.reajusteContratual.descricao ||
-              `${regras.reajusteContratual.percentualBase}% · ${regras.reajusteContratual.indiceReferencia || "sem índice"} · a cada ${regras.reajusteContratual.periodicidadeMeses} mês(es)`}
+              `${regras.reajusteContratual.percentualBase}% por ciclo de ${regras.reajusteContratual.periodicidadeMeses} meses`}
           </span>
         </div>
       )}
