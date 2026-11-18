@@ -92,6 +92,9 @@ export interface ReajusteContratual {
   ativo: boolean;
   modalidade: ReajusteModalidade;
   percentualBase: number;
+  // Se informado, esta e a taxa nominal mensal e percentualBase e derivado por
+  // multiplicacao simples pela periodicidade (sem capitalizacao mensal).
+  taxaMensalReferencia?: number;
   indiceReferencia: string;
   periodicidadeMeses: number;
   gatilhoPercentual: number;
