@@ -76,6 +76,11 @@ const rotulos: Record<string, string> = {
   EMPRESA_CRIADA: "Empresa criada",
   EMPRESA_ATUALIZADA: "Empresa atualizada",
   USUARIO_CRIADO: "Usuário criado",
+  ADMIN_CRIADO_DEPLOY: "Administrador cadastrado na implantação",
+  FUNCIONARIO_CRIADO: "Colaborador cadastrado",
+  FUNCIONARIO_ATUALIZADO: "Usuário atualizado",
+  FUNCIONARIO_DESATIVADO: "Usuário desativado",
+  SENHA_FUNCIONARIO_REDEFINIDA: "Senha do usuário redefinida",
   USUARIO_ATUALIZADO: "Usuário atualizado",
   USUARIO_DESATIVADO: "Usuário desativado",
   SENHA_REDEFINIDA: "Senha redefinida",
@@ -103,11 +108,25 @@ const acoesFiltro = [
   "EMPRESA_CRIADA",
   "EMPRESA_ATUALIZADA",
   "USUARIO_CRIADO",
+  "ADMIN_CRIADO_DEPLOY",
+  "FUNCIONARIO_CRIADO",
+  "FUNCIONARIO_ATUALIZADO",
+  "FUNCIONARIO_DESATIVADO",
+  "SENHA_FUNCIONARIO_REDEFINIDA",
   "USUARIO_ATUALIZADO",
   "USUARIO_DESATIVADO",
   "SENHA_REDEFINIDA",
   "CONVITE_REENVIADO",
 ];
+
+// O evento legado ADMIN_CRIADO_DEPLOY foi gerado por um processo automatico.
+// A coluna usuario_id nesse evento indica a conta CRIADA, nao o ator da acao.
+// Conservamos o historico original e esclarecemos a autoria somente na tela.
+function quemExecutou(registro: Registro) {
+  return registro.acao === "ADMIN_CRIADO_DEPLOY"
+    ? "Sistema (cadastro automático)"
+    : registro.usuarioNome;
+}
 
 function proximoDia(data: string) {
   if (!data) return "";
@@ -196,6 +215,7 @@ function AdminAuditoriaPage() {
     const termo = busca.trim().toLowerCase();
     if (!termo) return registros;
     return registros.filter((registro) =>
+      quemExecutou(registro).toLowerCase().includes(termo) ||
       registro.usuarioNome.toLowerCase().includes(termo) ||
       registro.empresaNome.toLowerCase().includes(termo) ||
       (rotulos[registro.acao] ?? registro.acao).toLowerCase().includes(termo) ||
@@ -429,7 +449,14 @@ function AdminAuditoriaPage() {
                     </p>
                   )}
                 </TableCell>
-                <TableCell className="align-top text-sm">{registro.usuarioNome}</TableCell>
+                <TableCell className="align-top text-sm">
+                  <div>{quemExecutou(registro)}</div>
+                  {registro.acao === "ADMIN_CRIADO_DEPLOY" && (
+                    <div className="text-xs text-muted-foreground">
+                      Conta cadastrada: {registro.usuarioNome}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell className="align-top text-sm">{registro.empresaNome}</TableCell>
                 <TableCell className="align-top text-sm text-muted-foreground">
                   {entidades[registro.entidade] ?? registro.entidade} #{registro.entidadeId}
