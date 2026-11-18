@@ -1,6 +1,7 @@
 // Cadastro de venda com composicao e parcelas, port do FinanceiroService.java.
 // Usa Decimal.js (centavos exatos), bloqueio de unidade e transacao MySQL.
 import Decimal from 'decimal.js';
+import { valorReajustadoFixo } from './reajustes.js';
 
 Decimal.set({precision: 36, rounding: Decimal.ROUND_HALF_UP});
 const D = x => new Decimal(x);
@@ -131,20 +132,6 @@ const addMonths = (iso, offset) => {
   date.setUTCDate(Math.min(d,last));
   return date.toISOString().slice(0,10);
 };
-const cyclesFixed = (contrato,vencimento,reajuste) => {
-  if (!reajuste?.ativo || reajuste.modalidade !== 'percentual_fixo') return 0;
-  const [ay,am,ad] = contrato.split('-').map(Number);
-  const [by,bm,bd] = vencimento.split('-').map(Number);
-  const months = (by-ay)*12 + bm-am - (bd<ad ? 1 : 0);
-  const period = Number(reajuste.periodicidadeMeses ?? 12);
-  if (!Number.isSafeInteger(period) || period < 1) throw Error('Periodicidade de reajuste invalida');
-  return Math.max(0,Math.floor(months/period));
-};
-const reajustar = (orig, cycles, reajuste) => {
-  if (!cycles || !reajuste || D(reajuste.percentualBase ?? 0).lte(0)) return orig;
-  const fator = D(1).plus(D(reajuste.percentualBase).div(100).toDecimalPlaces(12,Decimal.ROUND_HALF_UP));
-  return money(D(orig).times(fator.pow(cycles))).toFixed(2);
-};
 export function parcelasDaVenda(body,regras) {
   const inad = regras.inadimplencia == null ? null : JSON.stringify(regras.inadimplencia);
   let restantes = body.composicao.reduce((n,item)=>n+(isParcelado(item.tipo)?item.parcelas:0),0);
@@ -164,8 +151,9 @@ export function parcelasDaVenda(body,regras) {
         }
       }
       const vencimento = addMonths(item.primeiroVencimento,numero-1);
-      const ciclos = cyclesFixed(body.dataContrato,vencimento,regras.reajusteContratual);
-      const valor = reajustar(original,ciclos,regras.reajusteContratual);
+      const {valor,ciclos} = valorReajustadoFixo(
+        original,body.dataContrato,vencimento,regras.reajusteContratual
+      );
       rows.push({
         tipo:item.tipo,descricao:item.descricao ?? item.tipo,numero,totalParcelas:quantidade,
         vencimento,valor,valorOriginal:original,reajustesAplicados:ciclos,
