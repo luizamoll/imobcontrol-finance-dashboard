@@ -450,9 +450,34 @@ export type PreviaReajusteEmpreendimento = {
     parcelasAlteradas: number;
     parcelasComValorAlterado: number;
     parcelasPreservadas: number;
+    parcelasParciaisPreservadas: number;
     valorAtualTotal: string;
     valorPropostoTotal: string;
+    diferencaTotal: string;
+    variacaoPercentual: string;
+    exigeConfirmacaoExtra: boolean;
   };
+  contratos: Array<{
+    vendaId: number;
+    dataContrato: string;
+    parcelasAlteradas: number;
+    parcelasPreservadas: number;
+    parcelasParciaisPreservadas: number;
+    maiorCiclo: number;
+    regraAnterior: RegrasContrato["reajusteContratual"] | null;
+    valorAtual: string;
+    valorProposto: string;
+    diferenca: string;
+    variacaoPercentual: string;
+  }>;
+  porAno: Array<{
+    ano: string;
+    parcelas: number;
+    parcelasAlteradas: number;
+    valorAtual: string;
+    valorProposto: string;
+    diferenca: string;
+  }>;
   amostras: Array<{
     vendaId: number;
     parcelaId: number;
@@ -476,9 +501,10 @@ export async function aplicarReajusteEmpreendimentoRemoto(
   empresaId: number,
   empreendimentoId: string,
   tokenPrevia: string,
+  confirmacaoExtra?: string,
 ) {
   return apiJson<PreviaReajusteEmpreendimento["resumo"]>(
     `/api/empreendimentos/${empreendimentoId}/reajuste-contratos`,
-    { method: "POST", empresaId, body: JSON.stringify({ tokenPrevia }) },
+    { method: "POST", empresaId, body: JSON.stringify({ tokenPrevia, confirmacaoExtra }) },
   );
 }
