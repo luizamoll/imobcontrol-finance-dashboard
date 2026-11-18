@@ -439,12 +439,46 @@ export async function reverterParcelaRemota(
 }
 
 
-export async function aplicarReajusteEmpreendimentoRemoto(
+export type PreviaReajusteEmpreendimento = {
+  token: string;
+  modalidade: string;
+  percentualPorCiclo: string | null;
+  resumo: {
+    contratosAnalisados: number;
+    contratosAlterados: number;
+    parcelasAnalisadas: number;
+    parcelasAlteradas: number;
+    parcelasComValorAlterado: number;
+    parcelasPreservadas: number;
+    valorAtualTotal: string;
+    valorPropostoTotal: string;
+  };
+  amostras: Array<{
+    vendaId: number;
+    parcelaId: number;
+    vencimento: string;
+    valorAtual: string;
+    valorProposto: string;
+  }>;
+};
+
+export async function consultarPreviaReajusteEmpreendimento(
   empresaId: number,
   empreendimentoId: string,
 ) {
-  return apiJson<number>(`/api/empreendimentos/${empreendimentoId}/reajuste-contratos`, {
-    method: "POST",
-    empresaId,
-  });
+  return apiJson<PreviaReajusteEmpreendimento>(
+    `/api/empreendimentos/${empreendimentoId}/reajuste-contratos/previa`,
+    { empresaId },
+  );
+}
+
+export async function aplicarReajusteEmpreendimentoRemoto(
+  empresaId: number,
+  empreendimentoId: string,
+  tokenPrevia: string,
+) {
+  return apiJson<PreviaReajusteEmpreendimento["resumo"]>(
+    `/api/empreendimentos/${empreendimentoId}/reajuste-contratos`,
+    { method: "POST", empresaId, body: JSON.stringify({ tokenPrevia }) },
+  );
 }
