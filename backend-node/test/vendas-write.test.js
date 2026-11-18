@@ -70,3 +70,28 @@ test('rejeita comissao maior do que 100%, composicao inconsistente e datas inval
   assert.throws(()=>normalizarVenda({...venda, dataContrato: '2026-02-31'},bad),/invalida/);
   assert.throws(()=>normalizarVenda({...venda, composicao: []},bad),/invalida/);
 });
+
+test('dois sinais nao antecipam a correcao: primeira aplicacao no aniversario contratual',()=>{
+ const contrato=normalizarVenda({
+  ...venda,dataContrato:'2025-01-07',valorTotal:'52000.00',
+  valorImovel:null,corretagemValor:null,corretagemCompoeValorContrato:null,
+  composicao:[
+   {tipo:'sinal',descricao:'Sinal 1',valor:'100.00',parcelas:1,primeiroVencimento:'2025-01-07'},
+   {tipo:'sinal',descricao:'Sinal 2',valor:'100.00',parcelas:1,primeiroVencimento:'2025-02-07'},
+   {tipo:'parcelas',descricao:'Mensalidades',valor:'3700.00',parcelas:14,primeiroVencimento:'2025-01-07'}
+  ]
+ },bad);
+ const regra={ativo:true,modalidade:'percentual_fixo',periodicidadeMeses:12,
+  percentualBase:11.88,taxaMensalReferencia:0.99};
+ const parcelas=parcelasDaVenda(contrato,{reajusteContratual:regra});
+ assert.equal(parcelas.length,16);
+ assert.equal(parcelas[0].valor,'100.00');
+ assert.equal(parcelas[1].valor,'100.00');
+ const mensais=parcelas.filter(p=>p.tipo==='parcelas');
+ assert.equal(mensais[11].vencimento,'2025-12-07');
+ assert.equal(mensais[11].valor,'3700.00');
+ assert.equal(mensais[12].vencimento,'2026-01-07');
+ assert.equal(mensais[12].valor,'4139.56');
+ assert.equal(mensais[12].reajustesAplicados,1);
+ assert.equal(mensais[13].valor,'4139.56');
+});
