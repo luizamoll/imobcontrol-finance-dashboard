@@ -88,10 +88,12 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
    "SELECT * FROM vendas WHERE empresa_id=? AND empreendimento_id=? AND status='ativa' ORDER BY id"+lock,
    [empresa,empId]
   );
-  const updates=[],amostras=[],assinaturas=[],resumo={
+  const updates=[],amostras=[],assinaturas=[],contratos=[],anos=new Map(),resumo={
    contratosAnalisados:vendas.length,contratosAlterados:0,parcelasAnalisadas:0,
    parcelasAlteradas:0,parcelasComValorAlterado:0,parcelasPreservadas:0,
-   valorAtualTotal:'0.00',valorPropostoTotal:'0.00'
+   parcelasParciaisPreservadas:0,
+   valorAtualTotal:'0.00',valorPropostoTotal:'0.00',diferencaTotal:'0.00',
+   variacaoPercentual:'0.00',exigeConfirmacaoExtra:false
   };
   let totalAtual=D(0),totalProposto=D(0);
   for(const v of vendas){
@@ -99,7 +101,7 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
    const novasRegras={...regrasAtuais,reajusteContratual:regra};
    const mudouRegra=JSON.stringify(regrasAtuais.reajusteContratual??null)!==JSON.stringify(regra);
    const [parcelas]=await conn.execute(
-    "SELECT id,vencimento,valor,valor_original,reajustes_aplicados,acordo_id,status,versao FROM parcelas "+
+    "SELECT id,vencimento,valor,valor_pago,valor_original,reajustes_aplicados,acordo_id,status,versao FROM parcelas "+
     "WHERE empresa_id=? AND venda_id=? ORDER BY id"+lock,[empresa,v.id]
    );
    // Contratos que ja receberam indice manual nao devem perder ajustes anteriores
@@ -112,11 +114,17 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
      'A venda #'+v.id+' ja possui reajustes por indice. Revise o contrato antes de sincronizar a regra fixa.');
    }
    const mudancas=[];
+   let atualContrato=D(0),propostoContrato=D(0),afetasContrato=0,preservadasContrato=0,parciaisContrato=0,maiorCiclo=0;
    for(const p of parcelas){
-    assinaturas.push([v.id,p.id,p.vencimento,String(p.valor),String(p.valor_original??''),
-     p.reajustes_aplicados,p.acordo_id,p.status,p.versao]);
-    if(['paga','cancelada','em_acordo'].includes(p.status)||p.acordo_id!=null){
+    assinaturas.push([v.id,p.id,p.vencimento,String(p.valor),String(p.valor_pago??'0'),
+     String(p.valor_original??''),p.reajustes_aplicados,p.acordo_id,p.status,p.versao]);
+    // Recebimentos parciais ainda abertos tambem sao historico financeiro:
+    // nao recalcular seu principal nem modificar o saldo sem revisao individual.
+    const parcial=D(p.valor_pago??0).gt(0);
+    if(['paga','cancelada','em_acordo'].includes(p.status)||p.acordo_id!=null||parcial){
      resumo.parcelasPreservadas++;
+     preservadasContrato++;
+     if(parcial){resumo.parcelasParciaisPreservadas++;parciaisContrato++;}
      continue;
     }
     resumo.parcelasAnalisadas++;
@@ -129,10 +137,21 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
      :{valor:cash(p.valor),ciclos:Number(p.reajustes_aplicados??0)};
     totalAtual=totalAtual.plus(D(p.valor));
     totalProposto=totalProposto.plus(D(novo.valor));
+    atualContrato=atualContrato.plus(D(p.valor));
+    propostoContrato=propostoContrato.plus(D(novo.valor));
+    maiorCiclo=Math.max(maiorCiclo,novo.ciclos);
+    const ano=String(p.vencimento).slice(0,4);
+    const serie=anos.get(ano)??{ano,parcelas:0,alteradas:0,atual:D(0),proposto:D(0)};
+    serie.parcelas++;
+    serie.atual=serie.atual.plus(D(p.valor));
+    serie.proposto=serie.proposto.plus(D(novo.valor));
+    anos.set(ano,serie);
     const valorMudou=!D(novo.valor).eq(p.valor);
     const contagemMudou=regra.modalidade==='percentual_fixo'&&novo.ciclos!==Number(p.reajustes_aplicados??0);
     if(valorMudou||contagemMudou){
      mudancas.push({id:p.id,valor:novo.valor,original,ciclos:novo.ciclos});
+     afetasContrato++;
+     serie.alteradas++;
      resumo.parcelasAlteradas++;
      if(valorMudou)resumo.parcelasComValorAlterado++;
      if(amostras.length<12)amostras.push({
@@ -142,21 +161,44 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
     }
    }
    if(mudouRegra||mudancas.length)resumo.contratosAlterados++;
+   const diferencaContrato=propostoContrato.minus(atualContrato);
+   contratos.push({
+    vendaId:v.id,dataContrato:String(v.data_contrato).slice(0,10),
+    parcelasAlteradas:afetasContrato,parcelasPreservadas:preservadasContrato,
+    parcelasParciaisPreservadas:parciaisContrato,maiorCiclo,
+    regraAnterior:regrasAtuais.reajusteContratual??null,
+    valorAtual:cash(atualContrato),valorProposto:cash(propostoContrato),
+    diferenca:cash(diferencaContrato),
+    variacaoPercentual:atualContrato.gt(0)
+     ?diferencaContrato.div(atualContrato).times(100).toDecimalPlaces(2).toFixed(2):'0.00'
+   });
    updates.push({v,novasRegras,mudouRegra,mudancas});
    assinaturas.push([v.id,v.versao,v.regras_json??null]);
   }
   resumo.valorAtualTotal=cash(totalAtual);
   resumo.valorPropostoTotal=cash(totalProposto);
+  resumo.diferencaTotal=cash(totalProposto.minus(totalAtual));
+  resumo.variacaoPercentual=totalAtual.gt(0)
+   ?totalProposto.minus(totalAtual).div(totalAtual).times(100).toDecimalPlaces(2).toFixed(2):'0.00';
+  // Saltos grandes exigem uma segunda confirmacao explicita; nunca automaticamente.
+  resumo.exigeConfirmacaoExtra=totalAtual.gt(0)&&totalProposto.gt(totalAtual.times('1.5'));
+  contratos.sort((a,b)=>D(b.diferenca).cmp(a.diferenca));
+  const porAno=Array.from(anos.values())
+   .sort((a,b)=>a.ano.localeCompare(b.ano))
+   .map(a=>({ano:a.ano,parcelas:a.parcelas,parcelasAlteradas:a.alteradas,
+    valorAtual:cash(a.atual),valorProposto:cash(a.proposto),
+    diferenca:cash(a.proposto.minus(a.atual))}));
   const token=createHash('sha256').update(JSON.stringify({
    empresa,empId,regra,empVersao:empRows[0].versao,assinaturas
   })).digest('hex');
-  return {resumo,amostras,token,updates,regra};
+  return {resumo,amostras,contratos,porAno,token,updates,regra};
  }
  app.get('/api/empreendimentos/:id/reajuste-contratos/previa',exigirLogin,handler(async(req,res)=>{
   await exigirPermissao(req,['VENDAS_EDITAR']);
   const empresa=await empresaAutorizada(req),empId=id(req.params.id,bad);
   const simulacao=await prepararSincronizacao(db,empresa,empId);
   res.json({resumo:simulacao.resumo,amostras:simulacao.amostras,
+   contratos:simulacao.contratos,porAno:simulacao.porAno,
    token:simulacao.token,modalidade:simulacao.regra.modalidade,
    percentualPorCiclo:simulacao.regra.modalidade==='percentual_fixo'
     ?percentualPorCiclo(simulacao.regra):null});
@@ -173,6 +215,8 @@ export function registerReajustes(app,{db,exigirLogin,empresaAutorizada,exigirPe
    const simulacao=await prepararSincronizacao(conn,empresa,empId,true);
    if(simulacao.token!==token)
     throw bad(409,'Os contratos mudaram desde a previa. Atualize a simulacao e confira os valores');
+   if(simulacao.resumo.exigeConfirmacaoExtra&&req.body?.confirmacaoExtra!=='REVISADO')
+    throw bad(409,'O impacto financeiro elevado exige confirmacao adicional depois da revisao dos contratos');
    for(const {v,novasRegras,mudouRegra,mudancas} of simulacao.updates){
     const inad=novasRegras.inadimplencia==null?null:JSON.stringify(novasRegras.inadimplencia);
     if(mudouRegra){
