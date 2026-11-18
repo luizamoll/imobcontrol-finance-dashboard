@@ -860,7 +860,7 @@ export const expandedHelpTopics: ExpandedHelpTopic[] = [
       "O que significa maior entre percentual base e índice?",
       "Preciso informar o percentual apurado do índice?"
     ],
-    "answer": "Na venda, quando houver regra de reajuste contratual, use a ação de reajuste. O sistema sugere a data de referência com base na periodicidade e no último reajuste ou na data do contrato. Informe o percentual apurado do índice no período; em regras do tipo maior entre, o contrato usa o maior valor entre o percentual base e o índice informado.",
+    "answer": "Primeiro confira a regra em Empreendimentos > Editar regras: para taxa nominal de 0,99% por mês somada e aplicada somente uma vez por ano, selecione Taxa mensal nominal com periodicidade de 12 meses (11,88% por ciclo). O reajuste fixo considera o aniversário da data do contrato, não a 13ª parcela por si só; sinais e entradas não mudam a contagem de meses. Em vendas novas, o cálculo fixo é aplicado nas parcelas por vencimento. Para vendas antigas, abra o empreendimento e use Conferir impacto e aplicar correção: revise a prévia de valores, confirme e recarregue os dados. Parcelas quitadas, canceladas ou em acordo não são reescritas. Para IPCA/INCC e outros índices variáveis, abra a venda, use a ação de reajuste, informe o percentual efetivo do índice no período e confirme. Se a prévia identificar índice anterior ou ausência de valor original auditável, solicite revisão financeira, sem forçar o recalculo. O assistente não executa essa operação automaticamente e só deve confirmar sucesso após retorno do sistema.",
     "keywords": [
       "reajuste",
       "correção anual",

@@ -1,128 +1,55 @@
-# ImobControl — instruções de hospedagem
+# Imob Control — deploy unificado na Hostinger Business
 
-Este repositório contém três partes da aplicação:
+A aplicação desta branch é **uma única web app Node.js**, com Express (API) e Nitro/TanStack Start (React SSR). Banco de dados **MySQL**.
 
-- **Frontend:** React + TanStack Start, servido por Node.js/Nitro.
-- **Backend:** Java 21 + Spring Boot, porta interna `8081`.
-- **Banco:** PostgreSQL.
+## Configuração no hPanel
 
-O arquivo `docker-compose.yml` sobe frontend, backend, PostgreSQL e Nginx em conjunto.
+| Configuração | Valor |
+| --- | --- |
+| Repositório Git | `luizamoll/imobcontrol-finance-dashboard` |
+| Branch | `feat/hostinger-app-unificado-20261111` |
+| Diretório raiz | `./` |
+| Versão do Node | `22` |
+| Instalação | `npm install` |
+| Build | `npm run build` |
+| Iniciar | `npm start` |
+| Arquivo de entrada | `server/index.mjs` relativo à saída `.output/` |
+| Banco | MySQL (mesma conta Hostinger) |
 
-## Requisitos do servidor
+**Não criar uma aplicação separada para backend.** Não definir `API_UPSTREAM`.
 
-- Docker Engine
-- Docker Compose v2
-- Porta 80 liberada para o acesso inicial por HTTP
-- Para produção definitiva: domínio + HTTPS
+Definir estas variáveis no painel, sem colocá-las em arquivos públicos:
 
-## 1. Configurar as variáveis
-
-Na raiz do projeto:
-
-```bash
-cp .env.example .env
-```
-
-Edite `.env` e defina senhas fortes para `DB_PASSWORD` e `IMOB_ADMIN_PASSWORD`.
-
-O arquivo `.env` **não deve ser enviado ao GitHub**.
-
-`IMOB_ADMIN_EMAIL` e `IMOB_ADMIN_PASSWORD` criam o primeiro `SUPER_ADMIN` apenas caso esse e-mail ainda não exista no banco.
-
-Enquanto o acesso for somente por IP/HTTP, mantenha:
-
-```env
-SESSION_COOKIE_SECURE=false
-```
-
-Quando HTTPS estiver ativo, altere para:
-
-```env
+```text
+NODE_ENV=production
 SESSION_COOKIE_SECURE=true
+APP_URL=https://SEU_DOMINIO
+SMTP_HOST=HOST_SMTP
+SMTP_PORT=587
+SMTP_USER=USUARIO_SMTP
+SMTP_PASSWORD=SENHA_SMTP
+SMTP_FROM=Imob Control <no-reply@SEU_DOMINIO>
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=SEU_BANCO
+DB_USER=SEU_USUARIO
+DB_PASSWORD=SUA_SENHA
+SESSION_SECRET=SEGREDO_ALEATORIO_FORTE_DE_32_CARACTERES_OU_MAIS
 ```
 
-## 2. Subir o sistema
+A variável `PORT` é gerenciada pelo provedor. O processo Nitro `.output/server/index.mjs` escuta essa porta e serve ambas as partes. O Express é registrado como handler Node em `vite.config.ts` nas rotas `/api/**`, `/health` e `/actuator/health`. O build gera `.output/server/index.mjs` (middleware Nitro) e `.output/public`, mantidos junto ao código na instalação. **É necessário iniciar `.output/server/index.mjs`**; é justamente a entrada que o painel da Hostinger detecta como `server/index.mjs`. Não iniciar o antigo arquivo `hosting/hostinger.mjs`.
 
-```bash
-docker compose up -d --build
-```
+## Banco
 
-Verificar os serviços:
+O dump privado MySQL até 03/11/2026 permanece **separado** do código. Criar banco de teste vazio no hPanel, importar no phpMyAdmin, aplicar se faltarem `backend-node/sql/01_node_sessoes.sql`, `02_revisoes_financeiras.sql` e `03_tokens_acesso_node.sql`. Conferir contagens e saldos antes de qualquer virada. Não reimportar sobre banco já populado e não incluir dump no GitHub.
 
-```bash
-docker compose ps
-```
+## Verificações após o deploy em preview
 
-Verificar a API:
+- `/api/auth/csrf` → JSON e cookie da mesma origem.
+- `/api/clientes` sem login → 401 JSON.
+- `/login` → HTML React por SSR.
+- Testar login real, baixa retroativa, 409 sem duplicação, estorno e relatório de valores.
 
-```bash
-curl http://127.0.0.1/actuator/health
-```
+O GitHub Actions dessa branch já verifica API Express e SSR Nitro **em uma única porta**. Os módulos de acordos, reajustes, revisões, equipe, convites, recuperação de senha e superadmin já foram adicionados. **Não publicar em produção antes de conferir o CI do último commit, executar as três migrações no MySQL de testes, configurar SMTP e validar os fluxos e saldos com o dump real.**
 
-Resposta esperada:
-
-```json
-{"status":"UP"}
-```
-
-O sistema ficará disponível inicialmente em:
-
-```text
-http://IP_DO_SERVIDOR/
-```
-
-A página de login é:
-
-```text
-http://IP_DO_SERVIDOR/login
-```
-
-## 3. Logs
-
-Todos os serviços:
-
-```bash
-docker compose logs -f
-```
-
-Somente backend:
-
-```bash
-docker compose logs -f backend
-```
-
-Somente frontend:
-
-```bash
-docker compose logs -f frontend
-```
-
-## 4. Atualização
-
-Após receber uma nova versão do projeto:
-
-```bash
-docker compose up -d --build
-```
-
-As migrations do banco são executadas automaticamente pelo Flyway. O volume `postgres_data` preserva os dados entre recriações dos containers.
-
-## 5. Backup
-
-Exemplo de backup do PostgreSQL:
-
-```bash
-docker compose exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > imobcontrol-backup.sql
-```
-
-O responsável pela infraestrutura deve configurar uma rotina automática de backup antes de uso com dados reais.
-
-## 6. HTTPS
-
-O Nginx incluído no projeto faz o proxy interno entre navegador, frontend e backend. Para produção definitiva, o responsável pela hospedagem deve colocar HTTPS na frente da aplicação (certificado TLS, proxy do provedor ou configuração própria).
-
-Após HTTPS estar funcionando, `SESSION_COOKIE_SECURE=true` é obrigatório.
-
-## Observação sobre o estágio atual
-
-A autenticação, sessão, estrutura multi-tenant inicial e banco de usuários já utilizam o backend Java. As telas e dados financeiros que ainda estiverem mantidos apenas no frontend devem ser considerados **MVP de desenvolvimento**, não armazenamento definitivo de produção, até que os respectivos módulos sejam migrados para a API/PostgreSQL.
+Detalhes: [HOSTINGER_NODE_MYSQL.md](HOSTINGER_NODE_MYSQL.md).

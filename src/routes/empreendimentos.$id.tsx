@@ -47,7 +47,12 @@ import {
   criarUnidadeRemota,
 } from "@/lib/catalogo-api";
 import { brl, formatCNPJ, num, pct } from "@/lib/format";
-import { aplicarReajusteEmpreendimentoRemoto, carregarFinanceiro } from "@/lib/financeiro-api";
+import {
+  aplicarReajusteEmpreendimentoRemoto,
+  consultarPreviaReajusteEmpreendimento,
+  carregarFinanceiro,
+  type PreviaReajusteEmpreendimento,
+} from "@/lib/financeiro-api";
 import {
   DEFAULT_REAJUSTE_CONTRATUAL,
   empTotais,
@@ -91,6 +96,9 @@ function EmpreendimentoDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [sincronizandoReajuste, setSincronizandoReajuste] = useState(false);
+  const [previaReajuste, setPreviaReajuste] = useState<PreviaReajusteEmpreendimento | null>(null);
+  const [previaAberta, setPreviaAberta] = useState(false);
+  const [confirmacaoExtra, setConfirmacaoExtra] = useState("");
 
   if (!emp) throw notFound();
 
@@ -105,42 +113,63 @@ function EmpreendimentoDetail() {
     vendas.length > 0 || parcelas.length > 0 || movimentos.length > 0;
   const vendidoPct = emp.valorTotal ? Math.min(100, (t.vendido / emp.valorTotal) * 100) : 0;
 
-  const aplicarReajusteAContratos = async () => {
+  const conferirReajusteAContratos = async () => {
     if (!empresaAtualId) return;
     if (!regrasEmp.reajusteContratual?.ativo) {
       toast.error("Ative e salve uma regra de correção contratual primeiro.");
       return;
     }
-
-    const confirmar = window.confirm(
-      "Aplicar a regra de correção deste empreendimento às vendas ativas? Parcelas pagas e recebimentos históricos não serão alterados.",
-    );
-    if (!confirmar) return;
-
     setSincronizandoReajuste(true);
     try {
-      const quantidade = await aplicarReajusteEmpreendimentoRemoto(empresaAtualId, emp.id);
-      const financeiro = await carregarFinanceiro(empresaAtualId);
-      setState((s) => ({
-        ...s,
-        vendas: financeiro.vendas,
-        parcelas: financeiro.parcelas,
-        movimentos: financeiro.movimentos,
-      }));
-      toast.success(
-        quantidade === 1
-          ? "Correção aplicada a 1 contrato ativo"
-          : `Correção aplicada a ${quantidade} contratos ativos`,
-        {
-          description:
-            "Somente parcelas abertas foram recalculadas; pagamentos e recebimentos históricos foram preservados.",
-        },
+      const previa = await consultarPreviaReajusteEmpreendimento(empresaAtualId, emp.id);
+      if (previa.resumo.contratosAlterados === 0) {
+        toast.info("Os contratos ativos já estão sincronizados com a regra atual.");
+        return;
+      }
+      setPreviaReajuste(previa);
+      setConfirmacaoExtra("");
+      setPreviaAberta(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível simular o reajuste");
+    } finally {
+      setSincronizandoReajuste(false);
+    }
+  };
+
+  const confirmarReajusteAContratos = async () => {
+    if (!empresaAtualId || !previaReajuste || sincronizandoReajuste) return;
+    if (previaReajuste.resumo.exigeConfirmacaoExtra && confirmacaoExtra.trim() !== "REVISADO") {
+      toast.error("Digite REVISADO após conferir os valores por contrato.");
+      return;
+    }
+    setSincronizandoReajuste(true);
+    try {
+      const resultado = await aplicarReajusteEmpreendimentoRemoto(
+        empresaAtualId, emp.id, previaReajuste.token,
+        previaReajuste.resumo.exigeConfirmacaoExtra ? confirmacaoExtra.trim() : undefined,
       );
+      setPreviaAberta(false);
+      setPreviaReajuste(null);
+      setConfirmacaoExtra("");
+      toast.success(
+        "Sincronização concluída: " + resultado.contratosAlterados +
+        " contrato(s) e " + resultado.parcelasAlteradas + " parcela(s).",
+        { description: "Pagamentos anteriores e parcelas parcialmente recebidas foram preservados." },
+      );
+      try {
+        const financeiro = await carregarFinanceiro(empresaAtualId);
+        setState((anterior) => ({
+          ...anterior,
+          vendas: financeiro.vendas,
+          parcelas: financeiro.parcelas,
+          movimentos: financeiro.movimentos,
+        }));
+      } catch {
+        toast.warning("O reajuste foi salvo, mas a atualização da tela falhou. Recarregue a página.");
+      }
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível aplicar a correção aos contratos ativos",
+        error instanceof Error ? error.message : "Não foi possível sincronizar o reajuste",
       );
     } finally {
       setSincronizandoReajuste(false);
@@ -165,6 +194,160 @@ function EmpreendimentoDetail() {
 
   return (
     <PageShell>
+      <Dialog open={previaAberta} onOpenChange={(aberta) => {
+        if (sincronizandoReajuste) return;
+        setPreviaAberta(aberta);
+        if (!aberta) {
+          setPreviaReajuste(null);
+          setConfirmacaoExtra("");
+        }
+      }}>
+        <DialogContent className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Conferência do reajuste anual — {emp.nome}</DialogTitle>
+            <DialogDescription>
+              Simulação sem alterações no banco. Revise o impacto de todos os contratos e
+              os vencimentos por ano antes de confirmar. Parcelas quitadas, canceladas,
+              em acordo e parcialmente recebidas são preservadas.
+            </DialogDescription>
+          </DialogHeader>
+          {previaReajuste && (
+            <div className="space-y-5">
+              <div className="grid gap-3 rounded-lg border p-3 text-sm sm:grid-cols-3">
+                <div><div className="text-muted-foreground">Parcelas abertas atuais</div>
+                  <strong>{brl(Number(previaReajuste.resumo.valorAtualTotal))}</strong></div>
+                <div><div className="text-muted-foreground">Total proposto</div>
+                  <strong>{brl(Number(previaReajuste.resumo.valorPropostoTotal))}</strong></div>
+                <div><div className="text-muted-foreground">Diferença acumulada</div>
+                  <strong>{brl(Number(previaReajuste.resumo.diferencaTotal))}
+                    {" "}({Number(previaReajuste.resumo.variacaoPercentual).toLocaleString("pt-BR")}%)
+                  </strong></div>
+              </div>
+
+              {previaReajuste.resumo.exigeConfirmacaoExtra && (
+                <div className="rounded-md border border-amber-400/50 bg-amber-50 p-3 text-sm text-amber-950">
+                  <strong>Atenção: impacto financeiro superior a 50%.</strong>
+                  {" "}Isso pode acontecer em contratos longos com reajustes anuais acumulados,
+                  mas precisa ser conferido com os contratos reais. Não confirme sem
+                  validar as datas de assinatura, os ciclos e os valores propostos.
+                </div>
+              )}
+
+              <p className="text-sm">
+                {previaReajuste.resumo.contratosAnalisados} contratos analisados;{" "}
+                {previaReajuste.resumo.contratosAlterados} com mudanças;{" "}
+                {previaReajuste.resumo.parcelasAlteradas} parcelas elegíveis alteradas;{" "}
+                {previaReajuste.resumo.parcelasPreservadas} preservadas, das quais{" "}
+                {previaReajuste.resumo.parcelasParciaisPreservadas} com pagamentos parciais.
+                {" "}Regra por ciclo: <strong>{previaReajuste.percentualPorCiclo != null
+                  ? `${previaReajuste.percentualPorCiclo}%` : "índice variável"}</strong>.
+              </p>
+
+              <div className="space-y-2">
+                <h3 className="font-semibold">Por contrato</h3>
+                <div className="max-h-64 overflow-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Venda</TableHead>
+                        <TableHead>Assinatura</TableHead>
+                        <TableHead>Parcelas</TableHead>
+                        <TableHead>Ciclos até</TableHead>
+                        <TableHead className="text-right">Atual</TableHead>
+                        <TableHead className="text-right">Proposto</TableHead>
+                        <TableHead className="text-right">Aumento</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {previaReajuste.contratos.map((contrato) => (
+                        <TableRow key={contrato.vendaId}>
+                          <TableCell>
+                            <span className="font-medium">#{contrato.vendaId}</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {vendas.find((v) => v.id === String(contrato.vendaId))?.compradorNome ?? "Cliente não identificado"}
+                            </span>
+                          </TableCell>
+                          <TableCell>{contrato.dataContrato}</TableCell>
+                          <TableCell>{contrato.parcelasAlteradas}</TableCell>
+                          <TableCell>{contrato.maiorCiclo}</TableCell>
+                          <TableCell className="text-right">{brl(Number(contrato.valorAtual))}</TableCell>
+                          <TableCell className="text-right">{brl(Number(contrato.valorProposto))}</TableCell>
+                          <TableCell className="text-right">
+                            {brl(Number(contrato.diferenca))}
+                            <span className="block text-xs text-muted-foreground">
+                              {Number(contrato.variacaoPercentual).toLocaleString("pt-BR")}%
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="font-semibold">Por ano de vencimento</h3>
+                <div className="max-h-56 overflow-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ano</TableHead>
+                        <TableHead>Parcelas</TableHead>
+                        <TableHead className="text-right">Atual</TableHead>
+                        <TableHead className="text-right">Proposto</TableHead>
+                        <TableHead className="text-right">Diferença</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {previaReajuste.porAno.map((ano) => (
+                        <TableRow key={ano.ano}>
+                          <TableCell>{ano.ano}</TableCell>
+                          <TableCell>{ano.parcelasAlteradas} de {ano.parcelas}</TableCell>
+                          <TableCell className="text-right">{brl(Number(ano.valorAtual))}</TableCell>
+                          <TableCell className="text-right">{brl(Number(ano.valorProposto))}</TableCell>
+                          <TableCell className="text-right">{brl(Number(ano.diferenca))}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {previaReajuste.resumo.parcelasParciaisPreservadas > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Parcelas com pagamento parcial foram excluídas do recálculo. Qualquer
+                  atualização delas exige uma revisão financeira individual autorizada.
+                </p>
+              )}
+              {previaReajuste.resumo.exigeConfirmacaoExtra && (
+                <div className="space-y-2">
+                  <Label htmlFor="revisao-reajuste">Após validar a lista, digite REVISADO para liberar a confirmação</Label>
+                  <Input
+                    id="revisao-reajuste"
+                    value={confirmacaoExtra}
+                    onChange={(e) => setConfirmacaoExtra(e.target.value)}
+                    placeholder="REVISADO"
+                    autoComplete="off"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" disabled={sincronizandoReajuste} onClick={() => setPreviaAberta(false)}>
+              Cancelar sem alterar
+            </Button>
+            <Button
+              disabled={!previaReajuste || sincronizandoReajuste ||
+                (previaReajuste.resumo.exigeConfirmacaoExtra && confirmacaoExtra.trim() !== "REVISADO")}
+              onClick={() => void confirmarReajusteAContratos()}
+            >
+              {sincronizandoReajuste ? "Aplicando alterações..." : "Confirmar correção em lote"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div>
         <Button asChild variant="ghost" size="sm" className="-ml-3">
           <Link to="/empreendimentos">
@@ -314,11 +497,11 @@ function EmpreendimentoDetail() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void aplicarReajusteAContratos()}
+                onClick={() => void conferirReajusteAContratos()}
                 disabled={sincronizandoReajuste}
               >
                 <RefreshCcw className="mr-2 h-4 w-4" />
-                {sincronizandoReajuste ? "Aplicando..." : "Aplicar correção às vendas ativas"}
+                {sincronizandoReajuste ? "Calculando prévia..." : "Conferir impacto e aplicar correção"}
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
@@ -624,7 +807,7 @@ function ResumoRegras({ regras }: { regras: RegrasOperacao }) {
           <span className="text-muted-foreground">Reajuste contratual: </span>
           <span>
             {regras.reajusteContratual.descricao ||
-              `${regras.reajusteContratual.percentualBase}% · ${regras.reajusteContratual.indiceReferencia || "sem índice"} · a cada ${regras.reajusteContratual.periodicidadeMeses} mês(es)`}
+              `${regras.reajusteContratual.percentualBase}% por ciclo de ${regras.reajusteContratual.periodicidadeMeses} meses`}
           </span>
         </div>
       )}

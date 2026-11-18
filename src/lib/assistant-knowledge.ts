@@ -344,7 +344,7 @@ export const helpTopics: HelpTopic[] = [
       "O sistema aceita índice de correção?"
     ],
     answer:
-      "O ImobControl possui regras de reajuste contratual que podem trabalhar com percentual fixo, índice de referência ou outras modalidades previstas na operação. A periodicidade pode ser configurada, inclusive em ciclos anuais de 12 meses. Sempre confira a regra definida para o contrato antes de interpretar o valor atualizado.",
+      "Para reajuste fixo anual, acesse Empreendimentos > Editar regras > Reajuste das parcelas vincendas. Se o contrato prevê taxa nominal de 0,99% ao mês com aplicação ANUAL por soma simples, escolha Taxa mensal nominal e periodicidade 12 meses: o sistema mostra 11,88% por ciclo (não é juros compostos mensais). A primeira correção é calculada pelo aniversário da data do contrato, não pelo número da parcela ou pela quantidade de sinais/entradas. Novas vendas usam a regra salva; contratos já existentes exigem Conferir impacto e aplicar correção, com simulação e confirmação. Só parcelas abertas elegíveis são recalculadas. Parcelas pagas, canceladas ou em acordo e movimentos anteriores são preservados. Para índices variáveis como IPCA ou INCC, o percentual apurado precisa ser lançado e aplicado na venda conforme a regra contratual. Se a parcela esperada não foi corrigida, verifique a modalidade, taxa, periodicidade, data do contrato e se houve sincronização; não altere o banco diretamente nem prometa que a correção foi aplicada sem confirmação.",
     keywords: ["correção anual", "reajuste", "indice", "índice", "percentual", "12 meses", "contrato"],
     routes: ["/configuracoes", "/empreendimentos", "/vendas"]
   },

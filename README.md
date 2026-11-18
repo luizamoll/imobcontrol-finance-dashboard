@@ -1,62 +1,34 @@
-# ImobControl
+# Imob Control — migracao Node.js + MySQL para Hostinger
 
-[![Backend CI](https://github.com/luizamoll/imobcontrol-finance-dashboard/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/luizamoll/imobcontrol-finance-dashboard/actions/workflows/backend-ci.yml)
+O frontend React/TanStack Start + Nitro e a API Express funcionam em um unico servidor Node.js, sem `API_UPSTREAM`. O banco de destino e MySQL 8; o codigo Java original permanece preservado na branch `production`.
 
-Sistema web para gestão de empreendimentos imobiliários, vendas, clientes, parcelas, recebimentos, comissões, dividendos de terceiros e fechamento mensal.
+**Versao em homologacao:** `feat/hostinger-app-unificado-20261111`. Nao confundir build aprovado com autorizacao de uso do cliente.
 
-## Estado atual — outubro/2026
-
-O ImobControl já possui **frontend React/TypeScript**, **API Java 21/Spring Boot**, **PostgreSQL**, autenticação e publicação da branch `production` no **Railway**. Módulos operacionais principais utilizam a API e o banco, com migrações Flyway (até a V21 na revisão documental de 28/10/2026).
-
-**O sistema está em evolução e homologação contínua com cliente real.** Nem toda entrega publicada foi necessariamente validada em todos os cenários de negócio. Parte das configurações e compatibilidades pode continuar no navegador; verificar por módulo antes de alterar.
-
-### Acessos do ambiente de produção
-- [Frontend ImobControl](https://imobcontrol-web-preview-production.up.railway.app/)
-- [Fechamento mensal](https://imobcontrol-web-preview-production.up.railway.app/fechamento-mensal)
-- [GitHub Actions](https://github.com/luizamoll/imobcontrol-finance-dashboard/actions)
-
-## Tecnologia
-- Frontend: React 19, TypeScript, TanStack Start/Router, Vite, Tailwind CSS e Bun.
-- Backend: Java 21, Spring Boot 4.1, Spring Data JPA, validações, autorização por empresa e Flyway.
-- Banco: PostgreSQL; deploy: Railway; CI: GitHub Actions.
-
-## Fluxo funcional
-Empreendimentos e unidades → Clientes e corretores → Vendas → Parcelas e recebimentos → Relatórios/Fechamento Mensal.
-
-Relatórios financeiros devem distinguir **valor previsto/atribuído** de **pagamento efetivamente realizado**. O fechamento mensal pode gerar uma prévia dinâmica e um arquivo histórico para um mês encerrado.
-
-## Comece pela documentação
-- **[Guia do projeto e rotina de manutenção](docs/GUIA_DO_PROJETO.md)** — índice central e método para evitar documentação repetitiva.
-- [Regras de negócio e limitações](docs/REGRAS_DE_NEGOCIO.md)
-- [Evolução resumida e PRs](docs/EVOLUCAO_RESUMIDA.md)
-- [Pendências e prioridades](docs/ROADMAP.md)
-- [Arquitetura](docs/ARQUITETURA.md)
-- [Infraestrutura/PostgreSQL](docs/PRODUCAO_POSTGRESQL.md)
-- [Etapa jurídica futura: contrato, termos e aceite](docs/PRE_LANCAMENTO_JURIDICO.md)
-
-## Desenvolvimento
-Na raiz, com Bun instalado:
+## Desenvolvimento da aplicacao unificada
 
 ```bash
-bun install
-bun run dev
-bun run build
+npm install
+npm run build
+npm start
 ```
 
-Backend:
+O Nitro inicia em `.output/server/index.mjs`, incluindo Express em `/api/**` (tambem `/health`).
 
-```bash
-cd backend
-mvn test
-mvn spring-boot:run
-```
+## Modulos presentes
+- Login, sessoes, CSRF, minha conta, convite, verificacao de e-mail, recuperacao de senha.
+- Empresas, administracao de usuarios, permissoes, superadmin e auditoria.
+- Clientes, corretores, empreendimentos/quadras/unidades, vendas, parcelas, recebimentos, comissoes e estornos.
+- Acordos, reajustes de contratos, revisao financeira controlada, dividendos e fechamento mensal.
 
-O backend depende da configuração correta de ambiente/banco. Consulte [backend/README.md](backend/README.md), [DEPLOY.md](DEPLOY.md) e os arquivos de configuração antes de executar.
+## Testes e integracao
+O GitHub Actions compila o frontend Nitro, verifica `POST /api/auth/login` em JSON e executa testes Node e MySQL 8. A base real requer **homologacao separada** das regras financeiras e das permissoes de clientes.
 
-## Segurança e contribuição
-- Nunca versionar senhas, variáveis sigilosas, dumps ou dados pessoais reais.
-- Abrir PR, passar CI e verificar o deploy/healthcheck antes de declarar publicação concluída.
-- Registrar aceite do cliente **separadamente** do status de teste automatizado.
-- Não reescrever histórico Git conectado ao Lovable e não modificar registros financeiros históricos sem um fluxo auditado.
+## Documentacao
+- [Instrucoes Hostinger, SMTP e migracoes MySQL](HOSTINGER_NODE_MYSQL.md)
+- [API Node](backend-node/README.md)
+- [Deploy](DEPLOY.md)
+- [Regras de negocio](docs/REGRAS_DE_NEGOCIO.md)
 
-**Projeto desenvolvido por Maria Luiza Mol.**
+Nunca colocar dumps com dados reais nem credenciais neste repositorio publico.
+
+Desenvolvido por Maria Luiza Mol.

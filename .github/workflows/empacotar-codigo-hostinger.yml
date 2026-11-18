@@ -1,0 +1,63 @@
+name: Empacotar codigo Node + MySQL sem dump
+on:
+  push:
+    branches:
+      - migracao-node-mysql-hostinger-20261111
+    paths:
+      - '.github/workflows/empacotar-codigo-hostinger.yml'
+      - 'backend-node/**'
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'vite.config.ts'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pacote-codigo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Montar ZIP somente com frontend React e API Node
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="ImobControl_CODIGO_NODE_MYSQL_20261111"
+          mkdir -p "$out"
+          cp -r src public backend-node "$out/"
+          for f in package.json tsconfig.json vite.config.ts eslint.config.js components.json .prettierrc .prettierignore .env.example .gitignore HOSTINGER_NODE_MYSQL.md; do
+            if [[ -f "$f" ]]; then cp "$f" "$out/"; fi
+          done
+          cat > "$out/LEIA-ME-ENTREGA.txt" <<'EOF'
+          IMOB CONTROL - CODIGO REFATORADO
+          Frontend React + API Node.js/Express + MySQL
+          Branch: migracao-node-mysql-hostinger-20261111
+
+          Este ZIP CONTEM SOMENTE O CODIGO. O DUMP REAL MYSQL E UM ARQUIVO SEPARADO.
+          Nao inclui o backend antigo Java, os CSVs nem dados do cliente.
+
+          API: pasta backend-node (Node 22; npm install; npm start).
+          WEB: raiz do ZIP (Node 22; npm install; npm run build; npm start).
+          Banco MySQL da Hostinger: configurar DB_HOST, DB_PORT, DB_USER,
+          DB_PASSWORD, DB_NAME e SESSION_SECRET em variaveis de ambiente.
+          Configure API_UPSTREAM na aplicacao web.
+
+          IMPORTANTE: software AINDA EM REFATORACAO.
+          Ha funcionalidades Java nao migradas; NAO publicar para o cliente
+          sem concluir os modulos e homologar com dados reais.
+          Guia completo: HOSTINGER_NODE_MYSQL.md
+          EOF
+          test ! -f "$out/imobcontrol-MYSQL-REAL-20261110.sql"
+          test ! -d "$out/backend"
+          find "$out" -type f \( -name '*.dump' -o -name '*.csv' -o -name '*.zip' \) -print -quit | grep -q . && {
+            echo "ERRO: arquivo de dados inesperado" >&2; exit 1;
+          } || true
+          zip -qr "$out.zip" "$out"
+          unzip -l "$out.zip" | tail -n 1
+      - name: Disponibilizar pacote de codigo
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImobControl-CODIGO-Node-MySQL-20261111
+          path: ImobControl_CODIGO_NODE_MYSQL_20261111.zip
+          if-no-files-found: error
+          retention-days: 30
